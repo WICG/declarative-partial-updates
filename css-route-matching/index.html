@@ -8,7 +8,7 @@
   <meta content="Bikeshed version 3f621ba99, updated Mon Jul 28 15:38:36 2025 -0700" name="generator">
   <link href="https://wicg.github.io/declarative-partial-updates/css-route-matching/" rel="canonical">
   <link href="https://www.w3.org/2008/site/images/favicon.ico" rel="icon">
-  <meta content="2a4b10aa7c992f83fde93063fc567b051c7dd551" name="revision">
+  <meta content="77aa3ef8911e458ec74cfd577b50c07b047ce4d7" name="revision">
   <meta content="dark light" name="color-scheme">
   <link href="https://www.w3.org/StyleSheets/TR/2021/dark.css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css">
 <style>/* Boilerplate: style-autolinks */
@@ -695,7 +695,7 @@ c-[il] { color: #000000 } /* Literal.Number.Integer.Long */
 </p>
    <h1 class="p-name no-ref" id="title">CSS Route Matching</h1>
    <p id="w3c-state"><a href="https://www.w3.org/standards/types/#UD">Unofficial Proposal Draft</a>,
-    <time class="dt-updated" datetime="2025-09-30">30 September 2025</time></p>
+    <time class="dt-updated" datetime="2025-10-03">3 October 2025</time></p>
    <details open>
     <summary>More details about this document</summary>
     <div data-fill-with="spec-metadata">
@@ -843,29 +843,60 @@ the <a data-link-type="dfn" href="#route-location-url-pattern" id="ref-for-route
       <dd data-md>
        <p>The result is true if
 the <a data-link-type="dfn" href="#documents-navigation-api" id="ref-for-documents-navigation-api">document’s navigation API</a> of the document
-is non-null,
-its <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition" id="ref-for-concept-navigation-transition">transition</a> is non-null,
+is non-null, and either:</p>
+       <ul>
+        <li data-md>
+         <p>its <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition" id="ref-for-concept-navigation-transition">transition</a> is non-null,
 its <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigationtransition-from" id="ref-for-concept-navigationtransition-from">from entry</a>’s <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url" id="ref-for-dom-navigationhistoryentry-url">url</a></code>
 is non-null and
 <a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern-match" id="ref-for-url-pattern-match①">matches</a>
 the <a data-link-type="dfn" href="#route-location-url-pattern" id="ref-for-route-location-url-pattern①">route location URL pattern</a> of <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location⑦">&lt;route-location></a>.</p>
-      <dt data-md>to: <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location⑧">&lt;route-location></a>
+        <li data-md>
+         <p>its <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-activation" id="ref-for-navigation-activation">activation</a> is non-null,
+the document’s <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed" id="ref-for-has-been-revealed">has been revealed</a> is false or
+was false at the start of the current <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/webappapis.html#concept-task" id="ref-for-concept-task">task</a>,
+and the activation’s <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-from" id="ref-for-dom-navigationactivation-from">from</a></code>’s
+<code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url" id="ref-for-dom-navigationhistoryentry-url①">url</a></code>’s
+is non-null and
+<a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern-match" id="ref-for-url-pattern-match②">matches</a>
+the <a data-link-type="dfn" href="#route-location-url-pattern" id="ref-for-route-location-url-pattern②">route location URL pattern</a> of <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location⑧">&lt;route-location></a>.</p>
+       </ul>
+      <dt data-md>to: <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location⑨">&lt;route-location></a>
       <dd data-md>
        <p>The result is true if
 the <a data-link-type="dfn" href="#documents-navigation-api" id="ref-for-documents-navigation-api①">document’s navigation API</a> of the document
-is non-null,
-its <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event" id="ref-for-ongoing-navigate-event">ongoing navigate event</a> is non-null,
+is non-null, and either:</p>
+       <ul>
+        <li data-md>
+         <p>its <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event" id="ref-for-ongoing-navigate-event">ongoing navigate event</a> is non-null,
 and its <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigateevent-destination" id="ref-for-dom-navigateevent-destination">destination</a></code>’s
 <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationdestination-url" id="ref-for-dom-navigationdestination-url">url</a></code>
-<a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern-match" id="ref-for-url-pattern-match②">matches</a>
-the <a data-link-type="dfn" href="#route-location-url-pattern" id="ref-for-route-location-url-pattern②">route location URL pattern</a> of <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location⑨">&lt;route-location></a>.</p>
+<a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern-match" id="ref-for-url-pattern-match③">matches</a>
+the <a data-link-type="dfn" href="#route-location-url-pattern" id="ref-for-route-location-url-pattern③">route location URL pattern</a> of <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①⓪">&lt;route-location></a>.</p>
+         <p class="issue" id="issue-879c611d"><a class="self-link" href="#issue-879c611d"></a> This assumes that the <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event" id="ref-for-ongoing-navigate-event①">ongoing navigate event</a>
+and the <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition" id="ref-for-concept-navigation-transition①">transition</a> have the same lifetime,
+but this isn’t really
+true if the event is intercepted.
+After
+<a href="https://github.com/whatwg/html/issues/11690">whatwg/html#11690</a> /
+<a href="https://github.com/whatwg/html/pull/11692">whatwg/html#11692</a>.
+we could probably define this more like "from" above.
+But which lifetime is the one we want?</p>
+        <li data-md>
+         <p>its <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-activation" id="ref-for-navigation-activation①">activation</a> is non-null,
+the document’s <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed" id="ref-for-has-been-revealed①">has been revealed</a> is false or
+was false at the start of the current <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/webappapis.html#concept-task" id="ref-for-concept-task①">task</a>,
+and the activation’s <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-entry" id="ref-for-dom-navigationactivation-entry">entry</a></code>’s
+<code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url" id="ref-for-dom-navigationhistoryentry-url②">url</a></code>’s
+is non-null and
+<a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern-match" id="ref-for-url-pattern-match④">matches</a>
+the <a data-link-type="dfn" href="#route-location-url-pattern" id="ref-for-route-location-url-pattern④">route location URL pattern</a> of <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①①">&lt;route-location></a>.</p>
+       </ul>
      </dl>
-     <p class="issue" id="issue-23009793"><a class="self-link" href="#issue-23009793"></a> The above definitions of from and to probably don’t do the right thing
-during the loading of the new document in a cross-document navigation,
-since I think they reference concepts that are only present on the old document.</p>
      <p class="issue" id="issue-8de45772"><a class="self-link" href="#issue-8de45772"></a> The above definitions of from and to apparently don’t work right
 if you start a same-document navigation (e.g., with <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate" id="ref-for-dom-history-pushstate">pushState</a></code>)
 in the middle of a cross-document navigation.</p>
+     <p class="issue" id="issue-3df86670"><a class="self-link" href="#issue-3df86670"></a> Improve integration with <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed" id="ref-for-has-been-revealed②">has been revealed</a> rather than monkeypatching it.</p>
     <dt data-md><a class="production css" data-link-type="type" href="https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed" id="ref-for-typedef-general-enclosed③">&lt;general-enclosed></a>
     <dd data-md>
      <p>The result is false.</p>
@@ -873,8 +904,8 @@ in the middle of a cross-document navigation.</p>
 <span class="note">It exists only for future-compatibility,
 so that new syntax additions do not invalidate too much of a <a class="production css" data-link-type="type" href="#typedef-route-condition" id="ref-for-typedef-route-condition⑤">&lt;route-condition></a> in older user agents.</span></p>
    </dl>
-   <p>The <dfn class="dfn-paneled" data-dfn-type="dfn" data-noexport id="route-location-url-pattern">route location URL pattern</dfn> of a <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①⓪">&lt;route-location></a>
-depends on the type of <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①①">&lt;route-location></a>:</p>
+   <p>The <dfn class="dfn-paneled" data-dfn-type="dfn" data-noexport id="route-location-url-pattern">route location URL pattern</dfn> of a <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①②">&lt;route-location></a>
+depends on the type of <a class="production css" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①③">&lt;route-location></a>:</p>
    <dl>
     <dt data-md><a class="production css" data-link-type="type" href="#typedef-route-name" id="ref-for-typedef-route-name③">&lt;route-name></a>
     <dd data-md>
@@ -911,8 +942,7 @@ using the steps of the <dfn class="dfn-paneled" data-dfn-type="dfn" data-noexpor
     <li data-md>
      <p>Let <var>arg</var> be the <a class="production css" data-link-type="type" href="https://drafts.csswg.org/css-values-4/#string-value" id="ref-for-string-value①">&lt;string></a> argument to the <a class="css" data-link-type="maybe" href="#funcdef-urlpattern" id="ref-for-funcdef-urlpattern④">urlpattern()</a> function.</p>
     <li data-md>
-     <p>Let <var>baseURL</var> be the <u class="link-error" data-lt="style resource base URL" title="LINK ERROR: No &apos;dfn&apos; refs found for &apos;style resource base url&apos; that are marked for export.
-  (Possible specs this could be from: css-values-4)">style resource base URL</u> of
+     <p>Let <var>baseURL</var> be the <a data-link-type="dfn" href="https://drafts.csswg.org/css-values-4/#style-resource-base-url" id="ref-for-style-resource-base-url">style resource base URL</a> of
 the rule or declaration block containing the <a class="css" data-link-type="maybe" href="#funcdef-urlpattern" id="ref-for-funcdef-urlpattern⑤">urlpattern()</a> function.</p>
     <li data-md>
      <p>Return the result of <a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern-create" id="ref-for-url-pattern-create">create a URL pattern</a> given
@@ -994,6 +1024,7 @@ which allows its argument to be quoted or unquoted.</p>
      <li><span class="dfn-paneled" id="68150e76">*</span>
      <li><span class="dfn-paneled" id="e274345c">&lt;custom-ident></span>
      <li><span class="dfn-paneled" id="977d3003">&lt;string></span>
+     <li><span class="dfn-paneled" id="b511103c">style resource base URL</span>
      <li><span class="dfn-paneled" id="5a2f7ea1">url()</span>
      <li><span class="dfn-paneled" id="6ec67710">|</span>
     </ul>
@@ -1006,12 +1037,17 @@ which allows its argument to be quoted or unquoted.</p>
     <a data-link-type="biblio">[HTML]</a> defines the following terms:
     <ul>
      <li><span class="dfn-paneled" id="5d7209e9">Window</span>
+     <li><span class="dfn-paneled" id="2d8ceef2">activation</span>
      <li><span class="dfn-paneled" id="3349d69f">associated Document</span>
      <li><span class="dfn-paneled" id="12eb7c09">destination</span>
+     <li><span class="dfn-paneled" id="6b631d3b">entry</span>
+     <li><span class="dfn-paneled" id="b33508ca">from</span>
      <li><span class="dfn-paneled" id="00583f87">from entry</span>
+     <li><span class="dfn-paneled" id="6a40c011">has been revealed</span>
      <li><span class="dfn-paneled" id="8b6678c3">navigation API</span>
      <li><span class="dfn-paneled" id="c8c5d31a">ongoing navigate event</span>
      <li><span class="dfn-paneled" id="87806adf">pushState(data, unused, url)</span>
+     <li><span class="dfn-paneled" id="e270bd2a">task</span>
      <li><span class="dfn-paneled" id="05d605be">transition</span>
      <li><span class="dfn-paneled" id="78fedd4c">url <small>(for NavigationDestination)</small></span>
      <li><span class="dfn-paneled" id="bf4f3896">url <small>(for NavigationHistoryEntry)</small></span>
@@ -1059,12 +1095,19 @@ which allows its argument to be quoted or unquoted.</p>
   <h2 class="no-num no-ref heading settled" id="issues-index"><span class="content">Issues Index</span><a class="self-link" href="#issues-index"></a></h2>
   <div style="counter-reset:issue">
    <div class="issue">This should be defined more formally once routemaps are. <a class="issue-return" href="#issue-dde173c5" title="Jump to section">↵</a></div>
-   <div class="issue"> The above definitions of from and to probably don’t do the right thing
-during the loading of the new document in a cross-document navigation,
-since I think they reference concepts that are only present on the old document. <a class="issue-return" href="#issue-23009793" title="Jump to section">↵</a></div>
+   <div class="issue"> This assumes that the <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event">ongoing navigate event</a>
+and the <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition">transition</a> have the same lifetime,
+but this isn’t really
+true if the event is intercepted.
+After
+<a href="https://github.com/whatwg/html/issues/11690">whatwg/html#11690</a> /
+<a href="https://github.com/whatwg/html/pull/11692">whatwg/html#11692</a>.
+we could probably define this more like "from" above.
+But which lifetime is the one we want? <a class="issue-return" href="#issue-879c611d" title="Jump to section">↵</a></div>
    <div class="issue"> The above definitions of from and to apparently don’t work right
 if you start a same-document navigation (e.g., with <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate">pushState</a></code>)
 in the middle of a cross-document navigation. <a class="issue-return" href="#issue-8de45772" title="Jump to section">↵</a></div>
+   <div class="issue"> Improve integration with <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed">has been revealed</a> rather than monkeypatching it. <a class="issue-return" href="#issue-3df86670" title="Jump to section">↵</a></div>
    <div class="issue"> Once routemaps are defined more formally,
 this should be defined in terms of the routemap definition
 instead of referring directly to URLPattern. <a class="issue-return" href="#issue-6ca9e07a" title="Jump to section">↵</a></div>
@@ -1270,38 +1313,44 @@ function parseHTML(markup) {
 {
 let dfnPanelData = {
 "00583f87": {"dfnID":"00583f87","dfnText":"from entry","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-navigationtransition-from"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigationtransition-from"},
-"05d605be": {"dfnID":"05d605be","dfnText":"transition","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-navigation-transition"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition"},
+"05d605be": {"dfnID":"05d605be","dfnText":"transition","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-navigation-transition"},{"id":"ref-for-concept-navigation-transition\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition"},
 "12432dcb": {"dfnID":"12432dcb","dfnText":"<supports-condition>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-supports-condition"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-conditional-3/#typedef-supports-condition"},
 "12eb7c09": {"dfnID":"12eb7c09","dfnText":"destination","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigateevent-destination"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigateevent-destination"},
+"2d8ceef2": {"dfnID":"2d8ceef2","dfnText":"activation","external":true,"refSections":[{"refs":[{"id":"ref-for-navigation-activation"},{"id":"ref-for-navigation-activation\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-activation"},
 "3349d69f": {"dfnID":"3349d69f","dfnText":"associated Document","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-document-window"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-document-window"},
 "347e8fe9": {"dfnID":"347e8fe9","dfnText":"URL","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-document-url"}],"title":"1. Route queries: the @route rule"}],"url":"https://dom.spec.whatwg.org/#concept-document-url"},
 "3fca5a9e": {"dfnID":"3fca5a9e","dfnText":"map","external":true,"refSections":[{"refs":[{"id":"ref-for-ordered-map"}],"title":"2. The urlpattern() function"}],"url":"https://infra.spec.whatwg.org/#ordered-map"},
 "5a2f7ea1": {"dfnID":"5a2f7ea1","dfnText":"url()","external":true,"refSections":[{"refs":[{"id":"ref-for-funcdef-url"}],"title":"2. The urlpattern() function"}],"url":"https://drafts.csswg.org/css-values-4/#funcdef-url"},
-"5c4f772b": {"dfnID":"5c4f772b","dfnText":"match","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern-match"},{"id":"ref-for-url-pattern-match\u2460"},{"id":"ref-for-url-pattern-match\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern-match"},
+"5c4f772b": {"dfnID":"5c4f772b","dfnText":"match","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern-match"},{"id":"ref-for-url-pattern-match\u2460"},{"id":"ref-for-url-pattern-match\u2461"},{"id":"ref-for-url-pattern-match\u2462"},{"id":"ref-for-url-pattern-match\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern-match"},
 "5d7209e9": {"dfnID":"5d7209e9","dfnText":"Window","external":true,"refSections":[{"refs":[{"id":"ref-for-window"},{"id":"ref-for-window\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window"},
 "60393e82": {"dfnID":"60393e82","dfnText":"URL pattern","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern"}],"title":"1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-url-pattern\u2460"},{"id":"ref-for-url-pattern\u2461"}],"title":"2. The urlpattern() function"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern"},
 "65c9f2cf": {"dfnID":"65c9f2cf","dfnText":"<rule-list>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-rule-list"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-syntax-3/#typedef-rule-list"},
 "68150e76": {"dfnID":"68150e76","dfnText":"*","external":true,"refSections":[{"refs":[{"id":"ref-for-mult-zero-plus"},{"id":"ref-for-mult-zero-plus\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#mult-zero-plus"},
+"6a40c011": {"dfnID":"6a40c011","dfnText":"has been revealed","external":true,"refSections":[{"refs":[{"id":"ref-for-has-been-revealed"},{"id":"ref-for-has-been-revealed\u2460"},{"id":"ref-for-has-been-revealed\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed"},
+"6b631d3b": {"dfnID":"6b631d3b","dfnText":"entry","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationactivation-entry"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-entry"},
 "6ec67710": {"dfnID":"6ec67710","dfnText":"|","external":true,"refSections":[{"refs":[{"id":"ref-for-comb-one"},{"id":"ref-for-comb-one\u2460"},{"id":"ref-for-comb-one\u2461"},{"id":"ref-for-comb-one\u2462"},{"id":"ref-for-comb-one\u2463"},{"id":"ref-for-comb-one\u2464"},{"id":"ref-for-comb-one\u2465"},{"id":"ref-for-comb-one\u2466"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#comb-one"},
 "78fedd4c": {"dfnID":"78fedd4c","dfnText":"url (for NavigationDestination)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationdestination-url"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationdestination-url"},
 "87806adf": {"dfnID":"87806adf","dfnText":"pushState(data, unused, url)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-history-pushstate"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate"},
 "8b6678c3": {"dfnID":"8b6678c3","dfnText":"navigation API","external":true,"refSections":[{"refs":[{"id":"ref-for-window-navigation-api"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-navigation-api"},
 "977d3003": {"dfnID":"977d3003","dfnText":"<string>","external":true,"refSections":[{"refs":[{"id":"ref-for-string-value"},{"id":"ref-for-string-value\u2460"}],"title":"2. The urlpattern() function"}],"url":"https://drafts.csswg.org/css-values-4/#string-value"},
 "at-ruledef-route": {"dfnID":"at-ruledef-route","dfnText":"@route","external":false,"refSections":[{"refs":[{"id":"ref-for-at-ruledef-route"},{"id":"ref-for-at-ruledef-route\u2460"},{"id":"ref-for-at-ruledef-route\u2461"},{"id":"ref-for-at-ruledef-route\u2462"},{"id":"ref-for-at-ruledef-route\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"#at-ruledef-route"},
-"bf4f3896": {"dfnID":"bf4f3896","dfnText":"url (for NavigationHistoryEntry)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationhistoryentry-url"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url"},
+"b33508ca": {"dfnID":"b33508ca","dfnText":"from","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationactivation-from"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-from"},
+"b511103c": {"dfnID":"b511103c","dfnText":"style resource base URL","external":true,"refSections":[{"refs":[{"id":"ref-for-style-resource-base-url"}],"title":"2. The urlpattern() function"}],"url":"https://drafts.csswg.org/css-values-4/#style-resource-base-url"},
+"bf4f3896": {"dfnID":"bf4f3896","dfnText":"url (for NavigationHistoryEntry)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationhistoryentry-url"},{"id":"ref-for-dom-navigationhistoryentry-url\u2460"},{"id":"ref-for-dom-navigationhistoryentry-url\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url"},
 "bf9f0d4e": {"dfnID":"bf9f0d4e","dfnText":"create","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern-create"}],"title":"2. The urlpattern() function"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern-create"},
 "c4f8137c": {"dfnID":"c4f8137c","dfnText":"<general-enclosed>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-general-enclosed"},{"id":"ref-for-typedef-general-enclosed\u2460"},{"id":"ref-for-typedef-general-enclosed\u2461"},{"id":"ref-for-typedef-general-enclosed\u2462"},{"id":"ref-for-typedef-general-enclosed\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed"},
-"c8c5d31a": {"dfnID":"c8c5d31a","dfnText":"ongoing navigate event","external":true,"refSections":[{"refs":[{"id":"ref-for-ongoing-navigate-event"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event"},
+"c8c5d31a": {"dfnID":"c8c5d31a","dfnText":"ongoing navigate event","external":true,"refSections":[{"refs":[{"id":"ref-for-ongoing-navigate-event"},{"id":"ref-for-ongoing-navigate-event\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event"},
 "create-a-url-pattern-for-urlpattern": {"dfnID":"create-a-url-pattern-for-urlpattern","dfnText":"create a URL pattern for urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-create-a-url-pattern-for-urlpattern"}],"title":"1. Route queries: the @route rule"}],"url":"#create-a-url-pattern-for-urlpattern"},
 "documents-navigation-api": {"dfnID":"documents-navigation-api","dfnText":"document\u2019s navigation API","external":false,"refSections":[{"refs":[{"id":"ref-for-documents-navigation-api"},{"id":"ref-for-documents-navigation-api\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"#documents-navigation-api"},
+"e270bd2a": {"dfnID":"e270bd2a","dfnText":"task","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-task"},{"id":"ref-for-concept-task\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/webappapis.html#concept-task"},
 "e274345c": {"dfnID":"e274345c","dfnText":"<custom-ident>","external":true,"refSections":[{"refs":[{"id":"ref-for-identifier-value"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#identifier-value"},
 "funcdef-urlpattern": {"dfnID":"funcdef-urlpattern","dfnText":"urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-urlpattern"},{"id":"ref-for-funcdef-urlpattern\u2460"}],"title":"1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-funcdef-urlpattern\u2461"},{"id":"ref-for-funcdef-urlpattern\u2462"},{"id":"ref-for-funcdef-urlpattern\u2463"},{"id":"ref-for-funcdef-urlpattern\u2464"}],"title":"2. The urlpattern() function"}],"url":"#funcdef-urlpattern"},
-"route-location-url-pattern": {"dfnID":"route-location-url-pattern","dfnText":"route location URL pattern","external":false,"refSections":[{"refs":[{"id":"ref-for-route-location-url-pattern"},{"id":"ref-for-route-location-url-pattern\u2460"},{"id":"ref-for-route-location-url-pattern\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"#route-location-url-pattern"},
+"route-location-url-pattern": {"dfnID":"route-location-url-pattern","dfnText":"route location URL pattern","external":false,"refSections":[{"refs":[{"id":"ref-for-route-location-url-pattern"},{"id":"ref-for-route-location-url-pattern\u2460"},{"id":"ref-for-route-location-url-pattern\u2461"},{"id":"ref-for-route-location-url-pattern\u2462"},{"id":"ref-for-route-location-url-pattern\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"#route-location-url-pattern"},
 "route-queries": {"dfnID":"route-queries","dfnText":"route queries","external":false,"refSections":[],"url":"#route-queries"},
 "typedef-route-condition": {"dfnID":"typedef-route-condition","dfnText":"<route-condition>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-condition"},{"id":"ref-for-typedef-route-condition\u2460"},{"id":"ref-for-typedef-route-condition\u2461"},{"id":"ref-for-typedef-route-condition\u2462"},{"id":"ref-for-typedef-route-condition\u2463"},{"id":"ref-for-typedef-route-condition\u2464"},{"id":"ref-for-typedef-route-condition\u2465"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-condition"},
 "typedef-route-in-parens": {"dfnID":"typedef-route-in-parens","dfnText":"<route-in-parens>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-in-parens"},{"id":"ref-for-typedef-route-in-parens\u2460"},{"id":"ref-for-typedef-route-in-parens\u2461"},{"id":"ref-for-typedef-route-in-parens\u2462"},{"id":"ref-for-typedef-route-in-parens\u2463"},{"id":"ref-for-typedef-route-in-parens\u2464"},{"id":"ref-for-typedef-route-in-parens\u2465"},{"id":"ref-for-typedef-route-in-parens\u2466"},{"id":"ref-for-typedef-route-in-parens\u2467"},{"id":"ref-for-typedef-route-in-parens\u2468"},{"id":"ref-for-typedef-route-in-parens\u2460\u24ea"},{"id":"ref-for-typedef-route-in-parens\u2460\u2460"},{"id":"ref-for-typedef-route-in-parens\u2460\u2461"},{"id":"ref-for-typedef-route-in-parens\u2460\u2462"},{"id":"ref-for-typedef-route-in-parens\u2460\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-in-parens"},
 "typedef-route-keyword": {"dfnID":"typedef-route-keyword","dfnText":"<route-keyword>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-keyword"},{"id":"ref-for-typedef-route-keyword\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-keyword"},
-"typedef-route-location": {"dfnID":"typedef-route-location","dfnText":"<route-location>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-location"},{"id":"ref-for-typedef-route-location\u2460"},{"id":"ref-for-typedef-route-location\u2461"},{"id":"ref-for-typedef-route-location\u2462"},{"id":"ref-for-typedef-route-location\u2463"},{"id":"ref-for-typedef-route-location\u2464"},{"id":"ref-for-typedef-route-location\u2465"},{"id":"ref-for-typedef-route-location\u2466"},{"id":"ref-for-typedef-route-location\u2467"},{"id":"ref-for-typedef-route-location\u2468"},{"id":"ref-for-typedef-route-location\u2460\u24ea"},{"id":"ref-for-typedef-route-location\u2460\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-location"},
+"typedef-route-location": {"dfnID":"typedef-route-location","dfnText":"<route-location>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-location"},{"id":"ref-for-typedef-route-location\u2460"},{"id":"ref-for-typedef-route-location\u2461"},{"id":"ref-for-typedef-route-location\u2462"},{"id":"ref-for-typedef-route-location\u2463"},{"id":"ref-for-typedef-route-location\u2464"},{"id":"ref-for-typedef-route-location\u2465"},{"id":"ref-for-typedef-route-location\u2466"},{"id":"ref-for-typedef-route-location\u2467"},{"id":"ref-for-typedef-route-location\u2468"},{"id":"ref-for-typedef-route-location\u2460\u24ea"},{"id":"ref-for-typedef-route-location\u2460\u2460"},{"id":"ref-for-typedef-route-location\u2460\u2461"},{"id":"ref-for-typedef-route-location\u2460\u2462"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-location"},
 "typedef-route-name": {"dfnID":"typedef-route-name","dfnText":"<route-name>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-name"},{"id":"ref-for-typedef-route-name\u2460"},{"id":"ref-for-typedef-route-name\u2461"},{"id":"ref-for-typedef-route-name\u2462"},{"id":"ref-for-typedef-route-name\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-name"},
 "typedef-route-test": {"dfnID":"typedef-route-test","dfnText":"<route-test>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-test"},{"id":"ref-for-typedef-route-test\u2460"},{"id":"ref-for-typedef-route-test\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-test"},
 };
@@ -1711,17 +1760,23 @@ let refsData = {
 "https://drafts.csswg.org/css-values-4/#identifier-value": {"displayText":"<custom-ident>","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"<custom-ident>","type":"type","url":"https://drafts.csswg.org/css-values-4/#identifier-value"},
 "https://drafts.csswg.org/css-values-4/#mult-zero-plus": {"displayText":"*","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"*","type":"grammar","url":"https://drafts.csswg.org/css-values-4/#mult-zero-plus"},
 "https://drafts.csswg.org/css-values-4/#string-value": {"displayText":"<string>","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"<string>","type":"type","url":"https://drafts.csswg.org/css-values-4/#string-value"},
+"https://drafts.csswg.org/css-values-4/#style-resource-base-url": {"displayText":"style resource base URL","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"style resource base url","type":"dfn","url":"https://drafts.csswg.org/css-values-4/#style-resource-base-url"},
 "https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed": {"displayText":"<general-enclosed>","export":true,"for_":[],"level":"5","normative":true,"shortname":"mediaqueries","spec":"mediaqueries-5","status":"current","text":"<general-enclosed>","type":"type","url":"https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed"},
+"https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed": {"displayText":"has been revealed","export":true,"for_":[],"level":"","normative":true,"shortname":"html","spec":"html","status":"anchor-block","text":"has been revealed","type":"dfn","url":"https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-document-window": {"displayText":"associated Document","export":true,"for_":[],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"associated document","type":"dfn","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-document-window"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition": {"displayText":"transition","export":true,"for_":[],"level":"","normative":true,"shortname":"html","spec":"html","status":"anchor-block","text":"transition","type":"dfn","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigationtransition-from": {"displayText":"from entry","export":true,"for_":[],"level":"","normative":true,"shortname":"html","spec":"html","status":"anchor-block","text":"from entry","type":"dfn","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigationtransition-from"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate": {"displayText":"pushState(data, unused, url)","export":true,"for_":["History"],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"pushState(data, unused, url)","type":"method","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigateevent-destination": {"displayText":"destination","export":true,"for_":["NavigateEvent"],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"destination","type":"attribute","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigateevent-destination"},
+"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-entry": {"displayText":"entry","export":true,"for_":["NavigationActivation"],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"entry","type":"attribute","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-entry"},
+"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-from": {"displayText":"from","export":true,"for_":["NavigationActivation"],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"from","type":"attribute","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-from"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationdestination-url": {"displayText":"url","export":true,"for_":["NavigationDestination"],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"url","type":"attribute","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationdestination-url"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url": {"displayText":"url","export":true,"for_":["NavigationHistoryEntry"],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"url","type":"attribute","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url"},
+"https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-activation": {"displayText":"activation","export":true,"for_":[],"level":"","normative":true,"shortname":"html","spec":"html","status":"anchor-block","text":"activation","type":"dfn","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-activation"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event": {"displayText":"ongoing navigate event","export":true,"for_":[],"level":"","normative":true,"shortname":"html","spec":"html","status":"anchor-block","text":"ongoing navigate event","type":"dfn","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#window": {"displayText":"Window","export":true,"for_":[],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"Window","type":"interface","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window"},
 "https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-navigation-api": {"displayText":"navigation API","export":true,"for_":[],"level":"","normative":true,"shortname":"html","spec":"html","status":"anchor-block","text":"navigation api","type":"dfn","url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-navigation-api"},
+"https://html.spec.whatwg.org/multipage/webappapis.html#concept-task": {"displayText":"task","export":true,"for_":[],"level":"1","normative":true,"shortname":"html","spec":"html","status":"current","text":"task","type":"dfn","url":"https://html.spec.whatwg.org/multipage/webappapis.html#concept-task"},
 "https://infra.spec.whatwg.org/#ordered-map": {"displayText":"map","export":true,"for_":[],"level":"1","normative":true,"shortname":"infra","spec":"infra","status":"current","text":"map","type":"dfn","url":"https://infra.spec.whatwg.org/#ordered-map"},
 "https://urlpattern.spec.whatwg.org/#url-pattern": {"displayText":"URL pattern","export":true,"for_":[],"level":"1","normative":true,"shortname":"urlpattern","spec":"urlpattern","status":"current","text":"url pattern","type":"dfn","url":"https://urlpattern.spec.whatwg.org/#url-pattern"},
 "https://urlpattern.spec.whatwg.org/#url-pattern-create": {"displayText":"create","export":true,"for_":["URL pattern"],"level":"1","normative":true,"shortname":"urlpattern","spec":"urlpattern","status":"current","text":"create","type":"dfn","url":"https://urlpattern.spec.whatwg.org/#url-pattern-create"},
