@@ -8,7 +8,7 @@
   <meta content="Bikeshed version 3f621ba99, updated Mon Jul 28 15:38:36 2025 -0700" name="generator">
   <link href="https://wicg.github.io/declarative-partial-updates/css-route-matching/" rel="canonical">
   <link href="https://www.w3.org/2008/site/images/favicon.ico" rel="icon">
-  <meta content="d9450cf5f8b8fe703319e8b2f36f860333bfff1e" name="revision">
+  <meta content="f85319a8d5809875f506c2174ff91055e4d3055a" name="revision">
   <meta content="dark light" name="color-scheme">
   <link href="https://www.w3.org/StyleSheets/TR/2021/dark.css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css">
 <style>/* Boilerplate: style-autolinks */
@@ -695,7 +695,7 @@ c-[il] { color: #000000 } /* Literal.Number.Integer.Long */
 </p>
    <h1 class="p-name no-ref" id="title">CSS Route Matching</h1>
    <p id="w3c-state"><a href="https://www.w3.org/standards/types/#UD">Unofficial Proposal Draft</a>,
-    <time class="dt-updated" datetime="2025-10-08">8 October 2025</time></p>
+    <time class="dt-updated" datetime="2025-10-20">20 October 2025</time></p>
    <details open>
     <summary>More details about this document</summary>
     <div data-fill-with="spec-metadata">
@@ -731,10 +731,14 @@ or conditioned on the status of navigating between particular URLs.</p>
   <nav data-fill-with="table-of-contents" id="toc">
    <h2 class="no-num no-toc no-ref" id="contents">Table of Contents</h2>
    <ol class="toc" role="directory">
-    <li><a href="#at-route"><span class="secno">1</span> <span class="content">Route queries: the <span class="css">@route</span> rule</span></a>
+    <li>
+     <a href="#condional-route-queries"><span class="secno">1</span> <span class="content">Conditional rules for route queries</span></a>
+     <ol class="toc">
+      <li><a href="#at-route"><span class="secno">1.1</span> <span class="content">Route queries: the <span class="css">@route</span> rule</span></a>
+      <li><a href="#route-when-function"><span class="secno">1.2</span> <span class="content">The <span class="css">route()</span> function for <span class="css">@when</span></span></a>
+      <li><a href="#route-if-function"><span class="secno">1.3</span> <span class="content">The <span class="css">route()</span> function for <span class="css">if()</span></span></a>
+     </ol>
     <li><a href="#urlpattern-function"><span class="secno">2</span> <span class="content">The <span class="css">urlpattern()</span> function</span></a>
-    <li><a href="#route-when-function"><span class="secno">3</span> <span class="content">The <span class="css">route()</span> function for <span class="css">@when</span></span></a>
-    <li><a href="#route-if-function"><span class="secno">4</span> <span class="content">The <span class="css">route()</span> function for <span class="css">if()</span></span></a>
     <li>
      <a href="#w3c-conformance"><span class="secno"></span> <span class="content">Conformance</span></a>
      <ol class="toc">
@@ -755,7 +759,8 @@ or conditioned on the status of navigating between particular URLs.</p>
    </ol>
   </nav>
   <main>
-   <h2 class="heading settled" data-level="1" id="at-route"><span class="secno">1. </span><span class="content">Route queries: the <a class="css" data-link-type="maybe" href="#at-ruledef-route" id="ref-for-at-ruledef-route">@route</a> rule</span><a class="self-link" href="#at-route"></a></h2>
+   <h2 class="heading settled" data-level="1" id="condional-route-queries"><span class="secno">1. </span><span class="content">Conditional rules for route queries</span><a class="self-link" href="#condional-route-queries"></a></h2>
+   <h3 class="heading settled" data-level="1.1" id="at-route"><span class="secno">1.1. </span><span class="content">Route queries: the <a class="css" data-link-type="maybe" href="#at-ruledef-route" id="ref-for-at-ruledef-route">@route</a> rule</span><a class="self-link" href="#at-route"></a></h3>
    <p>The <dfn class="dfn-paneled css" data-dfn-type="at-rule" data-export id="at-ruledef-route">@route</dfn> rule
 is a conditional group rule
 whose condition tests
@@ -933,6 +938,20 @@ the result of the following steps on <var>document</var>:</p>
    </ol>
    <p>The condition of the <a class="css" data-link-type="maybe" href="#at-ruledef-route" id="ref-for-at-ruledef-route④">@route</a> rule
 is the result of the <a class="production css" data-link-type="type" href="#typedef-route-condition" id="ref-for-typedef-route-condition⑥">&lt;route-condition></a> in its prelude.</p>
+   <h3 class="heading settled" data-level="1.2" id="route-when-function"><span class="secno">1.2. </span><span class="content">The <a class="css" data-link-type="maybe" href="#funcdef-when-route" id="ref-for-funcdef-when-route">route()</a> function for <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-conditional-5/#at-ruledef-when" id="ref-for-at-ruledef-when">@when</a></span><a class="self-link" href="#route-when-function"></a></h3>
+   <p>This specification defines an additional function for the <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-conditional-5/#at-ruledef-when" id="ref-for-at-ruledef-when①">@when</a> rule:</p>
+<pre class="prod"><dfn class="dfn-paneled" data-dfn-for="@when" data-dfn-type="function" data-export id="funcdef-when-route">route()</dfn> = route( <a class="production" data-link-type="type" href="#typedef-route-condition" id="ref-for-typedef-route-condition⑦">&lt;route-condition></a> )
+</pre>
+   <p>The <a class="css" data-link-type="maybe" href="#funcdef-when-route" id="ref-for-funcdef-when-route①">route()</a> function is associated with the boolean result that
+its contained condition is associated with.</p>
+   <h3 class="heading settled" data-level="1.3" id="route-if-function"><span class="secno">1.3. </span><span class="content">The <a class="css" data-link-type="maybe" href="#funcdef-if-route" id="ref-for-funcdef-if-route">route()</a> function for <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if" id="ref-for-funcdef-if">if()</a></span><a class="self-link" href="#route-if-function"></a></h3>
+   <p>This specification defines an additional function for the <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if" id="ref-for-funcdef-if①">if()</a> function’s
+<a class="production css" data-link-type="type" href="https://drafts.csswg.org/css-values-5/#typedef-if-test" id="ref-for-typedef-if-test">&lt;if-test></a> production:</p>
+<pre class="prod"><dfn class="dfn-paneled" data-dfn-for="if()" data-dfn-type="function" data-export id="funcdef-if-route">route()</dfn> = route( <a class="production" data-link-type="type" href="#typedef-route-condition" id="ref-for-typedef-route-condition⑧">&lt;route-condition></a> )
+</pre>
+   <p class="issue" id="issue-14849ff8"><a class="self-link" href="#issue-14849ff8"></a> This should probably have a more formal definition of the function,
+but I can’t find the formal definitions of the existing <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if" id="ref-for-funcdef-if②">if()</a> functions
+to model it after.</p>
    <h2 class="heading settled" data-level="2" id="urlpattern-function"><span class="secno">2. </span><span class="content">The <a class="css" data-link-type="maybe" href="#funcdef-urlpattern" id="ref-for-funcdef-urlpattern②">urlpattern()</a> function</span><a class="self-link" href="#urlpattern-function"></a></h2>
    <p>The <dfn class="dfn-paneled css" data-dfn-type="function" data-export id="funcdef-urlpattern">urlpattern()</dfn> function represents a <a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern" id="ref-for-url-pattern①">URL pattern</a>,
 which can be used to match URLs.</p>
@@ -973,20 +992,6 @@ for <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/selecto
    <p class="note" role="note"><span class="marker">NOTE:</span>  This function requires that its argument is quoted.
 This differs from the <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-4/#funcdef-url" id="ref-for-funcdef-url①">url()</a> function,
 which allows its argument to be quoted or unquoted.</p>
-   <h2 class="heading settled" data-level="3" id="route-when-function"><span class="secno">3. </span><span class="content">The <a class="css" data-link-type="maybe" href="#funcdef-when-route" id="ref-for-funcdef-when-route">route()</a> function for <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-conditional-5/#at-ruledef-when" id="ref-for-at-ruledef-when">@when</a></span><a class="self-link" href="#route-when-function"></a></h2>
-   <p>This specification defines an additional function for the <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-conditional-5/#at-ruledef-when" id="ref-for-at-ruledef-when①">@when</a> rule:</p>
-<pre class="prod"><dfn class="dfn-paneled" data-dfn-for="@when" data-dfn-type="function" data-export id="funcdef-when-route">route()</dfn> = route( <a class="production" data-link-type="type" href="#typedef-route-condition" id="ref-for-typedef-route-condition⑦">&lt;route-condition></a> )
-</pre>
-   <p>The <a class="css" data-link-type="maybe" href="#funcdef-when-route" id="ref-for-funcdef-when-route①">route()</a> function is associated with the boolean result that
-its contained condition is associated with.</p>
-   <h2 class="heading settled" data-level="4" id="route-if-function"><span class="secno">4. </span><span class="content">The <a class="css" data-link-type="maybe" href="#funcdef-if-route" id="ref-for-funcdef-if-route">route()</a> function for <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if" id="ref-for-funcdef-if">if()</a></span><a class="self-link" href="#route-if-function"></a></h2>
-   <p>This specification defines an additional function for the <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if" id="ref-for-funcdef-if①">if()</a> function’s
-<a class="production css" data-link-type="type" href="https://drafts.csswg.org/css-values-5/#typedef-if-test" id="ref-for-typedef-if-test">&lt;if-test></a> production:</p>
-<pre class="prod"><dfn class="dfn-paneled" data-dfn-for="if()" data-dfn-type="function" data-export id="funcdef-if-route">route()</dfn> = route( <a class="production" data-link-type="type" href="#typedef-route-condition" id="ref-for-typedef-route-condition⑧">&lt;route-condition></a> )
-</pre>
-   <p class="issue" id="issue-14849ff8"><a class="self-link" href="#issue-14849ff8"></a> This should probably have a more formal definition of the function,
-but I can’t find the formal definitions of the existing <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if" id="ref-for-funcdef-if②">if()</a> functions
-to model it after.</p>
   </main>
   <div data-fill-with="conformance">
    <h2 class="no-ref no-num heading settled" id="w3c-conformance"><span class="content">Conformance</span><a class="self-link" href="#w3c-conformance"></a></h2>
@@ -1030,22 +1035,22 @@ to model it after.</p>
   <h3 class="no-num no-ref heading settled" id="index-defined-here"><span class="content">Terms defined by this specification</span><a class="self-link" href="#index-defined-here"></a></h3>
   <ul class="index">
    <li><a href="#create-a-url-pattern-for-urlpattern">create a URL pattern for urlpattern()</a><span>, in § 2</span>
-   <li><a href="#documents-navigation-api">document’s navigation API</a><span>, in § 1</span>
-   <li><a href="#at-ruledef-route">@route</a><span>, in § 1</span>
+   <li><a href="#documents-navigation-api">document’s navigation API</a><span>, in § 1.1</span>
+   <li><a href="#at-ruledef-route">@route</a><span>, in § 1.1</span>
    <li>
     route()
     <ul>
-     <li><a href="#funcdef-when-route">function for @when</a><span>, in § 3</span>
-     <li><a href="#funcdef-if-route">function for if()</a><span>, in § 4</span>
+     <li><a href="#funcdef-when-route">function for @when</a><span>, in § 1.2</span>
+     <li><a href="#funcdef-if-route">function for if()</a><span>, in § 1.3</span>
     </ul>
-   <li><a href="#typedef-route-condition">&lt;route-condition></a><span>, in § 1</span>
-   <li><a href="#typedef-route-in-parens">&lt;route-in-parens></a><span>, in § 1</span>
-   <li><a href="#typedef-route-keyword">&lt;route-keyword></a><span>, in § 1</span>
-   <li><a href="#typedef-route-location">&lt;route-location></a><span>, in § 1</span>
-   <li><a href="#route-location-url-pattern">route location URL pattern</a><span>, in § 1</span>
-   <li><a href="#typedef-route-name">&lt;route-name></a><span>, in § 1</span>
-   <li><a href="#route-queries">route queries</a><span>, in § 1</span>
-   <li><a href="#typedef-route-test">&lt;route-test></a><span>, in § 1</span>
+   <li><a href="#typedef-route-condition">&lt;route-condition></a><span>, in § 1.1</span>
+   <li><a href="#typedef-route-in-parens">&lt;route-in-parens></a><span>, in § 1.1</span>
+   <li><a href="#typedef-route-keyword">&lt;route-keyword></a><span>, in § 1.1</span>
+   <li><a href="#typedef-route-location">&lt;route-location></a><span>, in § 1.1</span>
+   <li><a href="#route-location-url-pattern">route location URL pattern</a><span>, in § 1.1</span>
+   <li><a href="#typedef-route-name">&lt;route-name></a><span>, in § 1.1</span>
+   <li><a href="#route-queries">route queries</a><span>, in § 1.1</span>
+   <li><a href="#typedef-route-test">&lt;route-test></a><span>, in § 1.1</span>
    <li><a href="#funcdef-urlpattern">urlpattern()</a><span>, in § 2</span>
   </ul>
   <h3 class="no-num no-ref heading settled" id="index-defined-elsewhere"><span class="content">Terms defined by reference</span><a class="self-link" href="#index-defined-elsewhere"></a></h3>
@@ -1178,6 +1183,9 @@ in the middle of a cross-document navigation. <a class="issue-return" href="#iss
    <div class="issue"> Once routemaps are defined more formally,
 this should be defined in terms of the routemap definition
 instead of referring directly to URLPattern. <a class="issue-return" href="#issue-6ca9e07a" title="Jump to section">↵</a></div>
+   <div class="issue"> This should probably have a more formal definition of the function,
+but I can’t find the formal definitions of the existing <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if">if()</a> functions
+to model it after. <a class="issue-return" href="#issue-14849ff8" title="Jump to section">↵</a></div>
    <div class="issue">
     
 Do we want this to be the base URL all the time?
@@ -1200,9 +1208,6 @@ for <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/selecto
     
  <a class="issue-return" href="#issue-6f9cd12a" title="Jump to section">↵</a>
    </div>
-   <div class="issue"> This should probably have a more formal definition of the function,
-but I can’t find the formal definitions of the existing <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if">if()</a> functions
-to model it after. <a class="issue-return" href="#issue-14849ff8" title="Jump to section">↵</a></div>
   </div>
 <script>/* Boilerplate: script-dom-helper */
 "use strict";
@@ -1404,54 +1409,54 @@ function parseHTML(markup) {
 "use strict";
 {
 let dfnPanelData = {
-"00583f87": {"dfnID":"00583f87","dfnText":"from entry","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-navigationtransition-from"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigationtransition-from"},
-"05d605be": {"dfnID":"05d605be","dfnText":"transition","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-navigation-transition"},{"id":"ref-for-concept-navigation-transition\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition"},
-"12432dcb": {"dfnID":"12432dcb","dfnText":"<supports-condition>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-supports-condition"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-conditional-3/#typedef-supports-condition"},
-"12eb7c09": {"dfnID":"12eb7c09","dfnText":"destination","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigateevent-destination"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigateevent-destination"},
+"00583f87": {"dfnID":"00583f87","dfnText":"from entry","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-navigationtransition-from"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigationtransition-from"},
+"05d605be": {"dfnID":"05d605be","dfnText":"transition","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-navigation-transition"},{"id":"ref-for-concept-navigation-transition\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition"},
+"12432dcb": {"dfnID":"12432dcb","dfnText":"<supports-condition>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-supports-condition"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-conditional-3/#typedef-supports-condition"},
+"12eb7c09": {"dfnID":"12eb7c09","dfnText":"destination","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigateevent-destination"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigateevent-destination"},
 "1b28d572": {"dfnID":"1b28d572","dfnText":"URLPattern","external":true,"refSections":[{"refs":[{"id":"ref-for-urlpattern"}],"title":"2. The urlpattern() function"}],"url":"https://urlpattern.spec.whatwg.org/#urlpattern"},
-"2d8ceef2": {"dfnID":"2d8ceef2","dfnText":"activation","external":true,"refSections":[{"refs":[{"id":"ref-for-navigation-activation"},{"id":"ref-for-navigation-activation\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-activation"},
-"3349d69f": {"dfnID":"3349d69f","dfnText":"associated Document","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-document-window"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-document-window"},
-"347e8fe9": {"dfnID":"347e8fe9","dfnText":"URL","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-document-url"}],"title":"1. Route queries: the @route rule"}],"url":"https://dom.spec.whatwg.org/#concept-document-url"},
+"2d8ceef2": {"dfnID":"2d8ceef2","dfnText":"activation","external":true,"refSections":[{"refs":[{"id":"ref-for-navigation-activation"},{"id":"ref-for-navigation-activation\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-activation"},
+"3349d69f": {"dfnID":"3349d69f","dfnText":"associated Document","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-document-window"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-document-window"},
+"347e8fe9": {"dfnID":"347e8fe9","dfnText":"URL","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-document-url"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://dom.spec.whatwg.org/#concept-document-url"},
 "3fca5a9e": {"dfnID":"3fca5a9e","dfnText":"map","external":true,"refSections":[{"refs":[{"id":"ref-for-ordered-map"}],"title":"2. The urlpattern() function"}],"url":"https://infra.spec.whatwg.org/#ordered-map"},
 "5a2f7ea1": {"dfnID":"5a2f7ea1","dfnText":"url()","external":true,"refSections":[{"refs":[{"id":"ref-for-funcdef-url"},{"id":"ref-for-funcdef-url\u2460"}],"title":"2. The urlpattern() function"}],"url":"https://drafts.csswg.org/css-values-4/#funcdef-url"},
-"5c4f772b": {"dfnID":"5c4f772b","dfnText":"match","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern-match"},{"id":"ref-for-url-pattern-match\u2460"},{"id":"ref-for-url-pattern-match\u2461"},{"id":"ref-for-url-pattern-match\u2462"},{"id":"ref-for-url-pattern-match\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern-match"},
-"5d7209e9": {"dfnID":"5d7209e9","dfnText":"Window","external":true,"refSections":[{"refs":[{"id":"ref-for-window"},{"id":"ref-for-window\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window"},
-"60393e82": {"dfnID":"60393e82","dfnText":"URL pattern","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern"}],"title":"1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-url-pattern\u2460"},{"id":"ref-for-url-pattern\u2461"}],"title":"2. The urlpattern() function"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern"},
-"61e3d51c": {"dfnID":"61e3d51c","dfnText":"<if-test>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-if-test"}],"title":"4. The route() function for if()"}],"url":"https://drafts.csswg.org/css-values-5/#typedef-if-test"},
-"65c9f2cf": {"dfnID":"65c9f2cf","dfnText":"<rule-list>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-rule-list"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-syntax-3/#typedef-rule-list"},
-"68150e76": {"dfnID":"68150e76","dfnText":"*","external":true,"refSections":[{"refs":[{"id":"ref-for-mult-zero-plus"},{"id":"ref-for-mult-zero-plus\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#mult-zero-plus"},
-"6a40c011": {"dfnID":"6a40c011","dfnText":"has been revealed","external":true,"refSections":[{"refs":[{"id":"ref-for-has-been-revealed"},{"id":"ref-for-has-been-revealed\u2460"},{"id":"ref-for-has-been-revealed\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed"},
-"6b631d3b": {"dfnID":"6b631d3b","dfnText":"entry","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationactivation-entry"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-entry"},
-"6e13c5fc": {"dfnID":"6e13c5fc","dfnText":"if()","external":true,"refSections":[{"refs":[{"id":"ref-for-funcdef-if"},{"id":"ref-for-funcdef-if\u2460"},{"id":"ref-for-funcdef-if\u2461"}],"title":"4. The route() function for if()"}],"url":"https://drafts.csswg.org/css-values-5/#funcdef-if"},
-"6ec67710": {"dfnID":"6ec67710","dfnText":"|","external":true,"refSections":[{"refs":[{"id":"ref-for-comb-one"},{"id":"ref-for-comb-one\u2460"},{"id":"ref-for-comb-one\u2461"},{"id":"ref-for-comb-one\u2462"},{"id":"ref-for-comb-one\u2463"},{"id":"ref-for-comb-one\u2464"},{"id":"ref-for-comb-one\u2465"},{"id":"ref-for-comb-one\u2466"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#comb-one"},
-"78fedd4c": {"dfnID":"78fedd4c","dfnText":"url (for NavigationDestination)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationdestination-url"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationdestination-url"},
-"87806adf": {"dfnID":"87806adf","dfnText":"pushState(data, unused, url)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-history-pushstate"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate"},
-"8b6678c3": {"dfnID":"8b6678c3","dfnText":"navigation API","external":true,"refSections":[{"refs":[{"id":"ref-for-window-navigation-api"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-navigation-api"},
+"5c4f772b": {"dfnID":"5c4f772b","dfnText":"match","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern-match"},{"id":"ref-for-url-pattern-match\u2460"},{"id":"ref-for-url-pattern-match\u2461"},{"id":"ref-for-url-pattern-match\u2462"},{"id":"ref-for-url-pattern-match\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern-match"},
+"5d7209e9": {"dfnID":"5d7209e9","dfnText":"Window","external":true,"refSections":[{"refs":[{"id":"ref-for-window"},{"id":"ref-for-window\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window"},
+"60393e82": {"dfnID":"60393e82","dfnText":"URL pattern","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern"}],"title":"1.1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-url-pattern\u2460"},{"id":"ref-for-url-pattern\u2461"}],"title":"2. The urlpattern() function"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern"},
+"61e3d51c": {"dfnID":"61e3d51c","dfnText":"<if-test>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-if-test"}],"title":"1.3. The route() function for if()"}],"url":"https://drafts.csswg.org/css-values-5/#typedef-if-test"},
+"65c9f2cf": {"dfnID":"65c9f2cf","dfnText":"<rule-list>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-rule-list"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-syntax-3/#typedef-rule-list"},
+"68150e76": {"dfnID":"68150e76","dfnText":"*","external":true,"refSections":[{"refs":[{"id":"ref-for-mult-zero-plus"},{"id":"ref-for-mult-zero-plus\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#mult-zero-plus"},
+"6a40c011": {"dfnID":"6a40c011","dfnText":"has been revealed","external":true,"refSections":[{"refs":[{"id":"ref-for-has-been-revealed"},{"id":"ref-for-has-been-revealed\u2460"},{"id":"ref-for-has-been-revealed\u2461"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed"},
+"6b631d3b": {"dfnID":"6b631d3b","dfnText":"entry","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationactivation-entry"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-entry"},
+"6e13c5fc": {"dfnID":"6e13c5fc","dfnText":"if()","external":true,"refSections":[{"refs":[{"id":"ref-for-funcdef-if"},{"id":"ref-for-funcdef-if\u2460"},{"id":"ref-for-funcdef-if\u2461"}],"title":"1.3. The route() function for if()"}],"url":"https://drafts.csswg.org/css-values-5/#funcdef-if"},
+"6ec67710": {"dfnID":"6ec67710","dfnText":"|","external":true,"refSections":[{"refs":[{"id":"ref-for-comb-one"},{"id":"ref-for-comb-one\u2460"},{"id":"ref-for-comb-one\u2461"},{"id":"ref-for-comb-one\u2462"},{"id":"ref-for-comb-one\u2463"},{"id":"ref-for-comb-one\u2464"},{"id":"ref-for-comb-one\u2465"},{"id":"ref-for-comb-one\u2466"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#comb-one"},
+"78fedd4c": {"dfnID":"78fedd4c","dfnText":"url (for NavigationDestination)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationdestination-url"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationdestination-url"},
+"87806adf": {"dfnID":"87806adf","dfnText":"pushState(data, unused, url)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-history-pushstate"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate"},
+"8b6678c3": {"dfnID":"8b6678c3","dfnText":"navigation API","external":true,"refSections":[{"refs":[{"id":"ref-for-window-navigation-api"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-navigation-api"},
 "977d3003": {"dfnID":"977d3003","dfnText":"<string>","external":true,"refSections":[{"refs":[{"id":"ref-for-string-value"},{"id":"ref-for-string-value\u2460"}],"title":"2. The urlpattern() function"}],"url":"https://drafts.csswg.org/css-values-4/#string-value"},
-"a25b060b": {"dfnID":"a25b060b","dfnText":"@when","external":true,"refSections":[{"refs":[{"id":"ref-for-at-ruledef-when"},{"id":"ref-for-at-ruledef-when\u2460"}],"title":"3. The route() function for @when"}],"url":"https://drafts.csswg.org/css-conditional-5/#at-ruledef-when"},
-"at-ruledef-route": {"dfnID":"at-ruledef-route","dfnText":"@route","external":false,"refSections":[{"refs":[{"id":"ref-for-at-ruledef-route"},{"id":"ref-for-at-ruledef-route\u2460"},{"id":"ref-for-at-ruledef-route\u2461"},{"id":"ref-for-at-ruledef-route\u2462"},{"id":"ref-for-at-ruledef-route\u2463"}],"title":"1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-at-ruledef-route\u2464"}],"title":"2. The urlpattern() function"}],"url":"#at-ruledef-route"},
-"b33508ca": {"dfnID":"b33508ca","dfnText":"from","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationactivation-from"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-from"},
+"a25b060b": {"dfnID":"a25b060b","dfnText":"@when","external":true,"refSections":[{"refs":[{"id":"ref-for-at-ruledef-when"},{"id":"ref-for-at-ruledef-when\u2460"}],"title":"1.2. The route() function for @when"}],"url":"https://drafts.csswg.org/css-conditional-5/#at-ruledef-when"},
+"at-ruledef-route": {"dfnID":"at-ruledef-route","dfnText":"@route","external":false,"refSections":[{"refs":[{"id":"ref-for-at-ruledef-route"},{"id":"ref-for-at-ruledef-route\u2460"},{"id":"ref-for-at-ruledef-route\u2461"},{"id":"ref-for-at-ruledef-route\u2462"},{"id":"ref-for-at-ruledef-route\u2463"}],"title":"1.1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-at-ruledef-route\u2464"}],"title":"2. The urlpattern() function"}],"url":"#at-ruledef-route"},
+"b33508ca": {"dfnID":"b33508ca","dfnText":"from","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationactivation-from"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-from"},
 "b511103c": {"dfnID":"b511103c","dfnText":"style resource base URL","external":true,"refSections":[{"refs":[{"id":"ref-for-style-resource-base-url"}],"title":"2. The urlpattern() function"}],"url":"https://drafts.csswg.org/css-values-4/#style-resource-base-url"},
-"bf4f3896": {"dfnID":"bf4f3896","dfnText":"url (for NavigationHistoryEntry)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationhistoryentry-url"},{"id":"ref-for-dom-navigationhistoryentry-url\u2460"},{"id":"ref-for-dom-navigationhistoryentry-url\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url"},
+"bf4f3896": {"dfnID":"bf4f3896","dfnText":"url (for NavigationHistoryEntry)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationhistoryentry-url"},{"id":"ref-for-dom-navigationhistoryentry-url\u2460"},{"id":"ref-for-dom-navigationhistoryentry-url\u2461"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationhistoryentry-url"},
 "bf9f0d4e": {"dfnID":"bf9f0d4e","dfnText":"create","external":true,"refSections":[{"refs":[{"id":"ref-for-url-pattern-create"}],"title":"2. The urlpattern() function"}],"url":"https://urlpattern.spec.whatwg.org/#url-pattern-create"},
-"c4f8137c": {"dfnID":"c4f8137c","dfnText":"<general-enclosed>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-general-enclosed"},{"id":"ref-for-typedef-general-enclosed\u2460"},{"id":"ref-for-typedef-general-enclosed\u2461"},{"id":"ref-for-typedef-general-enclosed\u2462"},{"id":"ref-for-typedef-general-enclosed\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed"},
-"c8c5d31a": {"dfnID":"c8c5d31a","dfnText":"ongoing navigate event","external":true,"refSections":[{"refs":[{"id":"ref-for-ongoing-navigate-event"},{"id":"ref-for-ongoing-navigate-event\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event"},
-"create-a-url-pattern-for-urlpattern": {"dfnID":"create-a-url-pattern-for-urlpattern","dfnText":"create a URL pattern for urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-create-a-url-pattern-for-urlpattern"}],"title":"1. Route queries: the @route rule"}],"url":"#create-a-url-pattern-for-urlpattern"},
-"documents-navigation-api": {"dfnID":"documents-navigation-api","dfnText":"document\u2019s navigation API","external":false,"refSections":[{"refs":[{"id":"ref-for-documents-navigation-api"},{"id":"ref-for-documents-navigation-api\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"#documents-navigation-api"},
-"e270bd2a": {"dfnID":"e270bd2a","dfnText":"task","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-task"},{"id":"ref-for-concept-task\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/webappapis.html#concept-task"},
-"e274345c": {"dfnID":"e274345c","dfnText":"<custom-ident>","external":true,"refSections":[{"refs":[{"id":"ref-for-identifier-value"}],"title":"1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#identifier-value"},
+"c4f8137c": {"dfnID":"c4f8137c","dfnText":"<general-enclosed>","external":true,"refSections":[{"refs":[{"id":"ref-for-typedef-general-enclosed"},{"id":"ref-for-typedef-general-enclosed\u2460"},{"id":"ref-for-typedef-general-enclosed\u2461"},{"id":"ref-for-typedef-general-enclosed\u2462"},{"id":"ref-for-typedef-general-enclosed\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed"},
+"c8c5d31a": {"dfnID":"c8c5d31a","dfnText":"ongoing navigate event","external":true,"refSections":[{"refs":[{"id":"ref-for-ongoing-navigate-event"},{"id":"ref-for-ongoing-navigate-event\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event"},
+"create-a-url-pattern-for-urlpattern": {"dfnID":"create-a-url-pattern-for-urlpattern","dfnText":"create a URL pattern for urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-create-a-url-pattern-for-urlpattern"}],"title":"1.1. Route queries: the @route rule"}],"url":"#create-a-url-pattern-for-urlpattern"},
+"documents-navigation-api": {"dfnID":"documents-navigation-api","dfnText":"document\u2019s navigation API","external":false,"refSections":[{"refs":[{"id":"ref-for-documents-navigation-api"},{"id":"ref-for-documents-navigation-api\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"#documents-navigation-api"},
+"e270bd2a": {"dfnID":"e270bd2a","dfnText":"task","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-task"},{"id":"ref-for-concept-task\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/webappapis.html#concept-task"},
+"e274345c": {"dfnID":"e274345c","dfnText":"<custom-ident>","external":true,"refSections":[{"refs":[{"id":"ref-for-identifier-value"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#identifier-value"},
 "f55ffdf2": {"dfnID":"f55ffdf2","dfnText":":local-link","external":true,"refSections":[{"refs":[{"id":"ref-for-local-link-pseudo"}],"title":"2. The urlpattern() function"}],"url":"https://drafts.csswg.org/selectors-5/#local-link-pseudo"},
-"funcdef-if-route": {"dfnID":"funcdef-if-route","dfnText":"route()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-if-route"}],"title":"4. The route() function for if()"}],"url":"#funcdef-if-route"},
-"funcdef-urlpattern": {"dfnID":"funcdef-urlpattern","dfnText":"urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-urlpattern"},{"id":"ref-for-funcdef-urlpattern\u2460"}],"title":"1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-funcdef-urlpattern\u2461"},{"id":"ref-for-funcdef-urlpattern\u2462"},{"id":"ref-for-funcdef-urlpattern\u2463"},{"id":"ref-for-funcdef-urlpattern\u2464"},{"id":"ref-for-funcdef-urlpattern\u2465"},{"id":"ref-for-funcdef-urlpattern\u2466"},{"id":"ref-for-funcdef-urlpattern\u2467"}],"title":"2. The urlpattern() function"}],"url":"#funcdef-urlpattern"},
-"funcdef-when-route": {"dfnID":"funcdef-when-route","dfnText":"route()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-when-route"},{"id":"ref-for-funcdef-when-route\u2460"}],"title":"3. The route() function for @when"}],"url":"#funcdef-when-route"},
-"route-location-url-pattern": {"dfnID":"route-location-url-pattern","dfnText":"route location URL pattern","external":false,"refSections":[{"refs":[{"id":"ref-for-route-location-url-pattern"},{"id":"ref-for-route-location-url-pattern\u2460"},{"id":"ref-for-route-location-url-pattern\u2461"},{"id":"ref-for-route-location-url-pattern\u2462"},{"id":"ref-for-route-location-url-pattern\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"#route-location-url-pattern"},
+"funcdef-if-route": {"dfnID":"funcdef-if-route","dfnText":"route()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-if-route"}],"title":"1.3. The route() function for if()"}],"url":"#funcdef-if-route"},
+"funcdef-urlpattern": {"dfnID":"funcdef-urlpattern","dfnText":"urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-urlpattern"},{"id":"ref-for-funcdef-urlpattern\u2460"}],"title":"1.1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-funcdef-urlpattern\u2461"},{"id":"ref-for-funcdef-urlpattern\u2462"},{"id":"ref-for-funcdef-urlpattern\u2463"},{"id":"ref-for-funcdef-urlpattern\u2464"},{"id":"ref-for-funcdef-urlpattern\u2465"},{"id":"ref-for-funcdef-urlpattern\u2466"},{"id":"ref-for-funcdef-urlpattern\u2467"}],"title":"2. The urlpattern() function"}],"url":"#funcdef-urlpattern"},
+"funcdef-when-route": {"dfnID":"funcdef-when-route","dfnText":"route()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-when-route"},{"id":"ref-for-funcdef-when-route\u2460"}],"title":"1.2. The route() function for @when"}],"url":"#funcdef-when-route"},
+"route-location-url-pattern": {"dfnID":"route-location-url-pattern","dfnText":"route location URL pattern","external":false,"refSections":[{"refs":[{"id":"ref-for-route-location-url-pattern"},{"id":"ref-for-route-location-url-pattern\u2460"},{"id":"ref-for-route-location-url-pattern\u2461"},{"id":"ref-for-route-location-url-pattern\u2462"},{"id":"ref-for-route-location-url-pattern\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"#route-location-url-pattern"},
 "route-queries": {"dfnID":"route-queries","dfnText":"route queries","external":false,"refSections":[],"url":"#route-queries"},
-"typedef-route-condition": {"dfnID":"typedef-route-condition","dfnText":"<route-condition>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-condition"},{"id":"ref-for-typedef-route-condition\u2460"},{"id":"ref-for-typedef-route-condition\u2461"},{"id":"ref-for-typedef-route-condition\u2462"},{"id":"ref-for-typedef-route-condition\u2463"},{"id":"ref-for-typedef-route-condition\u2464"},{"id":"ref-for-typedef-route-condition\u2465"}],"title":"1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-typedef-route-condition\u2466"}],"title":"3. The route() function for @when"},{"refs":[{"id":"ref-for-typedef-route-condition\u2467"}],"title":"4. The route() function for if()"}],"url":"#typedef-route-condition"},
-"typedef-route-in-parens": {"dfnID":"typedef-route-in-parens","dfnText":"<route-in-parens>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-in-parens"},{"id":"ref-for-typedef-route-in-parens\u2460"},{"id":"ref-for-typedef-route-in-parens\u2461"},{"id":"ref-for-typedef-route-in-parens\u2462"},{"id":"ref-for-typedef-route-in-parens\u2463"},{"id":"ref-for-typedef-route-in-parens\u2464"},{"id":"ref-for-typedef-route-in-parens\u2465"},{"id":"ref-for-typedef-route-in-parens\u2466"},{"id":"ref-for-typedef-route-in-parens\u2467"},{"id":"ref-for-typedef-route-in-parens\u2468"},{"id":"ref-for-typedef-route-in-parens\u2460\u24ea"},{"id":"ref-for-typedef-route-in-parens\u2460\u2460"},{"id":"ref-for-typedef-route-in-parens\u2460\u2461"},{"id":"ref-for-typedef-route-in-parens\u2460\u2462"},{"id":"ref-for-typedef-route-in-parens\u2460\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-in-parens"},
-"typedef-route-keyword": {"dfnID":"typedef-route-keyword","dfnText":"<route-keyword>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-keyword"},{"id":"ref-for-typedef-route-keyword\u2460"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-keyword"},
-"typedef-route-location": {"dfnID":"typedef-route-location","dfnText":"<route-location>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-location"},{"id":"ref-for-typedef-route-location\u2460"},{"id":"ref-for-typedef-route-location\u2461"},{"id":"ref-for-typedef-route-location\u2462"},{"id":"ref-for-typedef-route-location\u2463"},{"id":"ref-for-typedef-route-location\u2464"},{"id":"ref-for-typedef-route-location\u2465"},{"id":"ref-for-typedef-route-location\u2466"},{"id":"ref-for-typedef-route-location\u2467"},{"id":"ref-for-typedef-route-location\u2468"},{"id":"ref-for-typedef-route-location\u2460\u24ea"},{"id":"ref-for-typedef-route-location\u2460\u2460"},{"id":"ref-for-typedef-route-location\u2460\u2461"},{"id":"ref-for-typedef-route-location\u2460\u2462"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-location"},
-"typedef-route-name": {"dfnID":"typedef-route-name","dfnText":"<route-name>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-name"},{"id":"ref-for-typedef-route-name\u2460"},{"id":"ref-for-typedef-route-name\u2461"},{"id":"ref-for-typedef-route-name\u2462"},{"id":"ref-for-typedef-route-name\u2463"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-name"},
-"typedef-route-test": {"dfnID":"typedef-route-test","dfnText":"<route-test>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-test"},{"id":"ref-for-typedef-route-test\u2460"},{"id":"ref-for-typedef-route-test\u2461"}],"title":"1. Route queries: the @route rule"}],"url":"#typedef-route-test"},
+"typedef-route-condition": {"dfnID":"typedef-route-condition","dfnText":"<route-condition>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-condition"},{"id":"ref-for-typedef-route-condition\u2460"},{"id":"ref-for-typedef-route-condition\u2461"},{"id":"ref-for-typedef-route-condition\u2462"},{"id":"ref-for-typedef-route-condition\u2463"},{"id":"ref-for-typedef-route-condition\u2464"},{"id":"ref-for-typedef-route-condition\u2465"}],"title":"1.1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-typedef-route-condition\u2466"}],"title":"1.2. The route() function for @when"},{"refs":[{"id":"ref-for-typedef-route-condition\u2467"}],"title":"1.3. The route() function for if()"}],"url":"#typedef-route-condition"},
+"typedef-route-in-parens": {"dfnID":"typedef-route-in-parens","dfnText":"<route-in-parens>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-in-parens"},{"id":"ref-for-typedef-route-in-parens\u2460"},{"id":"ref-for-typedef-route-in-parens\u2461"},{"id":"ref-for-typedef-route-in-parens\u2462"},{"id":"ref-for-typedef-route-in-parens\u2463"},{"id":"ref-for-typedef-route-in-parens\u2464"},{"id":"ref-for-typedef-route-in-parens\u2465"},{"id":"ref-for-typedef-route-in-parens\u2466"},{"id":"ref-for-typedef-route-in-parens\u2467"},{"id":"ref-for-typedef-route-in-parens\u2468"},{"id":"ref-for-typedef-route-in-parens\u2460\u24ea"},{"id":"ref-for-typedef-route-in-parens\u2460\u2460"},{"id":"ref-for-typedef-route-in-parens\u2460\u2461"},{"id":"ref-for-typedef-route-in-parens\u2460\u2462"},{"id":"ref-for-typedef-route-in-parens\u2460\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-in-parens"},
+"typedef-route-keyword": {"dfnID":"typedef-route-keyword","dfnText":"<route-keyword>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-keyword"},{"id":"ref-for-typedef-route-keyword\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-keyword"},
+"typedef-route-location": {"dfnID":"typedef-route-location","dfnText":"<route-location>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-location"},{"id":"ref-for-typedef-route-location\u2460"},{"id":"ref-for-typedef-route-location\u2461"},{"id":"ref-for-typedef-route-location\u2462"},{"id":"ref-for-typedef-route-location\u2463"},{"id":"ref-for-typedef-route-location\u2464"},{"id":"ref-for-typedef-route-location\u2465"},{"id":"ref-for-typedef-route-location\u2466"},{"id":"ref-for-typedef-route-location\u2467"},{"id":"ref-for-typedef-route-location\u2468"},{"id":"ref-for-typedef-route-location\u2460\u24ea"},{"id":"ref-for-typedef-route-location\u2460\u2460"},{"id":"ref-for-typedef-route-location\u2460\u2461"},{"id":"ref-for-typedef-route-location\u2460\u2462"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-location"},
+"typedef-route-name": {"dfnID":"typedef-route-name","dfnText":"<route-name>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-name"},{"id":"ref-for-typedef-route-name\u2460"},{"id":"ref-for-typedef-route-name\u2461"},{"id":"ref-for-typedef-route-name\u2462"},{"id":"ref-for-typedef-route-name\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-name"},
+"typedef-route-test": {"dfnID":"typedef-route-test","dfnText":"<route-test>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-test"},{"id":"ref-for-typedef-route-test\u2460"},{"id":"ref-for-typedef-route-test\u2461"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-test"},
 };
 
 document.addEventListener("DOMContentLoaded", ()=>{
