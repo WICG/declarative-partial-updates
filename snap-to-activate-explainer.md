@@ -2,11 +2,8 @@
 We'd like to make it easier and more reliable for developers to build user experiences
 where navigation can be done by moving parts of the UI
 in a way that can correspond to scrolling and then scroll snapping.
-This navigation should be able to change the URL
-(so that the resulting state can be linked to and shared)
-and [eventually](route-matching-explainer.md#declarative-patch-based-document-updates)
-should be able to trigger loading of the resources needed
-to display the new part of the UI.
+This navigation should be able to change the URL,
+so that the resulting state can be linked to and shared.
 
 ## Use cases
 
@@ -99,10 +96,10 @@ etc.
 > to load new content if any is available
 > (which in this case it is not).
 
-### Swipe actions (like swipe to delete)
+### Swipe actions (like swipe to dismiss/delete)
 
 Another use case that is similar in many ways to pull-to-refresh
-is swipe-to-delete.
+is swipe-to-dismiss or swipe-to-delete.
 Many user interfaces with lists of items that the user can delete
 (for example, lists of messages)
 allow swiping an individual item to the side to either delete an item
@@ -125,23 +122,12 @@ although some aspects may also be different.)
 
 Some things worth thinking about when designing a solution for this are:
 
-* Snap-to-activate should integrate with the work on
-  [declarative patching](patching-explainer.md),
-  since some of the use cases may involve
-  activating substantial pieces of additional content.
-
 * An element, particularly one within a single-page app,
   may be activated in this way more than once in the lifetime of the page.
-  (This implies that while integration with declarative patching is useful,
+  (This implies that while integration
+  with [declarative patching](patching-explainer.md) is useful,
   the integration shouldn't be so tight that a second activation is
   difficult or has poor developer ergonomics.)
-
-* Snap-to-activate should integrate with
-  [declarative routing](route-matching-explainer.md) because
-  this gives the developer access to a declarative way to
-  start view transitions,
-  or perhaps to respond to navigations in other ways.
-  (TODO: Does this make sense?  Clarify?)
 
 * While in many cases the snapping involved will be
   `scroll-snap-type: mandatory`,
