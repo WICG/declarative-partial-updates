@@ -2,7 +2,7 @@
 We'd like to make it easier and more reliable for developers to build user experiences
 where navigation can be done by moving parts of the UI
 in a way that can correspond to scrolling and then scroll snapping.
-This navigation should be able to change the URL,
+This navigation should, in some cases, be able to change the URL,
 so that the resulting state can be linked to and shared.
 
 ## Use cases
@@ -100,6 +100,9 @@ etc.
 
 Another use case that is similar in many ways to pull-to-refresh
 is swipe-to-dismiss or swipe-to-delete.
+Many user interfaces with dialogs or notifications
+allow dismissing that dialog or notification
+by swiping it to the side.
 Many user interfaces with lists of items that the user can delete
 (for example, lists of messages)
 allow swiping an individual item to the side to either delete an item
