@@ -1,3 +1,6 @@
+# Snap-to-activate (Explainer)
+
+David Baron (@dbaron), October 2025
 
 We'd like to make it easier and more reliable for developers to build user experiences
 where navigation can be done by moving parts of the UI
@@ -132,9 +135,31 @@ Some things worth thinking about when designing a solution for this are:
   the integration shouldn't be so tight that a second activation is
   difficult or has poor developer ergonomics.)
 
+* We need to consider how assistive technology announces
+  the existence and use of the user interface elements
+  that can be activated by scrolling.
+  It seems likely that with some solutions in this space
+  the browser may have enough information to make
+  the announcements made by assistive technology
+  better than they would be if developers were using snapchange events.
+  However, we need to investigate what is actually possible for browsers to do,
+  in what cases the browser behavior
+  could be improved by better markup (e.g., ARIA) from the developer
+  (and thus what we should recommend developers do),
+  and in what cases we can improve the default behaviors
+  even in the absence of markup from the developer.
+
 * While in many cases the snapping involved will be
   `scroll-snap-type: mandatory`,
   the design should probably consider `scroll-snap-type: proximity` as well.
+
+* We should consider that scroll snapping works separately
+  in the horizontal and vertical directions.
+  Activation should probably require that an element be scrolled to accurately
+  in both directions, either because it is snapped or because that direction
+  is not scrollable.
+  However, it may need to work in some cases where an ancestor is scrollable
+  in the other direction but the element is not snapped.
 
 ## Possible directions
 
