@@ -57,23 +57,14 @@ parses its content as raw text, finds the target element using attributes, and r
 <section contentname=gallery>Loading...</section>
 
 <!-- later -->
-<template contentfor=gallery>Actual gallery content</template>
+<template contentmethod="replace-children"><section contentfor=gallery>Actual gallery content<section></template>
 ```
 
 A few details about interleaved patching:
-- If an outlet (an element with `contentname`) is not found, the patch template remains in the DOM.
+- Templates with a valid `contentmethod` are not attached to the DOM.
 - If the patching element is not a direct child of `<body>`, the outlet has to have a common ancestor with the patching element's parent.
-- The patch template has to be in the same tree scope as the outlet.
-- By default, the first patch in the stream replaces the entire contents of the outlet, like `replaceChildren`, and the next ones behave like `append`. 
-
-## Manipulating without replacing: `contentcommand`
-
-To allow the patch to manipulate the DOM without replacing all the children, A `contentcommand` attribute
-(values `replaceChildren`, `replaceWith`, `append`, `prepend`, `before`, `after`) can control where the contents of the patch are positioned.
-
-An empty string means the default behavior (`replaceChildren` at start, then `append`).
-
-Those behave with the same semantics as the equivalent DOM manipulation methods, and specifically as defined in https://github.com/whatwg/html/issues/11669.
+- The patch template has to be in the same tree (shadow) scope as the outlet.
+- `contentmethod` can be `replace-children`, `replace` (which replaces the entire element), `append`, or `prepend`.
 
 ## Avoiding overwriting with identical content
 
