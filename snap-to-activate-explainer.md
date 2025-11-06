@@ -41,7 +41,7 @@ but that's normal for exploring additional pieces of an app's UI.)
 Here are two examples taken from native Android apps:
 
 > [!NOTE]
-> (INCLUDE VIDEO HERE from https://photos.app.goo.gl/9YonAy8GKg7vyQ1P6)
+> [example-photos-carousel.webm](https://github.com/user-attachments/assets/a0642753-8bd8-4df8-a104-844a3fa8677b)
 >
 > In this case, the Android Photos app allows swiping from side to side
 > to navigate between photos.
@@ -51,7 +51,7 @@ Here are two examples taken from native Android apps:
 > This allows the URL of a single photo to be shared.
 
 > [!NOTE]
-> (INCLUDE VIDEO HERE from https://photos.app.goo.gl/1ABe699gY39oiZmH9)
+> [example-maps-train-schedule.webm](https://github.com/user-attachments/assets/de8983cc-2318-43d8-8a58-664cd3629d73)
 >
 > In this case, the maps app allows similar swiping from side-to-side
 > to navigate between successive trains departing from a single subway station
@@ -93,7 +93,7 @@ how it integrates with assistive technology,
 etc.
 
 > [!NOTE]
-> (INCLUDE VIDEO HERE from https://photos.app.goo.gl/JFuVWaXqnroUjeMH7)
+> [example-x-pull-to-refresh.webm](https://github.com/user-attachments/assets/51ce111c-8c54-4e2c-88a5-a543545a7cc0)
 >
 > In this case, the Web interface of X (formerly Twitter) uses pull-to-refresh
 > to load new content if any is available
@@ -119,7 +119,7 @@ action that requires the same level care regarding accessibility issues.
 although some aspects may also be different.)
 
 > [!NOTE]
-> (INCLUDE VIDEO HERE from https://photos.app.goo.gl/N7D5k5WaDDCeoDQ27)
+> [example-gmail-swipe-to-delete.webm](https://github.com/user-attachments/assets/12371816-f630-4559-8378-37c6ab260c31)
 >
 > In this case, the Android Gmail app uses a swipe gesture to
 > remove a message from the list of messages being shown.
