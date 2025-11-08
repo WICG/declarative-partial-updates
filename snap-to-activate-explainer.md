@@ -8,6 +8,13 @@ in a way that can correspond to scrolling and then scroll snapping.
 This navigation should, in some cases, be able to change the URL,
 so that the resulting state can be linked to and shared.
 
+These capabilities are important parts
+of building user interfaces
+that respond to gestures,
+which is common in current touch-based user interfaces.
+This is part of making these types of user interfaces
+easier to build on the Web.
+
 ## Use cases
 
 Let's start by examining some use cases that this feature should address,
