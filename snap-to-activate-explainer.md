@@ -100,7 +100,7 @@ how it integrates with assistive technology,
 etc.
 
 > [!NOTE]
-> [example-x-pull-to-refresh.webm](https://github.com/user-attachments/assets/51ce111c-8c54-4e2c-88a5-a543545a7cc0)
+> [example-x-pull-to-refresh.webm](https://github.com/user-attachments/assets/689d8d12-41e0-4011-b18d-609b169c2324)
 >
 > In this case, the Web interface of X (formerly Twitter) uses pull-to-refresh
 > to load new content if any is available
