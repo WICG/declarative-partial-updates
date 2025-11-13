@@ -8,7 +8,7 @@
   <meta content="Bikeshed version 7b3ff057a, updated Sun Nov 9 18:39:50 2025 -0800" name="generator">
   <link href="https://wicg.github.io/declarative-partial-updates/css-route-matching/" rel="canonical">
   <link href="https://www.w3.org/2008/site/images/favicon.ico" rel="icon">
-  <meta content="3402326932cb89c0806c416471e68160e3fd55e9" name="revision">
+  <meta content="637047822333e089172673210bbcedabde582f13" name="revision">
   <meta content="dark light" name="color-scheme">
   <link href="https://www.w3.org/StyleSheets/TR/2021/dark.css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css">
 <style>/* Boilerplate: style-autolinks */
@@ -566,127 +566,6 @@ a.self-link::before            { content: "¶"; }
 .heading > a.self-link::before { content: "§"; }
 dfn > a.self-link::before      { content: "#"; }
 </style>
-<style>/* Boilerplate: style-syntax-highlighting */
-code.highlight { padding: .1em; border-radius: .3em; }
-pre.highlight, pre > code.highlight { display: block; padding: 1em; margin: .5em 0; overflow: auto; border-radius: 0; }
-
-.highlight:not(.idl) { background: rgba(0, 0, 0, .03); }
-c-[a] { color: #990055 } /* Keyword.Declaration */
-c-[b] { color: #990055 } /* Keyword.Type */
-c-[c] { color: #708090 } /* Comment */
-c-[d] { color: #708090 } /* Comment.Multiline */
-c-[e] { color: #0077aa } /* Name.Attribute */
-c-[f] { color: #669900 } /* Name.Tag */
-c-[g] { color: #222222 } /* Name.Variable */
-c-[k] { color: #990055 } /* Keyword */
-c-[l] { color: #000000 } /* Literal */
-c-[m] { color: #000000 } /* Literal.Number */
-c-[n] { color: #0077aa } /* Name */
-c-[o] { color: #999999 } /* Operator */
-c-[p] { color: #999999 } /* Punctuation */
-c-[s] { color: #a67f59 } /* Literal.String */
-c-[t] { color: #a67f59 } /* Literal.String.Single */
-c-[u] { color: #a67f59 } /* Literal.String.Double */
-c-[cp] { color: #708090 } /* Comment.Preproc */
-c-[c1] { color: #708090 } /* Comment.Single */
-c-[cs] { color: #708090 } /* Comment.Special */
-c-[kc] { color: #990055 } /* Keyword.Constant */
-c-[kn] { color: #990055 } /* Keyword.Namespace */
-c-[kp] { color: #990055 } /* Keyword.Pseudo */
-c-[kr] { color: #990055 } /* Keyword.Reserved */
-c-[ld] { color: #000000 } /* Literal.Date */
-c-[nc] { color: #0077aa } /* Name.Class */
-c-[no] { color: #0077aa } /* Name.Constant */
-c-[nd] { color: #0077aa } /* Name.Decorator */
-c-[ni] { color: #0077aa } /* Name.Entity */
-c-[ne] { color: #0077aa } /* Name.Exception */
-c-[nf] { color: #0077aa } /* Name.Function */
-c-[nl] { color: #0077aa } /* Name.Label */
-c-[nn] { color: #0077aa } /* Name.Namespace */
-c-[py] { color: #0077aa } /* Name.Property */
-c-[ow] { color: #999999 } /* Operator.Word */
-c-[mb] { color: #000000 } /* Literal.Number.Bin */
-c-[mf] { color: #000000 } /* Literal.Number.Float */
-c-[mh] { color: #000000 } /* Literal.Number.Hex */
-c-[mi] { color: #000000 } /* Literal.Number.Integer */
-c-[mo] { color: #000000 } /* Literal.Number.Oct */
-c-[sb] { color: #a67f59 } /* Literal.String.Backtick */
-c-[sc] { color: #a67f59 } /* Literal.String.Char */
-c-[sd] { color: #a67f59 } /* Literal.String.Doc */
-c-[se] { color: #a67f59 } /* Literal.String.Escape */
-c-[sh] { color: #a67f59 } /* Literal.String.Heredoc */
-c-[si] { color: #a67f59 } /* Literal.String.Interpol */
-c-[sx] { color: #a67f59 } /* Literal.String.Other */
-c-[sr] { color: #a67f59 } /* Literal.String.Regex */
-c-[ss] { color: #a67f59 } /* Literal.String.Symbol */
-c-[vc] { color: #0077aa } /* Name.Variable.Class */
-c-[vg] { color: #0077aa } /* Name.Variable.Global */
-c-[vi] { color: #0077aa } /* Name.Variable.Instance */
-c-[il] { color: #000000 } /* Literal.Number.Integer.Long */
-
-@media (prefers-color-scheme: dark) {
-    .highlight:not(.idl) { background: rgba(255, 255, 255, .05); }
-
-    c-[a] { color: #d33682 } /* Keyword.Declaration */
-    c-[b] { color: #d33682 } /* Keyword.Type */
-    c-[c] { color: #2aa198 } /* Comment */
-    c-[d] { color: #2aa198 } /* Comment.Multiline */
-    c-[e] { color: #268bd2 } /* Name.Attribute */
-    c-[f] { color: #b58900 } /* Name.Tag */
-    c-[g] { color: #cb4b16 } /* Name.Variable */
-    c-[k] { color: #d33682 } /* Keyword */
-    c-[l] { color: #657b83 } /* Literal */
-    c-[m] { color: #657b83 } /* Literal.Number */
-    c-[n] { color: #268bd2 } /* Name */
-    c-[o] { color: #657b83 } /* Operator */
-    c-[p] { color: #657b83 } /* Punctuation */
-    c-[s] { color: #6c71c4 } /* Literal.String */
-    c-[t] { color: #6c71c4 } /* Literal.String.Single */
-    c-[u] { color: #6c71c4 } /* Literal.String.Double */
-    c-[ch] { color: #2aa198 } /* Comment.Hashbang */
-    c-[cp] { color: #2aa198 } /* Comment.Preproc */
-    c-[cpf] { color: #2aa198 } /* Comment.PreprocFile */
-    c-[c1] { color: #2aa198 } /* Comment.Single */
-    c-[cs] { color: #2aa198 } /* Comment.Special */
-    c-[kc] { color: #d33682 } /* Keyword.Constant */
-    c-[kn] { color: #d33682 } /* Keyword.Namespace */
-    c-[kp] { color: #d33682 } /* Keyword.Pseudo */
-    c-[kr] { color: #d33682 } /* Keyword.Reserved */
-    c-[ld] { color: #657b83 } /* Literal.Date */
-    c-[nc] { color: #268bd2 } /* Name.Class */
-    c-[no] { color: #268bd2 } /* Name.Constant */
-    c-[nd] { color: #268bd2 } /* Name.Decorator */
-    c-[ni] { color: #268bd2 } /* Name.Entity */
-    c-[ne] { color: #268bd2 } /* Name.Exception */
-    c-[nf] { color: #268bd2 } /* Name.Function */
-    c-[nl] { color: #268bd2 } /* Name.Label */
-    c-[nn] { color: #268bd2 } /* Name.Namespace */
-    c-[py] { color: #268bd2 } /* Name.Property */
-    c-[ow] { color: #657b83 } /* Operator.Word */
-    c-[mb] { color: #657b83 } /* Literal.Number.Bin */
-    c-[mf] { color: #657b83 } /* Literal.Number.Float */
-    c-[mh] { color: #657b83 } /* Literal.Number.Hex */
-    c-[mi] { color: #657b83 } /* Literal.Number.Integer */
-    c-[mo] { color: #657b83 } /* Literal.Number.Oct */
-    c-[sa] { color: #6c71c4 } /* Literal.String.Affix */
-    c-[sb] { color: #6c71c4 } /* Literal.String.Backtick */
-    c-[sc] { color: #6c71c4 } /* Literal.String.Char */
-    c-[dl] { color: #6c71c4 } /* Literal.String.Delimiter */
-    c-[sd] { color: #6c71c4 } /* Literal.String.Doc */
-    c-[se] { color: #6c71c4 } /* Literal.String.Escape */
-    c-[sh] { color: #6c71c4 } /* Literal.String.Heredoc */
-    c-[si] { color: #6c71c4 } /* Literal.String.Interpol */
-    c-[sx] { color: #6c71c4 } /* Literal.String.Other */
-    c-[sr] { color: #6c71c4 } /* Literal.String.Regex */
-    c-[ss] { color: #6c71c4 } /* Literal.String.Symbol */
-    c-[fm] { color: #268bd2 } /* Name.Function.Magic */
-    c-[vc] { color: #cb4b16 } /* Name.Variable.Class */
-    c-[vg] { color: #cb4b16 } /* Name.Variable.Global */
-    c-[vi] { color: #cb4b16 } /* Name.Variable.Instance */
-    c-[vm] { color: #cb4b16 } /* Name.Variable.Magic */
-    c-[il] { color: #657b83 } /* Literal.Number.Integer.Long */
-}
-</style>
  <body class="h-entry">
   <div class="head">
    <p data-fill-with="logo"><a class="logo" href="https://www.w3.org/">
@@ -695,7 +574,7 @@ c-[il] { color: #000000 } /* Literal.Number.Integer.Long */
 </p>
    <h1 class="no-ref p-name" id="title">CSS Route Matching</h1>
    <p id="w3c-state"><a href="https://www.w3.org/standards/types/#UD">Unofficial Proposal Draft</a>,
-    <time class="dt-updated" datetime="2025-11-10">10 November 2025</time></p>
+    <time class="dt-updated" datetime="2025-11-13">13 November 2025</time></p>
    <details open>
     <summary>More details about this document</summary>
     <div data-fill-with="spec-metadata">
@@ -801,8 +680,7 @@ in ways that are most intuitive and require the simplest code.</p>
 <dfn class="dfn-paneled" data-dfn-type="type" data-export id="typedef-route-in-parens"><a class="production" data-link-type="type" href="#typedef-route-in-parens" id="ref-for-typedef-route-in-parens⑤">&lt;route-in-parens></a></dfn> = ( <a class="production" data-link-type="type" href="#typedef-route-condition" id="ref-for-typedef-route-condition③">&lt;route-condition></a> ) <a data-link-type="grammar" href="https://drafts.csswg.org/css-values-4/#comb-one" id="ref-for-comb-one②">|</a> ( <a class="production" data-link-type="type" href="#typedef-route-test" id="ref-for-typedef-route-test">&lt;route-test></a> ) <a data-link-type="grammar" href="https://drafts.csswg.org/css-values-4/#comb-one" id="ref-for-comb-one③">|</a> <a class="production" data-link-type="type" href="https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed" id="ref-for-typedef-general-enclosed">&lt;general-enclosed></a>
 <dfn class="dfn-paneled" data-dfn-type="type" data-export id="typedef-route-test"><a class="production" data-link-type="type" href="#typedef-route-test" id="ref-for-typedef-route-test①">&lt;route-test></a></dfn> = <a class="production" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location">&lt;route-location></a> <a data-link-type="grammar" href="https://drafts.csswg.org/css-values-4/#comb-one" id="ref-for-comb-one④">|</a> <a class="production" data-link-type="type" href="#typedef-route-keyword" id="ref-for-typedef-route-keyword">&lt;route-keyword></a> : <a class="production" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①">&lt;route-location></a>
 <dfn class="dfn-paneled" data-dfn-type="type" data-export id="typedef-route-keyword"><a class="production" data-link-type="type" href="#typedef-route-keyword" id="ref-for-typedef-route-keyword①">&lt;route-keyword></a></dfn> = at <a data-link-type="grammar" href="https://drafts.csswg.org/css-values-4/#comb-one" id="ref-for-comb-one⑤">|</a> from <a data-link-type="grammar" href="https://drafts.csswg.org/css-values-4/#comb-one" id="ref-for-comb-one⑥">|</a> to
-<dfn class="dfn-paneled" data-dfn-type="type" data-export id="typedef-route-location"><a class="production" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location②">&lt;route-location></a></dfn> = <a class="production" data-link-type="type" href="#typedef-route-name" id="ref-for-typedef-route-name">&lt;route-name></a> <a data-link-type="grammar" href="https://drafts.csswg.org/css-values-4/#comb-one" id="ref-for-comb-one⑦">|</a> <a class="production" data-link-type="function" href="#funcdef-urlpattern" id="ref-for-funcdef-urlpattern">&lt;urlpattern()></a>
-<dfn class="dfn-paneled" data-dfn-type="type" data-export id="typedef-route-name"><a class="production" data-link-type="type" href="#typedef-route-name" id="ref-for-typedef-route-name①">&lt;route-name></a></dfn> = <a class="production" data-link-type="type" href="https://drafts.csswg.org/css-values-4/#identifier-value" id="ref-for-identifier-value">&lt;custom-ident></a>
+<dfn class="dfn-paneled" data-dfn-type="type" data-export id="typedef-route-location"><a class="production" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location②">&lt;route-location></a></dfn> = <a class="production" data-link-type="function" href="#funcdef-urlpattern" id="ref-for-funcdef-urlpattern">&lt;urlpattern()></a>
 </pre>
    <p>The above grammar is purposely very loose for forwards-compatibility reasons,
 since the <a class="css production" data-link-type="type" href="https://drafts.csswg.org/mediaqueries-5/#typedef-general-enclosed" id="ref-for-typedef-general-enclosed①">&lt;general-enclosed></a> production
@@ -813,10 +691,6 @@ which includes the <a class="css production" data-link-type="type" href="https:/
 is invalid.
 Style sheets <strong>must not</strong> use such a rule and
 processors <strong>must</strong> ignore such a rule (including all of its contents).</p>
-   <p>A <a class="css production" data-link-type="type" href="#typedef-route-name" id="ref-for-typedef-route-name②">&lt;route-name></a> is a reference to a route
-named in a <code class="highlight"><c- p>&lt;</c-><c- f>script</c-> <c- e>type</c-><c- o>=</c-><c- s>routemap</c-><c- p>></c-></code>
-in the document.
-<span class="issue" id="issue-dde173c5"><a class="self-link" href="#issue-dde173c5"></a>This should be defined more formally once routemaps are.</span></p>
    <p>Many of these grammar terms are associated with a boolean result,
 as follows:</p>
    <dl>
@@ -921,18 +795,18 @@ so that new syntax additions do not invalidate too much of a <a class="css produ
    <p>The <dfn class="dfn-paneled" data-dfn-type="dfn" data-noexport id="route-location-url-pattern">route location URL pattern</dfn> of a <a class="css production" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①②">&lt;route-location></a>
 depends on the type of <a class="css production" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①③">&lt;route-location></a>:</p>
    <dl>
-    <dt data-md><a class="css production" data-link-type="type" href="#typedef-route-name" id="ref-for-typedef-route-name③">&lt;route-name></a>
-    <dd data-md>
-     <p>the URL pattern of a route named <a class="css production" data-link-type="type" href="#typedef-route-name" id="ref-for-typedef-route-name④">&lt;route-name></a>
-declared in a <code class="highlight"><c- p>&lt;</c-><c- f>script</c-> <c- e>type</c-><c- o>=</c-><c- s>routemap</c-><c- p>></c-></code>.</p>
-     <p class="issue" id="issue-6ca9e07a"><a class="self-link" href="#issue-6ca9e07a"></a> Once routemaps are defined more formally,
-this should be defined in terms of the routemap definition
-instead of referring directly to URLPattern.</p>
     <dt data-md><a class="css production" data-link-type="function" href="#funcdef-urlpattern" id="ref-for-funcdef-urlpattern①">&lt;urlpattern()></a>
     <dd data-md>
      <p>The <a data-link-type="dfn" href="https://urlpattern.spec.whatwg.org/#url-pattern" id="ref-for-url-pattern">URL pattern</a> represented by the function; see
 <a data-link-type="dfn" href="#create-a-url-pattern-for-urlpattern" id="ref-for-create-a-url-pattern-for-urlpattern">create a URL pattern for urlpattern()</a>.</p>
    </dl>
+   <p class="issue" id="issue-1acb56c0"><a class="self-link" href="#issue-1acb56c0"></a> There is currently only one type of <a class="css production" data-link-type="type" href="#typedef-route-location" id="ref-for-typedef-route-location①④">&lt;route-location></a>
+but we should consider adding another,
+which would be just a name that references
+a name defined in a routemap.
+See the
+<a href="https://github.com/WICG/declarative-partial-updates/blob/main/route-matching-explainer.md">route matching explainer</a>
+for details.</p>
    <p>A <dfn class="dfn-paneled" data-dfn-type="dfn" data-noexport id="documents-navigation-api">document’s navigation API</dfn> is
 the result of the following steps on <var>document</var>:</p>
    <ol>
@@ -1063,7 +937,6 @@ intentionally does not provide a serialization.</p>
    <li><a href="#typedef-route-keyword">&lt;route-keyword></a><span>, in § 1.1</span>
    <li><a href="#typedef-route-location">&lt;route-location></a><span>, in § 1.1</span>
    <li><a href="#route-location-url-pattern">route location URL pattern</a><span>, in § 1.1</span>
-   <li><a href="#typedef-route-name">&lt;route-name></a><span>, in § 1.1</span>
    <li><a href="#route-queries">route queries</a><span>, in § 1.1</span>
    <li><a href="#typedef-route-test">&lt;route-test></a><span>, in § 1.1</span>
    <li><a href="#serialize-a-urlpattern-function">serialize a urlpattern() function</a><span>, in § 3</span>
@@ -1090,7 +963,6 @@ intentionally does not provide a serialization.</p>
     <a data-link-type="biblio">[CSS-VALUES-4]</a> defines the following terms:
     <ul>
      <li><span class="dfn-paneled" id="68150e76">*</span>
-     <li><span class="dfn-paneled" id="e274345c">&lt;custom-ident></span>
      <li><span class="dfn-paneled" id="977d3003">&lt;string></span>
      <li><span class="dfn-paneled" id="b511103c">style resource base URL</span>
      <li><span class="dfn-paneled" id="5a2f7ea1">url()</span>
@@ -1190,7 +1062,6 @@ intentionally does not provide a serialization.</p>
   </dl>
   <h2 class="heading no-num no-ref settled" id="issues-index"><span class="content">Issues Index</span><a class="self-link" href="#issues-index"></a></h2>
   <div style="counter-reset:issue">
-   <div class="issue">This should be defined more formally once routemaps are. <a class="issue-return" href="#issue-dde173c5" title="Jump to section">↵</a></div>
    <div class="issue"> This assumes that the <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#ongoing-navigate-event">ongoing navigate event</a>
 and the <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#concept-navigation-transition">transition</a> have the same lifetime,
 but this isn’t really
@@ -1204,9 +1075,13 @@ But which lifetime is the one we want? <a class="issue-return" href="#issue-879c
 if you start a same-document navigation (e.g., with <code class="idl"><a data-link-type="idl" href="https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate">pushState</a></code>)
 in the middle of a cross-document navigation. <a class="issue-return" href="#issue-8de45772" title="Jump to section">↵</a></div>
    <div class="issue"> Improve integration with <a data-link-type="dfn" href="https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed">has been revealed</a> rather than monkeypatching it. <a class="issue-return" href="#issue-3df86670" title="Jump to section">↵</a></div>
-   <div class="issue"> Once routemaps are defined more formally,
-this should be defined in terms of the routemap definition
-instead of referring directly to URLPattern. <a class="issue-return" href="#issue-6ca9e07a" title="Jump to section">↵</a></div>
+   <div class="issue"> There is currently only one type of <a class="css production" data-link-type="type" href="#typedef-route-location">&lt;route-location></a>
+but we should consider adding another,
+which would be just a name that references
+a name defined in a routemap.
+See the
+<a href="https://github.com/WICG/declarative-partial-updates/blob/main/route-matching-explainer.md">route matching explainer</a>
+for details. <a class="issue-return" href="#issue-1acb56c0" title="Jump to section">↵</a></div>
    <div class="issue"> This should probably have a more formal definition of the function,
 but I can’t find the formal definitions of the existing <a class="css" data-link-type="maybe" href="https://drafts.csswg.org/css-values-5/#funcdef-if">if()</a> functions
 to model it after. <a class="issue-return" href="#issue-14849ff8" title="Jump to section">↵</a></div>
@@ -1454,7 +1329,7 @@ let dfnPanelData = {
 "6a40c011": {"dfnID":"6a40c011","dfnText":"has been revealed","external":true,"refSections":[{"refs":[{"id":"ref-for-has-been-revealed"},{"id":"ref-for-has-been-revealed\u2460"},{"id":"ref-for-has-been-revealed\u2461"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/browsing-the-web.html#has-been-revealed"},
 "6b631d3b": {"dfnID":"6b631d3b","dfnText":"entry","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationactivation-entry"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationactivation-entry"},
 "6e13c5fc": {"dfnID":"6e13c5fc","dfnText":"if()","external":true,"refSections":[{"refs":[{"id":"ref-for-funcdef-if"},{"id":"ref-for-funcdef-if\u2460"},{"id":"ref-for-funcdef-if\u2461"}],"title":"1.3. The route() function for if()"}],"url":"https://drafts.csswg.org/css-values-5/#funcdef-if"},
-"6ec67710": {"dfnID":"6ec67710","dfnText":"|","external":true,"refSections":[{"refs":[{"id":"ref-for-comb-one"},{"id":"ref-for-comb-one\u2460"},{"id":"ref-for-comb-one\u2461"},{"id":"ref-for-comb-one\u2462"},{"id":"ref-for-comb-one\u2463"},{"id":"ref-for-comb-one\u2464"},{"id":"ref-for-comb-one\u2465"},{"id":"ref-for-comb-one\u2466"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#comb-one"},
+"6ec67710": {"dfnID":"6ec67710","dfnText":"|","external":true,"refSections":[{"refs":[{"id":"ref-for-comb-one"},{"id":"ref-for-comb-one\u2460"},{"id":"ref-for-comb-one\u2461"},{"id":"ref-for-comb-one\u2462"},{"id":"ref-for-comb-one\u2463"},{"id":"ref-for-comb-one\u2464"},{"id":"ref-for-comb-one\u2465"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#comb-one"},
 "78fedd4c": {"dfnID":"78fedd4c","dfnText":"url (for NavigationDestination)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-navigationdestination-url"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-navigationdestination-url"},
 "87806adf": {"dfnID":"87806adf","dfnText":"pushState(data, unused, url)","external":true,"refSections":[{"refs":[{"id":"ref-for-dom-history-pushstate"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate"},
 "8b6678c3": {"dfnID":"8b6678c3","dfnText":"navigation API","external":true,"refSections":[{"refs":[{"id":"ref-for-window-navigation-api"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-navigation-api"},
@@ -1470,7 +1345,6 @@ let dfnPanelData = {
 "create-a-url-pattern-for-urlpattern": {"dfnID":"create-a-url-pattern-for-urlpattern","dfnText":"create a URL pattern for urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-create-a-url-pattern-for-urlpattern"}],"title":"1.1. Route queries: the @route rule"}],"url":"#create-a-url-pattern-for-urlpattern"},
 "documents-navigation-api": {"dfnID":"documents-navigation-api","dfnText":"document\u2019s navigation API","external":false,"refSections":[{"refs":[{"id":"ref-for-documents-navigation-api"},{"id":"ref-for-documents-navigation-api\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"#documents-navigation-api"},
 "e270bd2a": {"dfnID":"e270bd2a","dfnText":"task","external":true,"refSections":[{"refs":[{"id":"ref-for-concept-task"},{"id":"ref-for-concept-task\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://html.spec.whatwg.org/multipage/webappapis.html#concept-task"},
-"e274345c": {"dfnID":"e274345c","dfnText":"<custom-ident>","external":true,"refSections":[{"refs":[{"id":"ref-for-identifier-value"}],"title":"1.1. Route queries: the @route rule"}],"url":"https://drafts.csswg.org/css-values-4/#identifier-value"},
 "f55ffdf2": {"dfnID":"f55ffdf2","dfnText":":local-link","external":true,"refSections":[{"refs":[{"id":"ref-for-local-link-pseudo"}],"title":"3. The urlpattern() function"}],"url":"https://drafts.csswg.org/selectors-5/#local-link-pseudo"},
 "funcdef-if-route": {"dfnID":"funcdef-if-route","dfnText":"route()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-if-route"}],"title":"1.3. The route() function for if()"}],"url":"#funcdef-if-route"},
 "funcdef-urlpattern": {"dfnID":"funcdef-urlpattern","dfnText":"urlpattern()","external":false,"refSections":[{"refs":[{"id":"ref-for-funcdef-urlpattern"},{"id":"ref-for-funcdef-urlpattern\u2460"}],"title":"1.1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-funcdef-urlpattern\u2461"},{"id":"ref-for-funcdef-urlpattern\u2462"},{"id":"ref-for-funcdef-urlpattern\u2463"},{"id":"ref-for-funcdef-urlpattern\u2464"},{"id":"ref-for-funcdef-urlpattern\u2465"},{"id":"ref-for-funcdef-urlpattern\u2466"},{"id":"ref-for-funcdef-urlpattern\u2467"},{"id":"ref-for-funcdef-urlpattern\u2468"}],"title":"3. The urlpattern() function"}],"url":"#funcdef-urlpattern"},
@@ -1481,8 +1355,7 @@ let dfnPanelData = {
 "typedef-route-condition": {"dfnID":"typedef-route-condition","dfnText":"<route-condition>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-condition"},{"id":"ref-for-typedef-route-condition\u2460"},{"id":"ref-for-typedef-route-condition\u2461"},{"id":"ref-for-typedef-route-condition\u2462"},{"id":"ref-for-typedef-route-condition\u2463"},{"id":"ref-for-typedef-route-condition\u2464"},{"id":"ref-for-typedef-route-condition\u2465"}],"title":"1.1. Route queries: the @route rule"},{"refs":[{"id":"ref-for-typedef-route-condition\u2466"}],"title":"1.2. The route() function for @when"},{"refs":[{"id":"ref-for-typedef-route-condition\u2467"}],"title":"1.3. The route() function for if()"}],"url":"#typedef-route-condition"},
 "typedef-route-in-parens": {"dfnID":"typedef-route-in-parens","dfnText":"<route-in-parens>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-in-parens"},{"id":"ref-for-typedef-route-in-parens\u2460"},{"id":"ref-for-typedef-route-in-parens\u2461"},{"id":"ref-for-typedef-route-in-parens\u2462"},{"id":"ref-for-typedef-route-in-parens\u2463"},{"id":"ref-for-typedef-route-in-parens\u2464"},{"id":"ref-for-typedef-route-in-parens\u2465"},{"id":"ref-for-typedef-route-in-parens\u2466"},{"id":"ref-for-typedef-route-in-parens\u2467"},{"id":"ref-for-typedef-route-in-parens\u2468"},{"id":"ref-for-typedef-route-in-parens\u2460\u24ea"},{"id":"ref-for-typedef-route-in-parens\u2460\u2460"},{"id":"ref-for-typedef-route-in-parens\u2460\u2461"},{"id":"ref-for-typedef-route-in-parens\u2460\u2462"},{"id":"ref-for-typedef-route-in-parens\u2460\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-in-parens"},
 "typedef-route-keyword": {"dfnID":"typedef-route-keyword","dfnText":"<route-keyword>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-keyword"},{"id":"ref-for-typedef-route-keyword\u2460"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-keyword"},
-"typedef-route-location": {"dfnID":"typedef-route-location","dfnText":"<route-location>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-location"},{"id":"ref-for-typedef-route-location\u2460"},{"id":"ref-for-typedef-route-location\u2461"},{"id":"ref-for-typedef-route-location\u2462"},{"id":"ref-for-typedef-route-location\u2463"},{"id":"ref-for-typedef-route-location\u2464"},{"id":"ref-for-typedef-route-location\u2465"},{"id":"ref-for-typedef-route-location\u2466"},{"id":"ref-for-typedef-route-location\u2467"},{"id":"ref-for-typedef-route-location\u2468"},{"id":"ref-for-typedef-route-location\u2460\u24ea"},{"id":"ref-for-typedef-route-location\u2460\u2460"},{"id":"ref-for-typedef-route-location\u2460\u2461"},{"id":"ref-for-typedef-route-location\u2460\u2462"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-location"},
-"typedef-route-name": {"dfnID":"typedef-route-name","dfnText":"<route-name>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-name"},{"id":"ref-for-typedef-route-name\u2460"},{"id":"ref-for-typedef-route-name\u2461"},{"id":"ref-for-typedef-route-name\u2462"},{"id":"ref-for-typedef-route-name\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-name"},
+"typedef-route-location": {"dfnID":"typedef-route-location","dfnText":"<route-location>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-location"},{"id":"ref-for-typedef-route-location\u2460"},{"id":"ref-for-typedef-route-location\u2461"},{"id":"ref-for-typedef-route-location\u2462"},{"id":"ref-for-typedef-route-location\u2463"},{"id":"ref-for-typedef-route-location\u2464"},{"id":"ref-for-typedef-route-location\u2465"},{"id":"ref-for-typedef-route-location\u2466"},{"id":"ref-for-typedef-route-location\u2467"},{"id":"ref-for-typedef-route-location\u2468"},{"id":"ref-for-typedef-route-location\u2460\u24ea"},{"id":"ref-for-typedef-route-location\u2460\u2460"},{"id":"ref-for-typedef-route-location\u2460\u2461"},{"id":"ref-for-typedef-route-location\u2460\u2462"},{"id":"ref-for-typedef-route-location\u2460\u2463"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-location"},
 "typedef-route-test": {"dfnID":"typedef-route-test","dfnText":"<route-test>","external":false,"refSections":[{"refs":[{"id":"ref-for-typedef-route-test"},{"id":"ref-for-typedef-route-test\u2460"},{"id":"ref-for-typedef-route-test\u2461"}],"title":"1.1. Route queries: the @route rule"}],"url":"#typedef-route-test"},
 };
 
@@ -1883,7 +1756,6 @@ let refsData = {
 "#typedef-route-in-parens": {"displayText":"<route-in-parens>","export":true,"for_":[],"level":"1","normative":true,"shortname":"css-route-matching","spec":"css-route-matching-1","status":"local","text":"<route-in-parens>","type":"type","url":"#typedef-route-in-parens"},
 "#typedef-route-keyword": {"displayText":"<route-keyword>","export":true,"for_":[],"level":"1","normative":true,"shortname":"css-route-matching","spec":"css-route-matching-1","status":"local","text":"<route-keyword>","type":"type","url":"#typedef-route-keyword"},
 "#typedef-route-location": {"displayText":"<route-location>","export":true,"for_":[],"level":"1","normative":true,"shortname":"css-route-matching","spec":"css-route-matching-1","status":"local","text":"<route-location>","type":"type","url":"#typedef-route-location"},
-"#typedef-route-name": {"displayText":"<route-name>","export":true,"for_":[],"level":"1","normative":true,"shortname":"css-route-matching","spec":"css-route-matching-1","status":"local","text":"<route-name>","type":"type","url":"#typedef-route-name"},
 "#typedef-route-test": {"displayText":"<route-test>","export":true,"for_":[],"level":"1","normative":true,"shortname":"css-route-matching","spec":"css-route-matching-1","status":"local","text":"<route-test>","type":"type","url":"#typedef-route-test"},
 "https://dom.spec.whatwg.org/#concept-document-url": {"displayText":"URL","export":true,"for_":["Document"],"level":"1","normative":true,"shortname":"dom","spec":"dom","status":"current","text":"url","type":"dfn","url":"https://dom.spec.whatwg.org/#concept-document-url"},
 "https://drafts.csswg.org/css-conditional-3/#typedef-supports-condition": {"displayText":"<supports-condition>","export":true,"for_":[],"level":"3","normative":true,"shortname":"css-conditional","spec":"css-conditional-3","status":"current","text":"<supports-condition>","type":"type","url":"https://drafts.csswg.org/css-conditional-3/#typedef-supports-condition"},
@@ -1891,7 +1763,6 @@ let refsData = {
 "https://drafts.csswg.org/css-syntax-3/#typedef-rule-list": {"displayText":"<rule-list>","export":true,"for_":[],"level":"3","normative":true,"shortname":"css-syntax","spec":"css-syntax-3","status":"current","text":"<rule-list>","type":"type","url":"https://drafts.csswg.org/css-syntax-3/#typedef-rule-list"},
 "https://drafts.csswg.org/css-values-4/#comb-one": {"displayText":"|","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"|","type":"grammar","url":"https://drafts.csswg.org/css-values-4/#comb-one"},
 "https://drafts.csswg.org/css-values-4/#funcdef-url": {"displayText":"url()","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"url()","type":"function","url":"https://drafts.csswg.org/css-values-4/#funcdef-url"},
-"https://drafts.csswg.org/css-values-4/#identifier-value": {"displayText":"<custom-ident>","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"<custom-ident>","type":"type","url":"https://drafts.csswg.org/css-values-4/#identifier-value"},
 "https://drafts.csswg.org/css-values-4/#mult-zero-plus": {"displayText":"*","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"*","type":"grammar","url":"https://drafts.csswg.org/css-values-4/#mult-zero-plus"},
 "https://drafts.csswg.org/css-values-4/#string-value": {"displayText":"<string>","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"<string>","type":"type","url":"https://drafts.csswg.org/css-values-4/#string-value"},
 "https://drafts.csswg.org/css-values-4/#style-resource-base-url": {"displayText":"style resource base URL","export":true,"for_":[],"level":"4","normative":true,"shortname":"css-values","spec":"css-values-4","status":"current","text":"style resource base url","type":"dfn","url":"https://drafts.csswg.org/css-values-4/#style-resource-base-url"},
