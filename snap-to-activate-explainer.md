@@ -257,3 +257,7 @@ and test with assistive technology,
 and producing at least minimally acceptible experiences
 in the cases where developers don't do those things
 but do follow general best practices in their code).
+
+## Other links
+
+* Discussion with ARIA WG in [w3c/aria#2659](https://github.com/w3c/aria/issues/2659)
