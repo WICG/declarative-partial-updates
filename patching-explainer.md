@@ -1,7 +1,7 @@
 # Interleaved HTML streaming (patching)
 
 ## Motivation
-Streaming of HTML existed from the early days of the web, serving an important purpose for perceieved performance when loading long articles etc.
+Streaming of HTML existed from the early days of the web, serving an important purpose for perceived performance when loading long articles etc.
 However, it always had the following major constraints:
 1. HTML content is streamed in DOM order.
 2. After the initial parsing of the document, streaming is no longer enabled.
