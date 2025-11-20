@@ -80,7 +80,7 @@ to the top
 and then continuing to scroll a little bit past the top
 (where the scrolling goes slower than the user's finger
 to provide the feeling of resistance or pulling)
-causes the content to reload or to add new conent.
+causes the content to reload or to add new content.
 This requires having UI in the overscroll area (the area past the end)
 of a scrollable container.
 When activated, the UI in the overscroll area can trigger the refresh.
