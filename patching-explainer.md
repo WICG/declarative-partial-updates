@@ -32,21 +32,30 @@ It is similar to calling `document.write()`, scoped to an node.
 The most atomic form of patching is opening a container node for writing, creating a `WritableStream` for it.
 This can be done with an API as such:
 ```js
-const writable = elementOrShadowRoot.streamHTML();
+const writable = elementOrShadowRoot.streamHTMLUnsafe({runScripts: true});
 byteOrTextStream.pipeTo(writable);
 ```
 
 A few details about one-off patching:
-- Trying to patch an element that is currently being patched would abort the original stream.
-- Replacing the contents of an existing script would only execute the script if the original contents were empty (equivalent to `innerHTML` behavior).
+- Streams do not abort each other. It is the author's responsibility to manage conflicts between multiple streams.
+- Unlike contextual fragments, when `runScripts` is true, classic scripts in the stream can block the parser until they are fetched. This makes the streaming parser behave more similarly to the main parser.
 
 To account for HTML sanitation, this API would have an "Unsafe" version and would accept a sanitizer in its option, like [`setHTML`](https://developer.mozilla.org/en-US/docs/Web/API/Element/setHTML):
 ```js
-byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTML({sanitizer}));
-byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTMLUnsafe({sanitizer}));
+byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTML({sanitizer, runScripts}));
+byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTMLUnsafe({sanitizer, runScripts}));
 ```
 
-Also see detailed discussion at https://github.com/whatwg/html/issues/11669, will amend this explainer once that's settled.
+Since user-space sanitizers like DOMPurify are not well suited for streaming, TrustedTypes only allows streaming with either sanitation or by giving it a "free pass", by blessing parser options:
+```js
+// This would fail if there is a default policy with `createHTML`
+element.streamHTMLUnsafe({sanitizer, runScripts});
+
+// This would "bless" the parser options for streaming.
+element.streamHTMLUnsafe(trustedSourcePolicy.createParserOptions({sanitizer, runScripts});
+```
+
+Also see detailed discussion at https://github.com/whatwg/html/issues/11669.
 
 ## Interleaved patching
 
@@ -57,50 +66,56 @@ parses its content as raw text, finds the target element using attributes, and r
 <section contentname=gallery>Loading...</section>
 
 <!-- later -->
-<template contentmethod="replace-children"><section contentfor=gallery>Actual gallery content<section></template>
+<template contentmethod="replace-children"><section contentname=gallery>Actual gallery content<section></template>
 ```
 
 A few details about interleaved patching:
 - Templates with a valid `contentmethod` are not attached to the DOM.
 - If the patching element is not a direct child of `<body>`, the outlet has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the outlet.
-- `contentmethod` can be `replace-children`, `replace` (which replaces the entire element), `append`, or `prepend`.
+- `contentmethod` can be `replace-children`, or `append`. `replace-children` is the basic one that allows replacing a placeholder with its contents,
+  while `append` allows for multiple patches that are interleaved in the same HTML stream to accumulate.
 
 ## Avoiding overwriting with identical content
 
 Some content might need to remain unchanged in certain conditions. For example, displaying a chat widget in all pages but the home, but not reloading it between pages.
 For this, both the outlet and the patch can have a `contentrevision` attribute. If those match, the content is not applied.
 
-## Reflection
+## Potential enhancement - streaming to non-element ranges
+See discussion in https://github.com/WICG/declarative-partial-updates/issues/6 and https://github.com/WICG/webcomponents/issues/1116.
 
-Besides applying a patch, there should be a few ways to reflect about the current status of patching and receive events/callbacks when a patch is underway.
+It has been a common request to stream not just by replacing the whole contents of an element or appending to it, but also by replacing an arbitrary range.
+This is connected with other use cases for addressing arbitrary ranges in the page.
+Use cases for this can be replcing some `<meta>` tags in the `<head>`, replacing multiple rows in a table, or replacing an element similar to the `replaceWith` method.
 
-### CSS reflection
-See https://github.com/w3c/csswg-drafts/issues/12579 and https://github.com/w3c/csswg-drafts/issues/12578.
+To achieve these use cases, the direction is to use addressable comments as per https://github.com/WICG/webcomponents/issues/1116, and use two comments as a "range", equivalent to an element with a `contentname` attribute.
 
-Suggesting to add a couple of pseudo-classes: `:updating` and `:pending`, that reflect the patching status of an element, in addition to a pseudo-class that reflects that an element's parser state is open (regardless of patching).
+Very initial example:
 
-### JS status
+```html
+<table contentname="data">
+  <tr><td>static data
+  <tr><td>static data
 
-Suggesting to give nodes a nullable `currentPatch` attribute that reflects the current status of a patch and allows aborting it.
-In addition, suggesting to fire a `patch` event on an element when a patch on it is invoked, allowing the listener to abort the patch or inject a `TransformStream` to it.
+  <?marker name=dyn-start?>
+  <tr><td>dynamic data 1
+  <tr><td>dynamic data 2
+  <?marker name=dyn-end?>
+</table>
 
-## Sanitation & Content Security
+<!-- stuff.... -->
 
-Since patching is a new API for setting HTML, it should be designed carefully in terms of XSS and the existing mitigations.
-As far as the HTML sanitizer go, it should be made sure that the different new APIs support passing a sanitizer, and that the sanitizer implementation works correctly when the parser content is streamed rather than set directly. See https://github.com/WICG/sanitizer-api/issues/190.
-Note that the HTML sanitizer works closely with the HTML parser, so it shouldn't need additional buffering/streaming support as part of the API.
-
-In addition, [Trusted types](https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API) would need streaming support in its policy, potentially by injecting a `TransformStream` into the patch. See https://github.com/w3c/trusted-types/issues/594.
-
-## Enhancement - JS API for interleaved patching
-In addition to invoking interleaved patching as part of the main response, allow parsing an HTML stream and extracting patches from it into an existing element:
-```js
-const writable = documentOrElementOrShadowTree.patchInterleaved()
-const writable = documentOrElementOrShadowTree.patchInterleavedUnsafe()
+<!-- This would replace the children only between the dyn-start and dyn-end markers, leaving the static data alone. -->
+<template contentmethod="replace-children" contentmarkerstart="dyn-start" contentmarkerend="dyn-end">
+  <table contentname=data>    
+    <tr><td>dynamic data 3
+    <tr><td>dynamic data 4
+    <tr><td>dynamic data 5
+  </table>
+</template>
+</body>
 ```
 
-When calling `patchInterleaved`, discovered patches are applied to the target container node, and the rest of the HTML is discarded.
 
 ## Potential enhancement - patch contents from URL
 
