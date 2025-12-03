@@ -39,10 +39,12 @@ byteOrTextStream.pipeTo(writable);
 A few details about one-off patching:
 - Streams do not abort each other. It is the author's responsibility to manage conflicts between multiple streams.
 - Unlike contextual fragments, when `runScripts` is true, classic scripts in the stream can block the parser until they are fetched. This makes the streaming parser behave more similarly to the main parser.
+- Only the unsafe variant can run scripts.
+- This describes `streamHTML`, but also `streamAppendHTML`, `streamPrependHTML`, `streamBeforeHTML`, `streamAfterHTML`, and `streamReplaceWithHTML` variants are proposed.
 
 To account for HTML sanitation, this API would have an "Unsafe" version and would accept a sanitizer in its option, like [`setHTML`](https://developer.mozilla.org/en-US/docs/Web/API/Element/setHTML):
 ```js
-byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTML({sanitizer, runScripts}));
+byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTML({sanitizer}));
 byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTMLUnsafe({sanitizer, runScripts}));
 ```
 
@@ -75,6 +77,7 @@ A few details about interleaved patching:
 - The patch template has to be in the same tree (shadow) scope as the outlet.
 - `contentmethod` can be `replace-children`, or `append`. `replace-children` is the basic one that allows replacing a placeholder with its contents,
   while `append` allows for multiple patches that are interleaved in the same HTML stream to accumulate.
+- Interleaved patching works together with one-off patching. When a `<template contentmethod>` appears inside a stream, it is applied, resolving `contentname` from the stream target.
 
 ## Avoiding overwriting with identical content
 
