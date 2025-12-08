@@ -13,78 +13,96 @@ For example, React streams content out of order by injecting inline `<script>` t
 
 This proposal introduces partial out-of-order HTML streaming as part of the web platform.
 
-## Patching
-A "patch" is a stream of HTML content, that can be injected into an existing position in the DOM.
-A patch can be streamed directly into that position using JavaScript, and multiple patches can be interleaved in an HTML document, allowing for out-of-order content as part of an ordinary HTML response.
+## Declarative patching
 
-## Anatomy of a patch
+Patches are delivered using a `<template>` element with the `contentmethod` attribute and target an existing elements in the DOM with the `contentname` attributes. These patches require no scripts to apply (are declarative) and can appear in the main response HTML to support out-of-order streaming.
 
-A patch is a [stream](https://developer.mozilla.org/en-US/docs/Web/API/Streams_API) that targets a [parent node](https://developer.mozilla.org/en-US/docs/Web/API/Node) (usually an element, but potentially a shadow root).
-It can handle strings, bytes, or `TrustedHTMLString`. When it receives bytes, it decodes them using UTF8.
-Anything other than strings or bytes is stringified.
+Patches can be be applied later in the page lifecycle using JavaScript, see [script-initiated patching](#script-initiated-patching).
 
-When a patch is active, it is essentially a [WritableStream](https://developer.mozilla.org/en-US/docs/Web/API/WritableStream) that feeds a [fragment-mode parser](https://html.spec.whatwg.org/multipage/parsing.html#html-fragment-parsing-algorithm) with strings from that stream.
-Unlike the usual fragment parser, nodes are inserted directly into the target and not buffered into the fragment first. The fragment parser is only used to set up the parser context.
-It is similar to calling `document.write()`, scoped to an node.
+### Proposed markup
 
-## One-off patching
-
-The most atomic form of patching is opening a container node for writing, creating a `WritableStream` for it.
-This can be done with an API as such:
-```js
-const writable = elementOrShadowRoot.streamHTMLUnsafe({runScripts: true});
-byteOrTextStream.pipeTo(writable);
-```
-
-A few details about one-off patching:
-- Streams do not abort each other. It is the author's responsibility to manage conflicts between multiple streams.
-- Unlike contextual fragments, when `runScripts` is true, classic scripts in the stream can block the parser until they are fetched. This makes the streaming parser behave more similarly to the main parser.
-- Only the unsafe variant can run scripts.
-- This describes `streamHTML`, but also `streamAppendHTML`, `streamPrependHTML`, `streamBeforeHTML`, `streamAfterHTML`, and `streamReplaceWithHTML` variants are proposed.
-
-To account for HTML sanitation, this API would have an "Unsafe" version and would accept a sanitizer in its option, like [`setHTML`](https://developer.mozilla.org/en-US/docs/Web/API/Element/setHTML):
-```js
-byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTML({sanitizer}));
-byteOrTextStream.pipeTo(elementOrShadowRoot.streamHTMLUnsafe({sanitizer, runScripts}));
-```
-
-Since user-space sanitizers like DOMPurify are not well suited for streaming, TrustedTypes only allows streaming with either sanitation or by giving it a "free pass", by blessing parser options:
-```js
-// This would fail if there is a default policy with `createHTML`
-element.streamHTMLUnsafe({sanitizer, runScripts});
-
-// This would "bless" the parser options for streaming.
-element.streamHTMLUnsafe(trustedSourcePolicy.createParserOptions({sanitizer, runScripts});
-```
-
-Also see detailed discussion at https://github.com/whatwg/html/issues/11669.
-
-## Interleaved patching
-
-In addition to invoking streaming using script, this proposal includes patching interleaved inside HTML content. A `<template>` would have a special attribute that
-parses its content as raw text, finds the target element using attributes, and reroutes the raw text content to the target element:
+The `contentname` attribute is used to identify an element which can be patched:
 
 ```html
 <section contentname=gallery>Loading...</section>
-
-<!-- later -->
-<template contentmethod="replace-children"><section contentname=gallery>Actual gallery content<section></template>
 ```
+
+The content is then patches using a `<template>` element:
+
+```html
+<template contentmethod="replace-children">
+  <section contentname=gallery>Actual gallery content<section>
+</template>
+```
+
+The element name (`section`) needs to be repeated so that children are parsed correctly, but only the child nodes are actually replaced in this example.
+
+There are two proposed `contentmethod` values:
+
+- `append` inserts nodes at the end of the element, similar to `element.append(nodes)`.
+- `replace-children` replaces any existing child nodes, similar to `element.replaceChildren(nodes)`.
+
+At a low level, the only difference is that is `replace-children` removes existing nodes and then appends new nodes, while `append` only appends new nodes.
 
 A few details about interleaved patching:
 - Templates with a valid `contentmethod` are not attached to the DOM.
 - If the patching element is not a direct child of `<body>`, the outlet has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the outlet.
-- `contentmethod` can be `replace-children`, or `append`. `replace-children` is the basic one that allows replacing a placeholder with its contents,
-  while `append` allows for multiple patches that are interleaved in the same HTML stream to accumulate.
-- Interleaved patching works together with one-off patching. When a `<template contentmethod>` appears inside a stream, it is applied, resolving `contentname` from the stream target.
 
-## Avoiding overwriting with identical content
+See the https://github.com/whatwg/html/pull/11818 for the full processing model and details.
+
+### Interleaved patching
+
+An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
+
+```html
+<div contentname=product-carousel>Loading...</div>
+<div contentname=search-results>Loading...</div>
+```
+
+In this example, the search results populate in two steps while the product carousel populates in one step in between:
+
+```html
+<template contentmethod=replace-children>
+  <div contentname=search-results>
+    <p>first result</p>
+    <p>second result</p>
+  </div>
+</template>
+
+<template contentmethod=replace-children>
+  <div contentname=product-carousel>Actual carousel content</div>
+</template>
+
+<template contentmethod=append>
+  <div contentname=search-results>
+    <p>more results</p>
+    <p>and so one</p>
+  </div>
+</template>
+```
+
+#### Alternatives considered
+
+A few variations to support interleaved patching have been considered:
+
+- Smart default behavior, to remove children the first time an element is targeted, and to append if it is targeted again within the same parser invocation. In this alternative, the opt-in to patching would be a boolean attribute like `contentupdate` on `<template>`, and `contentmethod` is only used to override the default.
+- Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To append, one would target two markers with no content between them originally. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
+- Like above, but add support for single-marker insertion points, to insert before or after. To append, one would repeatedly prepend before a marker at the end of a container node. The main remaining downside of this is that care is needed to close all elements before the marker, so that has the right parent.
+
+## Script-initiated patching
+
+`streamHTMLUnsafe()` is being pursued as a [separate proposal](https://github.com/whatwg/html/issues/2142), but will also work with patching. When `<template contentmethod>` appears in the streamed HTML, those patches can apply to descendants of element on which `streamHTMLUnsafe()` was called.
+
+## Potential enhancement
+
+### Avoiding overwriting with identical content
 
 Some content might need to remain unchanged in certain conditions. For example, displaying a chat widget in all pages but the home, but not reloading it between pages.
 For this, both the outlet and the patch can have a `contentrevision` attribute. If those match, the content is not applied.
 
-## Potential enhancement - streaming to non-element ranges
+### Streaming to non-element ranges
+
 See discussion in https://github.com/WICG/declarative-partial-updates/issues/6 and https://github.com/WICG/webcomponents/issues/1116.
 
 It has been a common request to stream not just by replacing the whole contents of an element or appending to it, but also by replacing an arbitrary range.
@@ -96,31 +114,32 @@ To achieve these use cases, the direction is to use addressable comments as per 
 Very initial example:
 
 ```html
-<table contentname="data">
-  <tr><td>static data
-  <tr><td>static data
+<table>
+  <tbody contentname=data>
+    <tr><td>static data</td></tr>
+    <tr><td>static data</td></tr>
 
-  <?marker name=dyn-start?>
-  <tr><td>dynamic data 1
-  <tr><td>dynamic data 2
-  <?marker name=dyn-end?>
+    <?marker name=dyn-start?>
+    <tr><td>dynamic data 1</td></tr>
+    <tr><td>dynamic data 2</td></tr>
+    <?marker name=dyn-end?>
+  </tbody>
 </table>
 
 <!-- stuff.... -->
 
 <!-- This would replace the children only between the dyn-start and dyn-end markers, leaving the static data alone. -->
 <template contentmethod="replace-children" contentmarkerstart="dyn-start" contentmarkerend="dyn-end">
-  <table contentname=data>    
+  <tbody contentname=data>    
     <tr><td>dynamic data 3
     <tr><td>dynamic data 4
     <tr><td>dynamic data 5
-  </table>
+  </tbody>
 </template>
 </body>
 ```
 
-
-## Potential enhancement - patch contents from URL
+### Patch contents from URL
 
 In addition to patching from a stream or interleaved in HTML, there are use-cases for patching by fetching a URL.
 This can be done with a `patchsrc` attribute.
