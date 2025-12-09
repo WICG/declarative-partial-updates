@@ -95,7 +95,9 @@ A few variations to support interleaved patching have been considered:
 To remove children the first time an element is targeted, and to append if it is targeted again within the same parser invocation. In this alternative, the opt-in to patching would be a boolean attribute like `contentupdate` on `<template>`, and `contentmethod` is only used to override the default.
 
 <details>
-<summary>The patches use `contentupdate` instead of `contentmethod`:</summary>
+<summary>Example</summary>
+
+The patches use `contentupdate` instead of `contentmethod`:
 
 ```html
 <template contentupdate>
@@ -129,7 +131,9 @@ To remove children the first time an element is targeted, and to append if it is
 Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To "append", target two markers with no content between them are used. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
 
 <details>
-<summary>The patches uses two markers to "emulate" append:</summary>
+<summary>Example</summary>
+
+The patches uses two markers to "emulate" append:
 
 ```html
 <template contentmethod=replace-children>
@@ -166,8 +170,9 @@ Don't support `contentmethod=append` and instead support this use case using [ma
 Similar to above, but instead of the `contentmarkerstart` and `contentmarkerend` attributes, a single marker node and the `contentmarkerstartbefore` attribute is used to define a range starting before the node and implicitly ending at the end of the container element. For multiple appends, each patch would need to insert a new marker at the end, but it could have the same name as the replaced marker.
 
 <details>
-<summary>The patches uses a single marker node:
-</summary>
+<summary>Example</summary>
+
+The patches uses a single marker node:
 
 ```html
 <template contentmethod=replace-children>
