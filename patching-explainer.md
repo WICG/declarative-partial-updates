@@ -94,7 +94,8 @@ A few variations to support interleaved patching have been considered:
 
 To remove children the first time an element is targeted, and to append if it is targeted again within the same parser invocation. In this alternative, the opt-in to patching would be a boolean attribute like `contentupdate` on `<template>`, and `contentmethod` is only used to override the default.
 
-The patches use `contentupdate` instead of `contentmethod`:
+<details>
+<summary>The patches use `contentupdate` instead of `contentmethod`:</summary>
 
 ```html
 <template contentupdate>
@@ -119,13 +120,16 @@ The patches use `contentupdate` instead of `contentmethod`:
 </template>
 ```
 
+</details>
+
 (For an append-only use case, `contentmethod` would still be needed in addition to `contentupdate`.)
 
 ##### Range markers
 
 Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To append, one would target two markers with no content between them originally. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
 
-The patches uses two markers to "emulate" append:
+<details>
+<summary>The patches uses two markers to "emulate" append:</summary>
 
 ```html
 <template contentmethod=replace-children>
@@ -155,11 +159,15 @@ The patches uses two markers to "emulate" append:
 </template>
 ```
 
+</details>
+
 ##### Insertion point markers
 
 Like above, but add support for single-marker insertion points, and `contentmethod=insert-before` to insert before such a marker. To append, one would repeatedly insert before a marker at the end of a container node.
 
-The patches uses a single marker, prepending before it to "emulate" append:
+<details>
+<summary>The patches uses a single marker, prepending before it to "emulate" append:
+</summary>
 
 ```html
 <template contentmethod=replace-children>
@@ -185,6 +193,8 @@ The patches uses a single marker, prepending before it to "emulate" append:
   </div>
 </template>
 ```
+
+</details>
 
 ## Script-initiated patching
 
