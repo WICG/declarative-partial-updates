@@ -60,13 +60,12 @@ An element can be patched multiple times and patches for different elements can 
 <div contentname=search-results>Loading...</div>
 ```
 
-In this example, the search results populate in two steps while the product carousel populates in one step in between:
+In this example, the search results populate in three steps while the product carousel populates in one step in between:
 
 ```html
 <template contentmethod=replace-children>
   <div contentname=search-results>
     <p>first result</p>
-    <p>second result</p>
   </div>
 </template>
 
@@ -76,8 +75,13 @@ In this example, the search results populate in two steps while the product caro
 
 <template contentmethod=append>
   <div contentname=search-results>
-    <p>more results</p>
-    <p>and so one</p>
+    <p>second result</p>
+  </div>
+</template>
+
+<template contentmethod=append>
+  <div contentname=search-results>
+    <p>third result</p>
   </div>
 </template>
 ```
@@ -86,9 +90,101 @@ In this example, the search results populate in two steps while the product caro
 
 A few variations to support interleaved patching have been considered:
 
-- Smart default behavior, to remove children the first time an element is targeted, and to append if it is targeted again within the same parser invocation. In this alternative, the opt-in to patching would be a boolean attribute like `contentupdate` on `<template>`, and `contentmethod` is only used to override the default.
-- Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To append, one would target two markers with no content between them originally. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
-- Like above, but add support for single-marker insertion points, to insert before or after. To append, one would repeatedly prepend before a marker at the end of a container node. The main remaining downside of this is that care is needed to close all elements before the marker, so that has the right parent.
+##### Automatic defaults
+
+To remove children the first time an element is targeted, and to append if it is targeted again within the same parser invocation. In this alternative, the opt-in to patching would be a boolean attribute like `contentupdate` on `<template>`, and `contentmethod` is only used to override the default.
+
+The patches use `contentupdate` instead of `contentmethod`:
+
+```html
+<template contentupdate>
+  <div contentname=search-results>
+  </div>
+</template>
+
+<template contentupdate>
+  <div contentname=product-carousel>Actual carousel content</div>
+</template>
+
+<template contentupdate>
+  <div contentname=search-results>
+    <p>second result</p>
+  </div>
+</template>
+
+<template contentupdate>
+  <div contentname=search-results>
+    <p>third result</p>
+  </div>
+</template>
+```
+
+(For an append-only use case, `contentmethod` would still be needed in addition to `contentupdate`.)
+
+##### Range markers
+
+Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To append, one would target two markers with no content between them originally. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
+
+The patches uses two markers to "emulate" append:
+
+```html
+<template contentmethod=replace-children>
+  <div contentname=search-results>
+    <p>first result</p>
+    <!-- adds markers to allow for "append" -->
+    <?marker name=m1?><?marker name=m2?>
+  </div>
+</template>
+
+<template contentmethod=replace-children>
+  <div contentname=product-carousel>Actual carousel content</div>
+</template>
+
+<template contentmethod=replace-children contentmarkerstart=m1 contentmarkerend=m2>
+  <div contentname=search-results>
+    <p>second result</p>
+    <!-- new markers are needed for the next "append". -->
+    <?marker name=m3?><?marker name=m4?>
+  </div>
+</template>
+
+<template contentmethod=replace-children contentmarkerstart=m3 contentmarkerend=m4>
+  <div contentname=search-results>
+    <p>third result</p>
+  </div>
+</template>
+```
+
+##### Insertion point markers
+
+Like above, but add support for single-marker insertion points, and `contentmethod=insert-before` to insert before such a marker. To append, one would repeatedly insert before a marker at the end of a container node.
+
+The patches uses a single marker, prepending before it to "emulate" append:
+
+```html
+<template contentmethod=replace-children>
+  <div contentname=search-results>
+    <p>first result</p>
+    <?marker name=end?>
+  </div>
+</template>
+
+<template contentmethod=replace-children>
+  <div contentname=product-carousel>Actual carousel content</div>
+</template>
+
+<template contentmethod=insert-before contentmarker=end>
+  <div contentname=search-results>
+    <p>second result</p>
+  </div>
+</template>
+
+<template contentmethod=insert-before contentmarker=end>
+  <div contentname=search-results>
+    <p>third result</p>
+  </div>
+</template>
+```
 
 ## Script-initiated patching
 
