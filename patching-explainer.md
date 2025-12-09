@@ -126,7 +126,7 @@ To remove children the first time an element is targeted, and to append if it is
 
 ##### Range markers
 
-Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To append, one would target two markers with no content between them originally. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
+Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To "append", target two markers with no content between them are used. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
 
 <details>
 <summary>The patches uses two markers to "emulate" append:</summary>
@@ -135,7 +135,7 @@ Don't support `contentmethod=append` and instead support this use case using [ma
 <template contentmethod=replace-children>
   <div contentname=search-results>
     <p>first result</p>
-    <!-- adds markers to allow for "append" -->
+    <!-- add markers to allow for "append" -->
     <?marker name=m1?><?marker name=m2?>
   </div>
 </template>
@@ -161,19 +161,20 @@ Don't support `contentmethod=append` and instead support this use case using [ma
 
 </details>
 
-##### Insertion point markers
+##### Single marker
 
-Like above, but add support for single-marker insertion points, and `contentmethod=insert-before` to insert before such a marker. To append, one would repeatedly insert before a marker at the end of a container node.
+Similar to above, but instead of the `contentmarkerstart` and `contentmarkerend` attributes, a single marker node and the `contentmarkerstartbefore` attribute is used to define a range starting before the node and implicitly ending at the end of the container element. For multiple appends, each patch would need to insert a new marker at the end, but it could have the same name as the replaced marker.
 
 <details>
-<summary>The patches uses a single marker, prepending before it to "emulate" append:
+<summary>The patches uses a single marker node:
 </summary>
 
 ```html
 <template contentmethod=replace-children>
   <div contentname=search-results>
     <p>first result</p>
-    <?marker name=end?>
+    <!-- add markers to allow for "append" -->
+    <?marker name=more?>
   </div>
 </template>
 
@@ -181,13 +182,15 @@ Like above, but add support for single-marker insertion points, and `contentmeth
   <div contentname=product-carousel>Actual carousel content</div>
 </template>
 
-<template contentmethod=insert-before contentmarker=end>
+<template contentmethod=replace-children contentmarkerstartbefore=more>
   <div contentname=search-results>
     <p>second result</p>
+    <!-- new markers are needed for the next "append". -->
+    <?marker name=more?>
   </div>
 </template>
 
-<template contentmethod=insert-before contentmarker=end>
+<template contentmethod=replace-children contentmarkerstartbefore=more>
   <div contentname=search-results>
     <p>third result</p>
   </div>
