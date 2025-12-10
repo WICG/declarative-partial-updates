@@ -1,12 +1,43 @@
 # Declarative Route Matching
 
-Note: this discusses route-matching at a higher level.
-The syntax examples are only examples.
-The actual syntax is discussed in https://github.com/WICG/declarative-partial-updates/issues/46 and https://github.com/w3c/csswg-drafts/issues/12594.
+[@noamr](https://github.com/noamr) and [@dbaron](https://github.com/dbaron), September 2025 / December 2025
+
+(This document is currently partway through being updated to reflect the current state of the work.)
+
+# Related links
+
+* [current css-navigation-1 specification draft](https://drafts.csswg.org/css-navigation-1/)
+* [current specification issues (open and closed)](https://github.com/w3c/csswg-drafts/issues?q=label%3Acss-navigation-1%20is%3Aissue)
+* initial syntax discussion for HTML route matching: https://github.com/WICG/declarative-partial-updates/issues/46
+* initial discussion for CSS route matching: https://github.com/w3c/csswg-drafts/issues/12594
 
 # Motivation and Use Cases
 
-Provide a way to respond to navigations and route-changes immediately and without requiring to hook into the navigation lifecycle.
+[CSS View Transitions](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API)
+provide a way to animate transitions between views in a web site.
+The goal of these animations is to help users understand, through visual movement,
+the change that happens in a user interface when they take some action.
+(In some cases that action changes to a different state of a single page app,
+while in other cases that action loads a different page.
+View transitions work for both cases.)
+
+Some important use cases for view transitions have proven difficult for authors to do at all
+and even more difficult for them to do well
+(for example, without getting into incorrect states after back/forward history traversal).
+One case that we're focusing on in the design of this feature is the desire to show a transition
+between a view that shows a list of items
+and another view that shows the details for one of the items in the list
+(possibly also retaining the view of the list itself in some form).
+We talk about these as a "list to details" transition or "details to list" transition,
+and this use case has been discussed for a while
+in [w3c/csswg-drafts#8209](https://github.com/w3c/csswg-drafts/issues/8209).
+
+The goal of this feature is to make it easier for authors to declaratively set up styles
+for this sort of transition.
+This means adding features that:
+* match patterns of URLs by exposing [URL Patterns](https://urlpattern.spec.whatwg.org/) in CSS
+* apply styles conditionally based on the origin and destination of the current navigation, so that transitions between particular sets of URLs (whether separate documents or separate states/routes within a single page app) can be styled
+* style an HTML link based on its target matching both the origin or destination of the current navigation *and* matching a particular URL pattern, which allows matching the correct item within the list in a list-to-details or details-to-list transition.
 
 ## Navigation-aware styling
 ### Framework routers
