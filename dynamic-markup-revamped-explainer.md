@@ -65,7 +65,7 @@ This is incompatible with how the sanitizer works, and also doesn't work well wi
 libraries such as `DOMPurify` would have to support streaming as well.
 
 The proposal is that trusted types would be able to participate in a flow that involves streaming and/or sanitizer
-by transforming or "blessing" a parser options dictionary ([`SetHTMLOptions`](https://wicg.github.io/sanitizer-api/#dictdef-sethtmloptions) or [`SetHTMLUnsafeOptions`](https://wicg.github.io/sanitizer-api/#dictdef-sethtmloptions):
+by transforming or "blessing" a parser options dictionary ([`SetHTMLOptions`](https://wicg.github.io/sanitizer-api/#dictdef-sethtmloptions) or [`SetHTMLUnsafeOptions`](https://wicg.github.io/sanitizer-api/#dictdef-sethtmlunsafeoptions)):
 
 ```webidl
 interface TrustedTypePolicy {
