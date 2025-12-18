@@ -74,7 +74,7 @@ interface TrustedTypePolicy {
 ```
 
 By providing a method as such, the policy can:
-- modify a sanitizer, or inject one if it doesn't exist
+- Modify a sanitizer, or inject one if it doesn't exist
 - Change the `runScripts` option
 - Bless the options as-is, e.g. to allow first-party scripts to inject unsafe and non-sanitized markup.
 
