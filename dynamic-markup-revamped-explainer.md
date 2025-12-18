@@ -16,7 +16,7 @@ These methods all have explicit and implicit knobs and consideration:
 - [Safe vs. unsafe](https://wicg.github.io/sanitizer-api/#safe-and-unsafe)
 - Is there a sanitizer?
 - Do scripts run? If so, when?
-- Relationship with trusted-types.
+- Relationship with trusted types.
 - Element creation side-effects (e.g. image preloading).
 
 The purpose of this explainer is to set a coherent way forward with dynamic markup insertion, in a way that takes all of these considerations into account while remaining consistent in terms of API.
