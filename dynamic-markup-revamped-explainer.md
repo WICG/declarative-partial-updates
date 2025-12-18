@@ -122,8 +122,8 @@ interface TrustedSetHTMLUnsafeOptions {
   boolean runScripts;
 }
 
-typedef (SetHTMLUnsafeOptions or TrustedSetHTMLUnsafeOptions) UnsafeHTMLSetterOptions;
-typedef (SetHTMLOptions or TrustedSetHTMLOptions) SafeHTMLSetterOptions;
+typedef (SetHTMLUnsafeOptions or TrustedHTMLParserOptions) UnsafeHTMLSetterOptions;
+typedef (SetHTMLOptions or TrustedHTMLParserOptions) SafeHTMLSetterOptions;
 
 [Exposed=Window]
 mixin interface ElementOrShadowRoot {
