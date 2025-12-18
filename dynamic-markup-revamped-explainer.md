@@ -92,6 +92,12 @@ See https://github.com/whatwg/html/issues/12010.
 
 This is intended to stay as a quirk specific to `createContextualFragment`, as no other API separates between the fragment creation and insertion.
 
+## Special template behavior
+
+Some new features such as declarative shadow DOM and out-of-order streaming allows template elements to be "active" and have a side effect when encountered.
+This is another difference between APIs, as older APIs might rely on userspace sanitizers that don't know about the existence of these features.
+
+Open issue: define how this should behave going forward.
 
 ## Resulting API
 
@@ -150,7 +156,8 @@ mixin interface ElementOrShadowRoot {
 
 ## Existing methods
 
-Apart from the `createContextualFragment` quirk, all of the existing APIs can be expressed in terms of the above APIs,
+Apart from the `createContextualFragment` quirk and special template behavior like declarative shadow roots,
+all of the existing APIs can be expressed in terms of the above APIs,
 implicitly being unsafe, having a false `runScripts` and no sanitizer:
 
 ```js
@@ -183,7 +190,8 @@ class Element {
 
 ```
 
-## Security & Privacy Questionnaire
+## Security & Privacy Questionnaire
+
 1. What information does this feature expose, and for what purposes?
 It does not expose new information.
 
