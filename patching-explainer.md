@@ -204,6 +204,60 @@ The patches uses a single marker node:
 
 </details>
 
+##### Markers with start/end attributes
+
+This alternative adds `start` and `end` boolean attributes to the marker nodes, so that the start/end of a range are defined by the markers, not attributes on `<template>`.
+
+This makes it possible to replace a `<title>` element.
+
+<details>
+<summary>Example</summary>
+
+```html
+<head>
+  <?marker name="metadata" start?>
+  <title>Page 1</title>
+  <?marker name="metadata" end?>  
+</head>
+
+<template contentname="metadata">
+  <title>Page 2</title>
+</template>
+```
+
+</details>
+
+Details around `<title>` and the RCDATA tokenizer state are the main reason that the tag name needs to be repeated in other alterantives, but this isn't needed in this option, the children of `<template>` elements are just the new content. The `contentname` attribute can refer to either marker node(s) or an element.
+
+When `start` and `end` aren't used, the marker node is replaced. The interleaved patching example then becomes:
+
+<details>
+<summary>Example</summary>
+
+```html
+<template contentname=search-results>
+  <p>first result</p>
+  <!-- add markers to allow for "append" -->
+  <?marker name=search-results-more?>
+</template>
+
+<template contentname=product-carousel>
+  Actual carousel content
+</template>
+
+<template contentname=search-results-more>
+  <p>second result</p>
+  <!-- new markers are needed for the next "append". -->
+  <?marker name=search-results-more?>
+</template>
+
+<template contentname=search-results-more>
+  <p>third result</p>
+</template>
+```
+
+</details>
+
 ## Script-initiated patching
 
 `streamHTMLUnsafe()` is being pursued as a [separate proposal](https://github.com/whatwg/html/issues/2142), but will also work with patching. When `<template contentmethod>` appears in the streamed HTML, those patches can apply to descendants of element on which `streamHTMLUnsafe()` was called.
