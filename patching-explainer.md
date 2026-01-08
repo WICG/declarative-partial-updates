@@ -206,9 +206,16 @@ The patches uses a single marker node:
 
 ##### Markers with start/end attributes
 
-This alternative adds `start` and `end` boolean attributes to the marker nodes, so that the start/end of a range are defined by the markers, not attributes on `<template>`.
+This alternative leans into markers as the way to define content ranges, using optional `start` and `end` boolean attributes. The range to replace is defined by the `contentfor` attribute on `<template>`, and the range is determined as such:
 
-This makes it possible to replace a `<title>` element.
+- First find the first marker in the tree with the right name
+- If there's no `start` or `end` attribute, or both are present, that marker itself is the whole range
+- If there's a `start` attribute, traverse next siblings until a matching marker with `end` is found, or the end of the sibling list
+- If there's an `end` attribute, traverse previous siblings until a matching marker with `start` is found, or the start of the sibling list
+
+Everything in that range is removed (including the marker nodes) before adding new nodes from the `<template>` element.
+
+This makes it possible to replace a `<title>` element:
 
 <details>
 <summary>Example</summary>
@@ -220,22 +227,26 @@ This makes it possible to replace a `<title>` element.
   <?marker name="metadata" end?>  
 </head>
 
-<template contentname="metadata">
+<template contentfor="metadata">
   <title>Page 2</title>
 </template>
 ```
 
 </details>
 
-Details around `<title>` and the RCDATA tokenizer state are the main reason that the tag name needs to be repeated in other alterantives, but this isn't needed in this option, the children of `<template>` elements are just the new content. The `contentname` attribute can refer to either marker node(s) or an element.
+Details around `<title>` and the RCDATA tokenizer state are the main reason that the tag name needs to be repeated in other alterantives, but this isn't needed in this option, the children of `<template>` elements are just the new content.
 
-When `start` and `end` aren't used, the marker node is replaced. The interleaved patching example then becomes:
+The interleaved patching example then becomes:
 
 <details>
 <summary>Example</summary>
 
 ```html
-<template contentname=search-results>
+<!-- explicit markers are needed *inside* the element being patched. end markers are omitted -->
+<div><?marker name=product-carousel start?>Loading...</div>
+<div><?marker name=search-results start?>Loading...</div>
+
+<template contentfor=search-results>
   <p>first result</p>
   <!-- add markers to allow for "append" -->
   <?marker name=search-results-more?>
@@ -257,6 +268,11 @@ When `start` and `end` aren't used, the marker node is replaced. The interleaved
 ```
 
 </details>
+
+Possible ergonomic additions this option:
+
+- Targeting elements (not just markers) and replacing all child nodes by default
+- A `keep` attribute on markers that would avoid removing them
 
 ## Script-initiated patching
 
