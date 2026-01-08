@@ -304,7 +304,6 @@ Very initial example:
     <tr><td>dynamic data 5
   </tbody>
 </template>
-</body>
 ```
 
 ### Patch contents from URL
