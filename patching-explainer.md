@@ -140,7 +140,7 @@ The patches uses two markers to "emulate" append:
   <div contentname=search-results>
     <p>first result</p>
     <!-- add markers to allow for "append" -->
-    <?marker name=m1?><?marker name=m2?>
+    <!marker m1><!marker m2>
   </div>
 </template>
 
@@ -152,7 +152,7 @@ The patches uses two markers to "emulate" append:
   <div contentname=search-results>
     <p>second result</p>
     <!-- new markers are needed for the next "append". -->
-    <?marker name=m3?><?marker name=m4?>
+    <!marker m3><!marker m4>
   </div>
 </template>
 
@@ -179,7 +179,7 @@ The patches uses a single marker node:
   <div contentname=search-results>
     <p>first result</p>
     <!-- add markers to allow for "append" -->
-    <?marker name=more?>
+    <!marker more>
   </div>
 </template>
 
@@ -191,7 +191,7 @@ The patches uses a single marker node:
   <div contentname=search-results>
     <p>second result</p>
     <!-- new markers are needed for the next "append". -->
-    <?marker name=more?>
+    <!marker more>
   </div>
 </template>
 
@@ -222,9 +222,9 @@ This makes it possible to replace a `<title>` element:
 
 ```html
 <head>
-  <?marker name="metadata" start?>
+  <!marker metadata start>
   <title>Page 1</title>
-  <?marker name="metadata" end?>  
+  <!marker metadata end>
 </head>
 
 <template contentfor="metadata">
@@ -243,13 +243,13 @@ The interleaved patching example then becomes:
 
 ```html
 <!-- explicit markers are needed *inside* the element being patched. end markers are omitted -->
-<div><?marker name=product-carousel start?>Loading...</div>
-<div><?marker name=search-results start?>Loading...</div>
+<div><!marker product-carousel start>Loading...</div>
+<div><!marker search-results start>Loading...</div>
 
 <template contentfor=search-results>
   <p>first result</p>
   <!-- add markers to allow for "append" -->
-  <?marker name=search-results-more?>
+  <!marker search-results-more>
 </template>
 
 <template contentname=product-carousel>
@@ -259,7 +259,7 @@ The interleaved patching example then becomes:
 <template contentname=search-results-more>
   <p>second result</p>
   <!-- new markers are needed for the next "append". -->
-  <?marker name=search-results-more?>
+  <!marker search-results-more>
 </template>
 
 <template contentname=search-results-more>
@@ -303,10 +303,10 @@ Very initial example:
     <tr><td>static data</td></tr>
     <tr><td>static data</td></tr>
 
-    <?marker name=dyn-start?>
+    <!marker dyn-start>
     <tr><td>dynamic data 1</td></tr>
     <tr><td>dynamic data 2</td></tr>
-    <?marker name=dyn-end?>
+    <!marker dyn-end>
   </tbody>
 </table>
 
