@@ -212,7 +212,7 @@ These `contentmethod` values could be supported:
 Weaknesses of this design are:
 
 - Doesn't support replacing arbitrary ranges of nodes, only an element or all of its children.
-- In order to support patching `<title>`, which uses the [RCDATA tokenizer state](https://html.spec.whatwg.org/multipage/parsing.html#rcdata-state), the tag name of the target element must be repeated. TODO
+- In order to support patching `<title>`, which uses the [RCDATA tokenizer state](https://html.spec.whatwg.org/multipage/parsing.html#rcdata-state), the tag name of the target element must be repeated. This is because switching to the RCDATA (or RAWTEXT) state in a `<template>` element would change how the content is parsed in supporting and non-supporting parsers, which could be a security concern.
 - `prepend` can fail if the original first child of the element is removed, meaning that a patch can fail mid-stream, requiring some error handling/reporting.
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
