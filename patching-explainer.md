@@ -65,11 +65,11 @@ To support multiple ranges, marker nodes can be named. The names must match one 
 <div marker="part-one part-two">
  <!marker start name="part-one">
  Placeholder content
- <!marker end name="part-one"
+ <!marker end name="part-one">
  <hr>
  <!marker start name="part-two">
  Placeholder content
- <!marker start name="part-two">
+ <!marker end name="part-two">
 </div>
 
 <template for="part-one">
