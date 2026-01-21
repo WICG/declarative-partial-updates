@@ -1,6 +1,7 @@
 # Interleaved HTML streaming (patching)
 
 ## Motivation
+
 Streaming of HTML existed from the early days of the web, serving an important purpose for perceived performance when loading long articles etc.
 However, it always had the following major constraints:
 1. HTML content is streamed in DOM order.
@@ -15,264 +16,118 @@ This proposal introduces partial out-of-order HTML streaming as part of the web 
 
 ## Declarative patching
 
-Patches are delivered using a `<template>` element with the `contentmethod` attribute and target an existing elements in the DOM with the `contentname` attributes. These patches require no scripts to apply (are declarative) and can appear in the main response HTML to support out-of-order streaming.
+Patches are delivered using a `<template>` element with the `for` attribute and target an existing elements in the DOM. These patches require no scripts to apply (are declarative) and can appear in the main response HTML to support out-of-order streaming.
 
 Patches can be be applied later in the page lifecycle using JavaScript, see [script-initiated patching](#script-initiated-patching).
 
 ### Proposed markup
 
-The `contentname` attribute is used to identify an element which can be patched:
+A new `<!marker>` node is introduced to express insertion points (single marker) and ranges (start/end markers).
+A `marker` attribute on the parent element is used to "expose" those markers for patching:
+
+Example where a placeholder is replaced with actual content:
 
 ```html
-<section contentname=gallery>Loading...</section>
-```
+<section marker="gallery">
+  <!marker start>Loading...<!marker end>
+</section>
 
-The content is then patches using a `<template>` element:
-
-```html
-<template contentmethod="replace-children">
-  <section contentname=gallery>Actual gallery content<section>
+<template for="gallery">
+  Actual gallery content
 </template>
 ```
 
-The element name (`section`) needs to be repeated so that children are parsed correctly, but only the child nodes are actually replaced in this example.
+The marker nodes and everything between them is replaced, so the resulting DOM is:
 
-There are two proposed `contentmethod` values:
+```html
+<section marker="gallery">
+  Actual gallery content
+</section>
+```
 
-- `append` inserts nodes at the end of the element, similar to `element.append(nodes)`.
-- `replace-children` replaces any existing child nodes, similar to `element.replaceChildren(nodes)`.
+To insert at a single point, a single `<!marker>` is used:
 
-At a low level, the only difference is that is `replace-children` removes existing nodes and then appends new nodes, while `append` only appends new nodes.
+```html
+<ul marker="list">
+  <li>first item</li>
+  <!marker>
+  <li>last item</li>
+</ul>
 
-A few details about interleaved patching:
-- Templates with a valid `contentmethod` are not attached to the DOM.
-- If the patching element is not a direct child of `<body>`, the outlet has to have a common ancestor with the patching element's parent.
-- The patch template has to be in the same tree (shadow) scope as the outlet.
+<template for="list">
+  <li>middle item</li>
+</template>
+```
 
-See the https://github.com/whatwg/html/pull/11818 for the full processing model and details.
+To support multiple ranges, marker nodes can be named. The names must match one of the tokens in the `marker` attribute, and any number of ranges can be exposed:
+
+```html
+<div marker="part-one part-two">
+ <!marker start name="part-one">
+ Placeholder content
+ <!marker end name="part-one"
+ <hr>
+ <!marker start name="part-two">
+ Placeholder content
+ <!marker start name="part-two">
+</div>
+
+<template for="part-one">
+  <p>Actual 1st part of the content</p>
+</template>
+
+<template for="part-two">
+  <p>Actual 2nd part of the content</p>
+</template>
+```
+
+A few details about patching:
+
+- Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
+- If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
+- The patch template has to be in the same tree (shadow) scope as the target element.
+
+Note on compat risk: Current HTML parsers interpret `<!marker>` as a bogus comment, so it's important that `<!marker>` does not appear in existing web content for this to be viable. Another name could be chosen if necessary for web compat.
 
 ### Interleaved patching
 
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div contentname=product-carousel>Loading...</div>
-<div contentname=search-results>Loading...</div>
+<div marker="product-carousel"><!marker start>Loading...</div>
+<div marker="search-results"><!marker start>Loading...</div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
 
 ```html
-<template contentmethod=replace-children>
-  <div contentname=search-results>
-    <p>first result</p>
-  </div>
-</template>
-
-<template contentmethod=replace-children>
-  <div contentname=product-carousel>Actual carousel content</div>
-</template>
-
-<template contentmethod=append>
-  <div contentname=search-results>
-    <p>second result</p>
-  </div>
-</template>
-
-<template contentmethod=append>
-  <div contentname=search-results>
-    <p>third result</p>
-  </div>
-</template>
-```
-
-#### Alternatives considered
-
-A few variations to support interleaved patching have been considered:
-
-##### Automatic defaults
-
-To remove children the first time an element is targeted, and to append if it is targeted again within the same parser invocation. In this alternative, the opt-in to patching would be a boolean attribute like `contentupdate` on `<template>`, and `contentmethod` is only used to override the default.
-
-<details>
-<summary>Example</summary>
-
-The patches use `contentupdate` instead of `contentmethod`:
-
-```html
-<template contentupdate>
-  <div contentname=search-results>
-  </div>
-</template>
-
-<template contentupdate>
-  <div contentname=product-carousel>Actual carousel content</div>
-</template>
-
-<template contentupdate>
-  <div contentname=search-results>
-    <p>second result</p>
-  </div>
-</template>
-
-<template contentupdate>
-  <div contentname=search-results>
-    <p>third result</p>
-  </div>
-</template>
-```
-
-</details>
-
-(For an append-only use case, `contentmethod` would still be needed in addition to `contentupdate`.)
-
-##### Range markers
-
-Don't support `contentmethod=append` and instead support this use case using [markers](#streaming-to-non-element-ranges). To "append", target two markers with no content between them are used. For multiple appends, each patch would need to insert an additional marker for the next patch to target.
-
-<details>
-<summary>Example</summary>
-
-The patches uses two markers to "emulate" append:
-
-```html
-<template contentmethod=replace-children>
-  <div contentname=search-results>
-    <p>first result</p>
-    <!-- add markers to allow for "append" -->
-    <!marker m1><!marker m2>
-  </div>
-</template>
-
-<template contentmethod=replace-children>
-  <div contentname=product-carousel>Actual carousel content</div>
-</template>
-
-<template contentmethod=replace-children contentmarkerstart=m1 contentmarkerend=m2>
-  <div contentname=search-results>
-    <p>second result</p>
-    <!-- new markers are needed for the next "append". -->
-    <!marker m3><!marker m4>
-  </div>
-</template>
-
-<template contentmethod=replace-children contentmarkerstart=m3 contentmarkerend=m4>
-  <div contentname=search-results>
-    <p>third result</p>
-  </div>
-</template>
-```
-
-</details>
-
-##### Single marker
-
-Similar to above, but instead of the `contentmarkerstart` and `contentmarkerend` attributes, a single marker node and the `contentmarkerstartbefore` attribute is used to define a range starting before the node and implicitly ending at the end of the container element. For multiple appends, each patch would need to insert a new marker at the end, but it could have the same name as the replaced marker.
-
-<details>
-<summary>Example</summary>
-
-The patches uses a single marker node:
-
-```html
-<template contentmethod=replace-children>
-  <div contentname=search-results>
-    <p>first result</p>
-    <!-- add markers to allow for "append" -->
-    <!marker more>
-  </div>
-</template>
-
-<template contentmethod=replace-children>
-  <div contentname=product-carousel>Actual carousel content</div>
-</template>
-
-<template contentmethod=replace-children contentmarkerstartbefore=more>
-  <div contentname=search-results>
-    <p>second result</p>
-    <!-- new markers are needed for the next "append". -->
-    <!marker more>
-  </div>
-</template>
-
-<template contentmethod=replace-children contentmarkerstartbefore=more>
-  <div contentname=search-results>
-    <p>third result</p>
-  </div>
-</template>
-```
-
-</details>
-
-##### Markers with start/end attributes
-
-This alternative leans into markers as the way to define content ranges, using optional `start` and `end` boolean attributes. The range to replace is defined by the `contentfor` attribute on `<template>`, and the range is determined as such:
-
-- First find the first marker in the tree with the right name
-- If there's no `start` or `end` attribute, or both are present, that marker itself is the whole range
-- If there's a `start` attribute, traverse next siblings until a matching marker with `end` is found, or the end of the sibling list
-- If there's an `end` attribute, traverse previous siblings until a matching marker with `start` is found, or the start of the sibling list
-
-Everything in that range is removed (including the marker nodes) before adding new nodes from the `<template>` element.
-
-This makes it possible to replace a `<title>` element:
-
-<details>
-<summary>Example</summary>
-
-```html
-<head>
-  <!marker metadata start>
-  <title>Page 1</title>
-  <!marker metadata end>
-</head>
-
-<template contentfor="metadata">
-  <title>Page 2</title>
-</template>
-```
-
-</details>
-
-Details around `<title>` and the RCDATA tokenizer state are the main reason that the tag name needs to be repeated in other alterantives, but this isn't needed in this option, the children of `<template>` elements are just the new content.
-
-The interleaved patching example then becomes:
-
-<details>
-<summary>Example</summary>
-
-```html
-<!-- explicit markers are needed *inside* the element being patched. end markers are omitted -->
-<div><!marker product-carousel start>Loading...</div>
-<div><!marker search-results start>Loading...</div>
-
-<template contentfor=search-results>
+<template for="search-results">
   <p>first result</p>
-  <!-- add markers to allow for "append" -->
-  <!marker search-results-more>
+  <!-- a new marker is added at the end for the following patch -->
+  <!marker>
 </template>
 
-<template contentname=product-carousel>
+<template for="product-carousel">
   Actual carousel content
 </template>
 
-<template contentname=search-results-more>
+<template for="search-results">
   <p>second result</p>
-  <!-- new markers are needed for the next "append". -->
-  <!marker search-results-more>
+  <!-- a new marker is added at the end for the following patch -->
+  <!marker>
 </template>
 
-<template contentname=search-results-more>
+<template for="search-results">
   <p>third result</p>
+  <!-- no new marker needed in the last patch (but would be harmless) -->
 </template>
 ```
 
-</details>
+## Marker APIs
 
-Possible ergonomic additions this option:
+The new `<!marker>` node would be represented with a new `Marker` interface inheriting from `Node`, with mutable `start`, `end`, and `name` attributes. Scripts can create marker nodes using `new Marker()` .
 
-- Targeting elements (not just markers) and replacing all child nodes by default
-- A `keep` attribute on markers that would avoid removing them
+To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
 
 ## Script-initiated patching
 
@@ -280,47 +135,36 @@ Possible ergonomic additions this option:
 
 ## Potential enhancement
 
+### Implicit markers
+
+To simplify the common case of replacing all children of an element without requiring a `<!marker start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
+
+```html
+<section marker="gallery:all">
+  Loading...
+</section>
+
+<template for="gallery">
+  Actual gallery content
+</template>
+```
+
+Appending could also be supported with another keyword:
+
+```html
+<ul marker="gallery:last">
+  <li>first item</li>
+</ul>
+
+<template for="gallery">
+  <li>second item</li>
+</template>
+```
+
 ### Avoiding overwriting with identical content
 
 Some content might need to remain unchanged in certain conditions. For example, displaying a chat widget in all pages but the home, but not reloading it between pages.
-For this, both the outlet and the patch can have a `contentrevision` attribute. If those match, the content is not applied.
-
-### Streaming to non-element ranges
-
-See discussion in https://github.com/WICG/declarative-partial-updates/issues/6 and https://github.com/WICG/webcomponents/issues/1116.
-
-It has been a common request to stream not just by replacing the whole contents of an element or appending to it, but also by replacing an arbitrary range.
-This is connected with other use cases for addressing arbitrary ranges in the page.
-Use cases for this can be replcing some `<meta>` tags in the `<head>`, replacing multiple rows in a table, or replacing an element similar to the `replaceWith` method.
-
-To achieve these use cases, the direction is to use addressable comments as per https://github.com/WICG/webcomponents/issues/1116, and use two comments as a "range", equivalent to an element with a `contentname` attribute.
-
-Very initial example:
-
-```html
-<table>
-  <tbody contentname=data>
-    <tr><td>static data</td></tr>
-    <tr><td>static data</td></tr>
-
-    <!marker dyn-start>
-    <tr><td>dynamic data 1</td></tr>
-    <tr><td>dynamic data 2</td></tr>
-    <!marker dyn-end>
-  </tbody>
-</table>
-
-<!-- stuff.... -->
-
-<!-- This would replace the children only between the dyn-start and dyn-end markers, leaving the static data alone. -->
-<template contentmethod="replace-children" contentmarkerstart="dyn-start" contentmarkerend="dyn-end">
-  <tbody contentname=data>    
-    <tr><td>dynamic data 3
-    <tr><td>dynamic data 4
-    <tr><td>dynamic data 5
-  </tbody>
-</template>
-```
+For this, both the patch and the target element can have a `contentrevision` attribute. If those match, the content is not applied.
 
 ### Patch contents from URL
 
@@ -328,6 +172,43 @@ In addition to patching from a stream or interleaved in HTML, there are use-case
 This can be done with a `patchsrc` attribute.
 
 Enabling remote fetching of patch content would act as a script in terms of CSP, with a CORS-only request, and would be sanitized with the same HTML/trusted-types restrictions as patching using script.
+
+## Alternatives considered
+
+### Marker pointers on `Element`
+
+The main proposal treats `<!marker start>` and `<!marker end>` as two nodes, which can appear in any number and order. Error handling is done when trying to apply a `<template>` patch.
+
+An alternative is that the parser doesn't create `Marker` nodes, but instead sets pointers `element.beforeFirstMarker` and `element.afterLastMarker`. Serializing would insert `<!marker>` at the appropriate places.
+
+The chief downside of this approach is that it requires bookkeeping similar to live `Range` objects.
+
+### `contentmethod` attribute
+
+An earlier proposal that did not have marker nodes used a `contentmethod` attribute to control which nodes are removed and where new nodes are inserted. The `contentname` attribute was used on both `<template>` and the target element to link them.
+
+Example:
+
+```html
+<section contentname=gallery>Loading...</section>
+
+<template contentmethod="replace-children">
+  <section contentname=gallery>Actual gallery content<section>
+</template>
+```
+
+These `contentmethod` values could be supported:
+
+- `append` inserts nodes at the end of the element, similar to `element.append(nodes)`.
+- `prepend` inserts nodes at the end of the element, similar to `element.prepend(nodes)`.
+- `replace-children` replaces any existing child nodes, similar to `element.replaceChildren(nodes)`.
+- `replace` replaces the element itself, similar to `element.replaceWith(nodes)`.
+
+Weaknesses of this design are:
+
+- Doesn't support replacing arbitrary ranges of nodes, only an element or all of its children.
+- In order to support patching `<title>`, which uses the [RCDATA tokenizer state](https://html.spec.whatwg.org/multipage/parsing.html#rcdata-state), the tag name of the target element must be repeated. TODO
+- `prepend` can fail if the original first child of the element is removed, meaning that a patch can fail mid-stream, requiring some error handling/reporting.
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
 
