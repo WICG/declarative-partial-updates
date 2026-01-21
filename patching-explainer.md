@@ -125,7 +125,12 @@ In this example, the search results populate in three steps while the product ca
 
 ## Marker APIs
 
-The new `<!marker>` node would be represented with a new `Marker` interface inheriting from `Node`, with mutable `start`, `end`, and `name` attributes. Scripts can create marker nodes using `new Marker()` .
+The new `<!marker>` node would be represented with a new `Marker` interface inheriting from `Node`, with these attributes:
+
+- `type`, an enum with values "start", "end", and the empty string
+- `name`, a string
+
+Scripts can create marker nodes using `new Marker()` .
 
 To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
 
