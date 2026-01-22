@@ -28,8 +28,8 @@ A `marker` attribute on the parent element is used to "expose" those markers for
 Example where a placeholder is replaced with actual content:
 
 ```html
-<section marker="gallery">
-  <!marker start>Loading...<!marker end>
+<section range="gallery">
+  <!start gallery>Loading...<!end gallery>
 </section>
 
 <template for="gallery">
@@ -40,7 +40,7 @@ Example where a placeholder is replaced with actual content:
 The marker nodes and everything between them is replaced, so the resulting DOM is:
 
 ```html
-<section marker="gallery">
+<section range="gallery">
   Actual gallery content
 </section>
 ```
@@ -48,9 +48,9 @@ The marker nodes and everything between them is replaced, so the resulting DOM i
 To insert at a single point, a single `<!marker>` is used:
 
 ```html
-<ul marker="list">
+<ul range="list">
   <li>first item</li>
-  <!marker>
+  <!marker list>
   <li>last item</li>
 </ul>
 
@@ -62,14 +62,14 @@ To insert at a single point, a single `<!marker>` is used:
 To support multiple ranges, marker nodes can be named. The names must match one of the tokens in the `marker` attribute, and any number of ranges can be exposed:
 
 ```html
-<div marker="part-one part-two">
- <!marker start name="part-one">
+<div range="part-one part-two">
+ <!start part-one>
  Placeholder content
- <!marker end name="part-one">
+ <!end part-one>
  <hr>
- <!marker start name="part-two">
+ <!start part-two>
  Placeholder content
- <!marker end name="part-two">
+ <!end part-two>
 </div>
 
 <template for="part-one">
@@ -87,15 +87,15 @@ A few details about patching:
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 
-Note on compat risk: Current HTML parsers interpret `<!marker>` as a bogus comment, so it's important that `<!marker>` does not appear in existing web content for this to be viable. Another name could be chosen if necessary for web compat.
+Note on compat risk: Current HTML parsers interpret `<!...>` as a bogus comment, so it's important that `<!marker>`, `<!start>`, and `<!end>` does not appear in existing web content for this to be viable. Another name could be chosen if necessary for web compat.
 
 ### Interleaved patching
 
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div marker="product-carousel"><!marker start>Loading...</div>
-<div marker="search-results"><!marker start>Loading...</div>
+<div range="product-carousel"><!start product-carousel>Loading...</div>
+<div range="search-results"><!start search-results>Loading...</div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
@@ -104,7 +104,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>first result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <!marker>
+  <!marker search-results>
 </template>
 
 <template for="product-carousel">
@@ -114,7 +114,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>second result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <!marker>
+  <!marker search-results>
 </template>
 
 <template for="search-results">
@@ -125,12 +125,12 @@ In this example, the search results populate in three steps while the product ca
 
 ## Marker APIs
 
-The new `<!marker>` node would be represented with a new `Marker` interface inheriting from `Node`, with these attributes:
+The new `<!marker>`, `<!start>`, and `<!end>` nodes would be represented with a new `Marker` interface inheriting from `Node`, with these read-only attributes:
 
-- `type`, an enum with values "start", "end", and the empty string
+- `type`, an enum with values "marker", "start", "end"
 - `name`, a string
 
-Scripts can create marker nodes using `new Marker()` .
+Scripts can create marker nodes using `new Marker({ type, name })`.
 
 To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
 
@@ -140,12 +140,22 @@ To allow scripts to use markers in the same way a declarative patching would, an
 
 ## Potential enhancement
 
+### Custom highlights integration
+
+Named ranges created by marker nodes are similar to the named highlights created by the [custom highlights API](https://drafts.csswg.org/css-highlight-api-1/). For declarative highlights, a possible direction is named `<!start>` and `<!end>` nodes together with a CSS rule to specify the highlight priority and type.
+
+See https://github.com/w3c/csswg-drafts/issues/13381 for discussion.
+
+## DOM Parts integration
+
+[DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of marker nodes to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
+
 ### Implicit markers
 
-To simplify the common case of replacing all children of an element without requiring a `<!marker start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
+To simplify the common case of replacing all children of an element without requiring a `<!start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
 
 ```html
-<section marker="gallery:all">
+<section range="gallery:all">
   Loading...
 </section>
 
@@ -157,7 +167,7 @@ To simplify the common case of replacing all children of an element without requ
 Appending could also be supported with another keyword:
 
 ```html
-<ul marker="gallery:last">
+<ul range="gallery:last">
   <li>first item</li>
 </ul>
 
@@ -182,9 +192,9 @@ Enabling remote fetching of patch content would act as a script in terms of CSP,
 
 ### Marker pointers on `Element`
 
-The main proposal treats `<!marker start>` and `<!marker end>` as two nodes, which can appear in any number and order. Error handling is done when trying to apply a `<template>` patch.
+The main proposal treats `<!start>` and `<!end>` as two nodes, which can appear in any number and order. Error handling is done when trying to apply a `<template>` patch.
 
-An alternative is that the parser doesn't create `Marker` nodes, but instead sets pointers `element.beforeFirstMarker` and `element.afterLastMarker`. Serializing would insert `<!marker>` at the appropriate places.
+An alternative is that the parser doesn't create `Marker` nodes, but instead sets pointers `element.beforeFirstMarker` and `element.afterLastMarker`. Serializing would insert `<!start>` and `<!end>` at the appropriate places.
 
 The chief downside of this approach is that it requires bookkeeping similar to live `Range` objects.
 
