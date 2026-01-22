@@ -166,6 +166,21 @@ Appending could also be supported with another keyword:
 </template>
 ```
 
+### Void markers
+
+TODO
+
+```html
+<div marker="results-start:results-end">
+  Before
+  <!mark name=results-start>
+  Results
+  <!mark name=results-end>
+</div>
+```
+
+TODO
+
 ### Avoiding overwriting with identical content
 
 Some content might need to remain unchanged in certain conditions. For example, displaying a chat widget in all pages but the home, but not reloading it between pages.
