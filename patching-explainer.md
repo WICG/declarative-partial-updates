@@ -22,14 +22,17 @@ Patches can be be applied later in the page lifecycle using JavaScript, see [scr
 
 ### Proposed markup
 
-A new `<!marker>` node is introduced to express insertion points (single marker) and ranges (start/end markers).
-A `marker` attribute on the parent element is used to "expose" those markers for patching:
+Proposing to re-introduce processing instructions into HTML.
+Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
+
+All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet` would be parsed as such.
+and a few special "targets" would be used towards marking: `start`, `end`, and `marker`, the latter being a "void".
 
 Example where a placeholder is replaced with actual content:
 
 ```html
-<section range="gallery">
-  <!start gallery>Loading...<!end gallery>
+<section marker="gallery">
+  <?start name="gallery">Loading...<!end name="gallery">
 </section>
 
 <template for="gallery">
@@ -40,17 +43,17 @@ Example where a placeholder is replaced with actual content:
 The marker nodes and everything between them is replaced, so the resulting DOM is:
 
 ```html
-<section range="gallery">
+<section marker="gallery">
   Actual gallery content
 </section>
 ```
 
-To insert at a single point, a single `<!marker>` is used:
+To insert at a single point, a single `<?marker>` is used:
 
 ```html
-<ul range="list">
+<ul marker="list">
   <li>first item</li>
-  <!marker list>
+  <?marker name=list>
   <li>last item</li>
 </ul>
 
@@ -62,14 +65,14 @@ To insert at a single point, a single `<!marker>` is used:
 To support multiple ranges, marker nodes can be named. The names must match one of the tokens in the `marker` attribute, and any number of ranges can be exposed:
 
 ```html
-<div range="part-one part-two">
- <!start part-one>
+<div marker="part-one part-two">
+ <?start name="part-one">
  Placeholder content
- <!end part-one>
+ <?end name="part-one">
  <hr>
- <!start part-two>
+ <?start name="part-two">
  Placeholder content
- <!end part-two>
+ <?end name="part-two">
 </div>
 
 <template for="part-one">
@@ -86,8 +89,6 @@ A few details about patching:
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
-
-Note on compat risk: Current HTML parsers interpret `<!...>` as a bogus comment, so it's important that `<!marker>`, `<!start>`, and `<!end>` does not appear in existing web content for this to be viable. Another name could be chosen if necessary for web compat.
 
 ### Interleaved patching
 
@@ -224,6 +225,12 @@ Weaknesses of this design are:
 - Doesn't support replacing arbitrary ranges of nodes, only an element or all of its children.
 - In order to support patching `<title>`, which uses the [RCDATA tokenizer state](https://html.spec.whatwg.org/multipage/parsing.html#rcdata-state), the tag name of the target element must be repeated. This is because switching to the RCDATA (or RAWTEXT) state in a `<template>` element would change how the content is parsed in supporting and non-supporting parsers, which could be a security concern.
 - `prepend` can fail if the original first child of the element is removed, meaning that a patch can fail mid-stream, requiring some error handling/reporting.
+
+### Using a new node type
+
+Instead of using processing instructions, one of the alternatives was treating it as a node type, and perhaps allowing something like `<!marker>`.
+However, creating a new type can be incompatible with tools and extensions that rely on XML and HTML being roughly compatible in terms of DOM,
+and this doesn't add a lot of value on top of the existing concept of `ProcessingInstruction`.
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
 
