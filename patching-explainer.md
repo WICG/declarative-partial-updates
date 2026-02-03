@@ -32,7 +32,7 @@ Example where a placeholder is replaced with actual content:
 
 ```html
 <section marker="gallery">
-  <?start name="gallery">Loading...<!end name="gallery">
+  <?start name="gallery">Loading...<?end name="gallery">
 </section>
 
 <template for="gallery">
@@ -95,8 +95,8 @@ A few details about patching:
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div range="product-carousel"><!start product-carousel>Loading...</div>
-<div range="search-results"><!start search-results>Loading...</div>
+<div range="product-carousel"><?start name="product-carousel">Loading...</div>
+<div range="search-results"><?start name="search-results">Loading...</div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
@@ -105,7 +105,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>first result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <!marker search-results>
+  <?marker name="search-results">
 </template>
 
 <template for="product-carousel">
@@ -115,7 +115,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>second result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <!marker search-results>
+  <?marker name="search-results">
 </template>
 
 <template for="search-results">
@@ -126,12 +126,7 @@ In this example, the search results populate in three steps while the product ca
 
 ## Marker APIs
 
-The new `<!marker>`, `<!start>`, and `<!end>` nodes would be represented with a new `Marker` interface inheriting from `Node`, with these read-only attributes:
-
-- `type`, an enum with values "marker", "start", "end"
-- `name`, a string
-
-Scripts can create marker nodes using `new Marker({ type, name })`.
+The new `<?marker>`, `<?start>`, and `<?end>` nodes would be represented with the `ProcessingInstruction` interface. That interface would receive `getAttribute`, `setAttribute` methods etc. (details TBD).
 
 To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
 
