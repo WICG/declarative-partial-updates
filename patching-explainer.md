@@ -22,7 +22,7 @@ Patches can be be applied later in the page lifecycle using JavaScript, see [scr
 
 ### Proposed markup
 
-Proposing to re-introduce processing instructions into HTML.
+Proposing to introduce processing instructions into HTML.
 Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
 
 All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet` would be parsed as such.
