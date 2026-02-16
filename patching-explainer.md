@@ -130,9 +130,42 @@ The new `<?marker>`, `<?start>`, and `<?end>` nodes would be represented with th
 
 To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
 
-## Script-initiated patching
+## Interaction with script-initiated patching
 
-`streamHTMLUnsafe()` is being pursued as a [separate proposal](https://github.com/whatwg/html/issues/2142), but will also work with patching. When `<template contentmethod>` appears in the streamed HTML, those patches can apply to descendants of element on which `streamHTMLUnsafe()` was called.
+Streaming into an element using script is being pursued [separately](https://github.com/WICG/declarative-partial-updates/blob/main/dynamic-markup-revamped-explainer.md), but will also work with patching.
+When `<template for>` appears in the streamed HTML, those patches can apply to descendants of element on which `streamAppendHTMLUnsafe()` was called.
+
+For example:
+
+```html
+<!-- load the document shell -->
+<div id=container>
+  <div marker="results more">
+    <?start name=results>
+    Loading...
+  </div>
+</div>
+<!-- later, as a response to navigation or a click or anything... -->
+<script>
+  async function update_results() {
+  const writer = container.streamAppendHTMLUnsafe().getWriter();
+   await writer.write(`
+      <template for=result>
+        <?start name=results>
+        Result 1
+        <?marker name=more>
+      </template>
+    `);
+   await writer.write(`
+      <template for=more>
+        Result 2
+        <?marker name=more>
+      </template>
+    `);
+  }
+</script>
+```
+
 
 ## Potential enhancement
 
