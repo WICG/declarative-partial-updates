@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Out of order streaming with start/end markers</title>
+    <script defer src="highlight.js"></script>
+  </head>
+  <body>
+    <h1>Out of order streaming with start/end markers</h1>
+
+    <table>
+      <tbody marker="data">
+        <tr>
+          <td>Before</td>
+        </tr>
+        <?marker name=data>
+        <tr>
+          <td>After</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <template for="data">
+      <?start name=data>
+      <tr>
+        <td>Data</td>
+      </tr>
+      <?end name=data>
+    </template>
+
+    <template for="data">
+      <tr>
+        <td>Data 1</td>
+      </tr>
+      <?marker name=data>
+    </template>
+
+    <template for="data">
+      <tr>
+        <td>Data 2</td>
+      </tr>
+    </template>
+  </body>
+</html>

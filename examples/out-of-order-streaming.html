@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Out of order streaming</title>
+    <script defer src="highlight.js"></script>
+  </head>
+  <body>
+    <h1>Out of order streaming</h1>
+
+    <div marker="placeholder"><?start name=placeholder>Loading...</div>
+
+    <template for="placeholder">
+      <p>Result 1</p>
+      <?marker name=placeholder></template
+    >
+
+    <template for="placeholder">
+      <p>Result 2</p>
+    </template>
+
+    <footer>Footer</footer>
+  </body>
+</html>

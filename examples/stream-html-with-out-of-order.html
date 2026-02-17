@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script defer src="highlight.js"></script>
+    <title>Stream HTML with out of order patches</title>
+  </head>
+  <body>
+    <h1>Stream HTML with out of order patches</h1>
+    <div id="root" marker="data"><?start name=data>Loading...</div>
+
+    <script>
+      const root = document.getElementById("root");
+
+      const stream = root.streamAppendHTMLUnsafe();
+      const writer = stream.getWriter();
+
+      (async () => {
+        for (let i = 0; i < 100; ++i) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await writer.write(
+            `<template for=data><?start name=data>${i}</template>`,
+          );
+        }
+        writer.close();
+      })();
+    </script>
+  </body>
+</html>

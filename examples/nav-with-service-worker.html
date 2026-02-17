@@ -1,0 +1,41 @@
+<!doctype html>
+
+<body>
+  <header>
+    <nav>
+      <a href="?page=1">Page 1</a>
+      <a href="?page=2">Page 2</a>
+      <a href="?page=3">Page 3</a>
+    </nav>
+  </header>
+  <main>
+    <div id="content" marker="content"><?start name=content>Loading...</div>
+  </main>
+</body>
+<script>
+  const loaded = new Promise((resolve) => {
+    window.onload = async () => {
+      navigator.serviceWorker.register("./sw.js");
+      await navigator.serviceWorker.ready;
+      console.log("Service worker ready");
+      resolve();
+    };
+  });
+
+  navigation.addEventListener("navigate", async (event) => {
+    if (event.canIntercept) {
+      event.intercept({
+        async handler() {
+          await loaded;
+          const url = new URL(event.destination.url);
+          const page = url.searchParams.get("page");
+          const stream = document.body.streamAppendHTMLUnsafe();
+          const response = await fetch("/content?page=" + page);
+          await response.body
+            .pipeThrough(new TextDecoderStream())
+            .pipeTo(stream);
+        },
+      });
+    }
+  });
+</script>

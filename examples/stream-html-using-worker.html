@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stream HTML using a worker</title>
+    <script defer src="highlight.js"></script>
+  </head>
+  <body>
+    <h1>Stream HTML using a worker</h1>
+    <div id="root">Loading...</div>
+
+    <script>
+      const root = document.getElementById("root");
+
+      const worker = new Worker("worker.js");
+
+      setTimeout(async () => {
+        let i = 0;
+        const stream = root.streamHTMLUnsafe();
+        worker.postMessage({ stream }, [stream]);
+      }, 1000);
+    </script>
+  </body>
+</html>
