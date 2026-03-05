@@ -162,9 +162,10 @@ For example:
 ```html
 <!-- load the document shell -->
 <div id=container>
-  <div marker="results more">
-    <?start name=results>
+  <div marker="results">
+    <?start name="next-result">
     Loading...
+    <?end>
   </div>
 </div>
 <!-- later, as a response to navigation or a click or anything... -->
@@ -172,18 +173,18 @@ For example:
   async function update_results() {
   const writer = container.streamAppendHTMLUnsafe().getWriter();
    await writer.write(`
-      <template for=result>
-        <?start name=results>
+      <template for=results#next-result>
         Result 1
-        <?marker name=more>
+        <?marker name="next-result">
       </template>
     `);
    await writer.write(`
-      <template for=more>
+      <template for=results#next-result>
         Result 2
-        <?marker name=more>
+        <?marker name="next-result">
       </template>
     `);
+   // Add as many more results streaming in later as you see fit.
   }
 </script>
 ```
