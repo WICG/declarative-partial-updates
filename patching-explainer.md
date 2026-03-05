@@ -40,7 +40,7 @@ Example where a placeholder is replaced with actual content:
 </template>
 ```
 
-The marker nodes and everything between them is replaced, so the resulting DOM is:
+The processing instructions and everything between them is replaced, so the resulting DOM is:
 
 ```html
 <section marker="gallery">
