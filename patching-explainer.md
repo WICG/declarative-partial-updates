@@ -48,6 +48,8 @@ The processing instructions and everything between them is replaced, so the resu
 </section>
 ```
 
+The `<?end>` processing instruction is optional. If it is not present, the template is assumed to end at the end of the current element.
+
 To insert at a single point, a single `<?marker>` is used:
 
 ```html
@@ -66,13 +68,13 @@ To support multiple ranges, processing instructions can be named. Any number of 
 
 ```html
 <div marker="results">
- <?start name="part-one">
- Placeholder content
- <?end>
- <hr>
- <?start name="part-two">
- Placeholder content
- <?end>
+  <?start name="part-one">
+  Placeholder content
+  <?end>
+  <hr>
+  <?start name="part-two">
+  Placeholder content
+  <?end>
 </div>
 
 <template for="results#part-one">
@@ -88,9 +90,9 @@ Multiple `<?marker>` elements without place-holder content is also supported in 
 
 ```html
 <div marker="results">
- <?marker name="part-one">
- <hr>
- <?marker name="part-two">
+  <?marker name="part-one">
+  <hr>
+  <?marker name="part-two">
 </div>
 
 <template for="results#part-one">
@@ -105,7 +107,6 @@ Multiple `<?marker>` elements without place-holder content is also supported in 
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
-- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the next `<?end>` sibling.
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
@@ -145,6 +146,50 @@ In this example, the search results populate in three steps while the product ca
   <!-- no new marker needed in the last patch (but would be harmless) -->
 </template>
 ```
+
+### Nested patching
+
+Since processing instructions are flat in the DOM, they are not nested like actual DOM elements. To support nested markers within the same direct element you must explicitly provide an `<?end>` with a `name` to faciliate matching.
+
+For example, to support named processing instructions for all content, and within that for parts of the content you would need to provide `<?end>` with a `name`:
+
+```html
+<div marker="results">
+  <?start name="all-results">
+  <?start name="part-one">
+  Placeholder content
+  <?end name="part-one">
+  <hr>
+  <?start name="part-two">
+  Placeholder content
+  <?end name="part-two">
+  <?end name="all-results">
+</div>
+```
+
+In the previous example if `name` attributes where not provided on the `<?end>` processing instructions, the browser would have to track which `<?start>` the `<?end>` was closing by implementing a virtual nesting (or stack) of processing instructions. That would be complex, error prone and is not supported.
+
+A perhaps cleaner alternative, if you prefer not to use `name` attributes on the `<?end>` processing instructions, is to provide nesting with actual DOM elements such as `<div>`s and separate markers:
+
+```html
+<div marker="results">
+  <?start>
+  <div marker="part-one">
+    <?start>
+    Placeholder content
+    <?end>
+  </div>
+  <hr>
+  <div marker="part-two">
+    <?start>
+    Placeholder content
+    <?end>
+  </div>
+  <?end>
+</div>
+```
+
+Both of these options are supported.
 
 ## Marker APIs
 
