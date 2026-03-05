@@ -18,7 +18,7 @@ This proposal introduces partial out-of-order HTML streaming as part of the web 
 
 Patches are delivered using a `<template>` element with the `for` attribute and target an existing elements in the DOM. These patches require no scripts to apply (are declarative) and can appear in the main response HTML to support out-of-order streaming.
 
-Patches can be be applied later in the page lifecycle using JavaScript, see [script-initiated patching](#script-initiated-patching).
+Patches can be be applied later in the page lifecycle using JavaScript, see [interaction with script-initiated patching](#interaction-with-script-initiated-patching).
 
 ### Proposed markup
 
