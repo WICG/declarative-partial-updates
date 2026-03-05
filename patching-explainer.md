@@ -32,7 +32,7 @@ Example where a placeholder is replaced with actual content:
 
 ```html
 <section marker="gallery">
-  <?start name="gallery">Loading...<?end name="gallery">
+  <?start>Loading...<?end>
 </section>
 
 <template for="gallery">
@@ -53,7 +53,7 @@ To insert at a single point, a single `<?marker>` is used:
 ```html
 <ul marker="list">
   <li>first item</li>
-  <?marker name=list>
+  <?marker>
   <li>last item</li>
 </ul>
 
@@ -62,10 +62,10 @@ To insert at a single point, a single `<?marker>` is used:
 </template>
 ```
 
-To support multiple ranges, marker nodes can be named. The names must match one of the tokens in the `marker` attribute, and any number of ranges can be exposed:
+To support multiple ranges, marker nodes can be named. Any number of ranges can be exposed, and the template has to address the specific one:
 
 ```html
-<div marker="part-one part-two">
+<div marker="results">
  <?start name="part-one">
  Placeholder content
  <?end name="part-one">
@@ -75,11 +75,11 @@ To support multiple ranges, marker nodes can be named. The names must match one 
  <?end name="part-two">
 </div>
 
-<template for="part-one">
+<template for="results#part-one">
   <p>Actual 1st part of the content</p>
 </template>
 
-<template for="part-two">
+<template for="results#part-two">
   <p>Actual 2nd part of the content</p>
 </template>
 ```
@@ -91,14 +91,15 @@ A few details about patching:
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
 - New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended.
+- Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
 ### Interleaved patching
 
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div range="product-carousel"><?start name="product-carousel">Loading...</div>
-<div range="search-results"><?start name="search-results">Loading...</div>
+<div range="product-carousel"><?start>Loading...</div>
+<div range="search-results"><?start>Loading...</div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
@@ -107,7 +108,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>first result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <?marker name="search-results">
+  <?marker>
 </template>
 
 <template for="product-carousel">
@@ -117,7 +118,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>second result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <?marker name="search-results">
+  <?marker>
 </template>
 
 <template for="search-results">
@@ -128,7 +129,7 @@ In this example, the search results populate in three steps while the product ca
 
 ## Marker APIs
 
-The new `<?marker>`, `<?start>`, and `<?end>` nodes would be represented with the `ProcessingInstruction` interface. That interface would receive `getAttribute`, `setAttribute` methods etc. (details TBD).
+The new `<?marker>`, `<?start>`, and `<?end>` nodes would be represented with the `ProcessingInstruction` interface. That interface would receive `getAttribute`, `setAttribute` methods etc. See https://github.com/whatwg/dom/pull/1454.
 
 To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
 
