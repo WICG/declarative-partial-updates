@@ -86,6 +86,8 @@ To support multiple ranges, processing instructions can be named. Any number of 
 </template>
 ```
 
+`<?end>` processing instructions can optionally include a `name` attribute. If the `name` attribute is present, it must match the `name` attribute of the corresponding `<?start>` processing instruction. If the `name` attribute is not present, it is assumed to match the `<?start>` processing instruction without a `name` attribute. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
+
 Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
 
 ```html
@@ -151,7 +153,7 @@ In this example, the search results populate in three steps while the product ca
 
 Since processing instructions are flat in the DOM, they are not nested like actual DOM elements. To support nested markers within the same direct element you must explicitly provide an `<?end>` with a `name` to faciliate matching.
 
-For example, to support named processing instructions for all content, and within that for parts of the content you would need to provide `<?end>` with a `name`:
+For example, to support named processing instructions for "all results" in the previous example and also specific numbered results, you would need to provide `<?end>` with a `name` thast matches its `<?start>` processing instruction:
 
 ```html
 <div marker="results">
@@ -167,7 +169,7 @@ For example, to support named processing instructions for all content, and withi
 </div>
 ```
 
-In the previous example if `name` attributes where not provided on the `<?end>` processing instructions, the browser would have to track which `<?start>` the `<?end>` was closing by implementing a virtual nesting (or stack) of processing instructions. That would be complex, error prone and is not supported.
+In the previous example if `name` attributes were not provided on the `<?end>` processing instructions, the browser would have to track which `<?start>` the `<?end>` was closing by implementing a virtual nesting (or stack) of processing instructions. That would be complex and error prone and so is not supported.
 
 A perhaps cleaner alternative, if you prefer not to use `name` attributes on the `<?end>` processing instructions, is to provide nesting with actual DOM elements such as `<div>`s and separate markers:
 
@@ -189,7 +191,7 @@ A perhaps cleaner alternative, if you prefer not to use `name` attributes on the
 </div>
 ```
 
-Both of these options are supported.
+Both of these options are supported for nesting.
 
 ## Marker APIs
 
