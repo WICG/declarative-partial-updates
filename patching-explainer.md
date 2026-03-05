@@ -84,6 +84,24 @@ To support multiple ranges, processing instructions can be named. Any number of 
 </template>
 ```
 
+Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
+
+```html
+<div marker="results">
+ <?marker name="part-one">
+ <hr>
+ <?marker name="part-two">
+</div>
+
+<template for="results#part-one">
+  <p>Actual 1st part of the content</p>
+</template>
+
+<template for="results#part-two">
+  <p>Actual 2nd part of the content</p>
+</template>
+```
+
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
