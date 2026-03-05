@@ -18,7 +18,7 @@ This proposal introduces partial out-of-order HTML streaming as part of the web 
 
 Patches are delivered using a `<template>` element with the `for` attribute and target an existing elements in the DOM. These patches require no scripts to apply (are declarative) and can appear in the main response HTML to support out-of-order streaming.
 
-Patches can be be applied later in the page lifecycle using JavaScript, see [script-initiated patching](#script-initiated-patching).
+Patches can be be applied later in the page lifecycle using JavaScript, see [interaction with script-initiated patching](#interaction-with-script-initiated-patching).
 
 ### Proposed markup
 
@@ -73,6 +73,24 @@ To support multiple ranges, processing instructions can be named. Any number of 
  <?start name="part-two">
  Placeholder content
  <?end>
+</div>
+
+<template for="results#part-one">
+  <p>Actual 1st part of the content</p>
+</template>
+
+<template for="results#part-two">
+  <p>Actual 2nd part of the content</p>
+</template>
+```
+
+Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
+
+```html
+<div marker="results">
+ <?marker name="part-one">
+ <hr>
+ <?marker name="part-two">
 </div>
 
 <template for="results#part-one">
