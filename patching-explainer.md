@@ -25,7 +25,7 @@ Patches can be be applied later in the page lifecycle using JavaScript, see [scr
 Proposing to introduce processing instructions into HTML.
 Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
 
-All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet` would be parsed as such.
+All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet`) would be parsed as such.
 and a few special "targets" would be used towards marking: `start`, `end`, and `marker`, the latter being a "void".
 
 Example where a placeholder is replaced with actual content:
