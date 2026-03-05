@@ -86,7 +86,7 @@ To support multiple ranges, processing instructions can be named. Any number of 
 </template>
 ```
 
-`<?end>` processing instructions can optionally include a `name` attribute. If the `name` attribute is present, it must match the `name` attribute of the corresponding `<?start>` processing instruction. If the `name` attribute is not present, it is assumed to match the `<?start>` processing instruction without a `name` attribute. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
+`<?end>` processing instructions can optionally include a `name` attribute. If the `name` attribute is present, it must match the `name` attribute of the corresponding `<?start>` processing instruction. If the `name` attribute is not present, it is assumed to match the preceeding `<?start>` processing instruction. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
 
 Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
 
