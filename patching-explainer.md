@@ -68,11 +68,11 @@ To support multiple ranges, processing instructions can be named. Any number of 
 <div marker="results">
  <?start name="part-one">
  Placeholder content
- <?end name="part-one">
+ <?end>
  <hr>
  <?start name="part-two">
  Placeholder content
- <?end name="part-two">
+ <?end>
 </div>
 
 <template for="results#part-one">
@@ -87,6 +87,7 @@ To support multiple ranges, processing instructions can be named. Any number of 
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the next `<?end>` sibling.
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
