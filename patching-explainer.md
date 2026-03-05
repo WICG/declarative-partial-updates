@@ -25,14 +25,14 @@ Patches can be be applied later in the page lifecycle using JavaScript, see [scr
 Proposing to introduce processing instructions into HTML.
 Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
 
-All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet` would be parsed as such.
+All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet`) would be parsed as such.
 and a few special "targets" would be used towards marking: `start`, `end`, and `marker`, the latter being a "void".
 
 Example where a placeholder is replaced with actual content:
 
 ```html
 <section marker="gallery">
-  <?start name="gallery">Loading...<?end name="gallery">
+  <?start>Loading...<?end>
 </section>
 
 <template for="gallery">
@@ -40,7 +40,7 @@ Example where a placeholder is replaced with actual content:
 </template>
 ```
 
-The marker nodes and everything between them is replaced, so the resulting DOM is:
+The processing instructions and everything between them is replaced, so the resulting DOM is:
 
 ```html
 <section marker="gallery">
@@ -53,7 +53,7 @@ To insert at a single point, a single `<?marker>` is used:
 ```html
 <ul marker="list">
   <li>first item</li>
-  <?marker name=list>
+  <?marker>
   <li>last item</li>
 </ul>
 
@@ -62,24 +62,24 @@ To insert at a single point, a single `<?marker>` is used:
 </template>
 ```
 
-To support multiple ranges, marker nodes can be named. The names must match one of the tokens in the `marker` attribute, and any number of ranges can be exposed:
+To support multiple ranges, processing instructions can be named. Any number of ranges can be exposed, and the template has to address the specific one:
 
 ```html
-<div marker="part-one part-two">
+<div marker="results">
  <?start name="part-one">
  Placeholder content
- <?end name="part-one">
+ <?end>
  <hr>
  <?start name="part-two">
  Placeholder content
- <?end name="part-two">
+ <?end>
 </div>
 
-<template for="part-one">
+<template for="results#part-one">
   <p>Actual 1st part of the content</p>
 </template>
 
-<template for="part-two">
+<template for="results#part-two">
   <p>Actual 2nd part of the content</p>
 </template>
 ```
@@ -87,18 +87,20 @@ To support multiple ranges, marker nodes can be named. The names must match one 
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the next `<?end>` sibling.
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
 - New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended.
+- Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
 ### Interleaved patching
 
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div range="product-carousel"><?start name="product-carousel">Loading...</div>
-<div range="search-results"><?start name="search-results">Loading...</div>
+<div range="product-carousel"><?start>Loading...</div>
+<div range="search-results"><?start>Loading...</div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
@@ -107,7 +109,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>first result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <?marker name="search-results">
+  <?marker>
 </template>
 
 <template for="product-carousel">
@@ -117,7 +119,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>second result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <?marker name="search-results">
+  <?marker>
 </template>
 
 <template for="search-results">
@@ -128,7 +130,7 @@ In this example, the search results populate in three steps while the product ca
 
 ## Marker APIs
 
-The new `<?marker>`, `<?start>`, and `<?end>` nodes would be represented with the `ProcessingInstruction` interface. That interface would receive `getAttribute`, `setAttribute` methods etc. (details TBD).
+The new `<?marker>`, `<?start>`, and `<?end>` nodes would be represented with the `ProcessingInstruction` interface. That interface would receive `getAttribute`, `setAttribute` methods etc. See https://github.com/whatwg/dom/pull/1454.
 
 To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
 
@@ -173,13 +175,13 @@ For example:
 
 ### Custom highlights integration
 
-Named ranges created by marker nodes are similar to the named highlights created by the [custom highlights API](https://drafts.csswg.org/css-highlight-api-1/). For declarative highlights, a possible direction is named `<!start>` and `<!end>` nodes together with a CSS rule to specify the highlight priority and type.
+Named ranges created by processing instructions are similar to the named highlights created by the [custom highlights API](https://drafts.csswg.org/css-highlight-api-1/). For declarative highlights, a possible direction is named `<?start>` and `<?end>` processing instructions together with a CSS rule to specify the highlight priority and type.
 
 See https://github.com/w3c/csswg-drafts/issues/13381 for discussion.
 
 ## DOM Parts integration
 
-[DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of marker nodes to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
+[DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of processing instructions to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
 
 ### Implicit markers
 
@@ -231,7 +233,7 @@ The chief downside of this approach is that it requires bookkeeping similar to l
 
 ### `contentmethod` attribute
 
-An earlier proposal that did not have marker nodes used a `contentmethod` attribute to control which nodes are removed and where new nodes are inserted. The `contentname` attribute was used on both `<template>` and the target element to link them.
+An earlier proposal that did not have processing instructions used a `contentmethod` attribute to control which nodes are removed and where new nodes are inserted. The `contentname` attribute was used on both `<template>` and the target element to link them.
 
 Example:
 
