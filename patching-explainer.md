@@ -62,7 +62,7 @@ To insert at a single point, a single `<?marker>` is used:
 </template>
 ```
 
-To support multiple ranges, marker nodes can be named. Any number of ranges can be exposed, and the template has to address the specific one:
+To support multiple ranges, processing instructions can be named. Any number of ranges can be exposed, and the template has to address the specific one:
 
 ```html
 <div marker="results">
@@ -174,13 +174,13 @@ For example:
 
 ### Custom highlights integration
 
-Named ranges created by marker nodes are similar to the named highlights created by the [custom highlights API](https://drafts.csswg.org/css-highlight-api-1/). For declarative highlights, a possible direction is named `<!start>` and `<!end>` nodes together with a CSS rule to specify the highlight priority and type.
+Named ranges created by processing instructions are similar to the named highlights created by the [custom highlights API](https://drafts.csswg.org/css-highlight-api-1/). For declarative highlights, a possible direction is named `<?start>` and `<?end>` processing instructions together with a CSS rule to specify the highlight priority and type.
 
 See https://github.com/w3c/csswg-drafts/issues/13381 for discussion.
 
 ## DOM Parts integration
 
-[DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of marker nodes to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
+[DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of processing instructions to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
 
 ### Implicit markers
 
@@ -232,7 +232,7 @@ The chief downside of this approach is that it requires bookkeeping similar to l
 
 ### `contentmethod` attribute
 
-An earlier proposal that did not have marker nodes used a `contentmethod` attribute to control which nodes are removed and where new nodes are inserted. The `contentname` attribute was used on both `<template>` and the target element to link them.
+An earlier proposal that did not have processing instructions used a `contentmethod` attribute to control which nodes are removed and where new nodes are inserted. The `contentname` attribute was used on both `<template>` and the target element to link them.
 
 Example:
 
