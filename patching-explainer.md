@@ -86,7 +86,7 @@ To support multiple ranges, processing instructions can be named. Any number of 
 </template>
 ```
 
-`<?end>` processing instructions can optionally include a `name` attribute. If the `name` attribute is present, it must match the `name` attribute of the corresponding `<?start>` processing instruction. If the `name` attribute is not present, it is assumed to match the preceeding `<?start>` processing instruction. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
+`<?end>` processing instructions can optionally include a `name` attribute. If the `name` attribute is present, it must match the `name` attribute of the corresponding `<?start>` processing instruction. If the `name` attribute is not present, it is assumed to match any open `<?start>` processing instruction(s) within this element. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
 
 Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
 
@@ -151,9 +151,9 @@ In this example, the search results populate in three steps while the product ca
 
 ### Nested patching
 
-Since processing instructions are flat in the DOM, they are not nested like actual DOM elements. To support nested markers within the same direct element you must explicitly provide an `<?end>` with a `name` to faciliate matching.
+Since processing instructions are flat in the DOM, they are not nested like actual DOM elements. To support nested markers within the same direct element you should explicitly provide an `<?end>` with a `name` to faciliate matching and avoid unexpected results.
 
-For example, to support named processing instructions for "all results" in the previous example and also specific numbered results, you would need to provide `<?end>` with a `name` thast matches its `<?start>` processing instruction:
+For example, to support named processing instructions for "all results" in the previous example and also specific numbered results, you should provide `<?end>` with a `name` that matches its `<?start>` processing instruction:
 
 ```html
 <div marker="results">
@@ -170,6 +170,8 @@ For example, to support named processing instructions for "all results" in the p
 ```
 
 In the previous example if `name` attributes were not provided on the `<?end>` processing instructions, the browser would have to track which `<?start>` the `<?end>` was closing by implementing a virtual nesting (or stack) of processing instructions. That would be complex and error prone and so is not supported.
+
+Instead, if `name` attributes were not provided, what would actually happen is that the first `<?end>` would close both the `<?start name="all-results">` and `<?start name="part-one">` processing instructions and the final `<?end>` would be ignored, which would lead to unexpected results. This is why the `name` attribute is recommended on `<?end>` processing instructions when nesting is desired.
 
 A perhaps cleaner alternative, if you prefer not to use `name` attributes on the `<?end>` processing instructions, is to provide nesting with actual DOM elements such as `<div>`s and separate markers:
 
@@ -191,7 +193,9 @@ A perhaps cleaner alternative, if you prefer not to use `name` attributes on the
 </div>
 ```
 
-Both of these options are supported for nesting.
+Since there is no nesting within the same element here, the `name` attributes are not required on either the `<?start>` or `<?end>` processing instructions and the intention is clear. However, you may still provide them if you wish.
+
+Both of these options (use of `name` attributes, or use of DOM elements to provide the nesting structure) are supported for nesting.
 
 ## Marker APIs
 
