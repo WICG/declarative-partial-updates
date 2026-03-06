@@ -109,11 +109,11 @@ When `<?start>` or `<?marker>` processing instructions are named, the template `
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error (note since templates are hidden by default, templates without a valid `for` will not be visible on the page to the user, but they will be visible in the DOM to the developer).
-- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the nearest `<?end>` sibling, or the closing of its parent element.
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction matches the nearest unmatched `<?end>` sibling (or the closing of its parent element is no `<?end>` is found).
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
-- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended (effectively, the missing PI is assumed to exist at the end of the element).
+- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` processing instruction is still there, it is inserted before that node. Otherwise, it is appended (effectively, the missing processing instruction is assumed to exist at the end of the element).
 - Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
 ### Interleaved patching
@@ -246,13 +246,15 @@ Named ranges created by processing instructions are similar to the named highlig
 
 See https://github.com/w3c/csswg-drafts/issues/13381 for discussion.
 
+Note however that presently, ranges cannot partially overlap while custom highlights can.
+
 ## DOM Parts integration
 
 [DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of processing instructions to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
 
 ### Implicit markers
 
-To simplify the common case of replacing all children of an element without requiring a `<!start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
+To simplify the common case of replacing all children of an element without requiring a `<?start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
 
 ```html
 <section range="gallery:all">
@@ -292,9 +294,9 @@ Enabling remote fetching of patch content would act as a script in terms of CSP,
 
 ### Marker pointers on `Element`
 
-The main proposal treats `<!start>` and `<!end>` as two nodes, which can appear in any number and order. Error handling is done when trying to apply a `<template>` patch.
+The main proposal treats `<?start>` and `<?end>` as two nodes, which can appear in any number and order. Error handling is done when trying to apply a `<template>` patch.
 
-An alternative is that the parser doesn't create `Marker` nodes, but instead sets pointers `element.beforeFirstMarker` and `element.afterLastMarker`. Serializing would insert `<!start>` and `<!end>` at the appropriate places.
+An alternative is that the parser doesn't create `Marker` nodes, but instead sets pointers `element.beforeFirstMarker` and `element.afterLastMarker`. Serializing would insert `<?start>` and `<?end>` at the appropriate places.
 
 The chief downside of this approach is that it requires bookkeeping similar to live `Range` objects.
 
