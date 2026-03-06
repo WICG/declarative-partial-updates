@@ -109,7 +109,7 @@ Multiple `<?marker>` elements without place-holder content is also supported in 
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
-- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the nearest `<?end>` sibling, or the closing of it's element.
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the nearest `<?end>` sibling, or the closing of its parent element.
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
