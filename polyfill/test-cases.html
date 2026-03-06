@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patching polyfill test cases</title>
+  <script src="./dist/declarative-partial-updates-polyfill.js" async></script>
+</head>
+
+<body>
+  <h1>Test 1</h1>
+  <section marker="gallery1">
+    <?marker></section>
+    <template for="gallery1">
+      Actual <strong>gallery1</strong> content
+    </template>
+
+    <h1>Test 2</h1>
+    <section marker="gallery2"><?start>Loading...<?end></section>
+    <template for="gallery2">
+      Actual <strong>gallery2</strong> content
+    </template>
+
+    <h1>Test 3</h1>
+    <section marker="gallery3"><?start name="part">Loading...<?end></section>
+    <template for="gallery3#part">
+      Actual <strong>gallery3</strong> content
+    </template>
+
+    <h1>Test 4</h1>
+    <p>Should leave first loading...</p>
+    <section marker="gallery4">
+      <?start name="all"> Loading...<br />
+      <?start name="part">Loading inner...<?end> <?end>
+    </section>
+    <template for="gallery4#part">
+      Actual <strong>gallery4</strong> content
+    </template>
+
+    <h1>Test 5</h1>
+    <p>Should leave first loading...</p>
+    <section marker="gallery5">
+      <?start name="all"> Loading...<br />
+      <div><?start name="part">Loading inner...<?end></div>
+      <?end>
+    </section>
+    <template for="gallery5#part">
+      Actual <strong>gallery5</strong> content
+    </template>
+
+    <h1>Test 6</h1>
+    <section marker="gallery6">
+      <?start name="all"> Loading...<br />
+      <div><?start name="part">Loading inner...<?end></div>
+      <?end>
+    </section>
+    <template for="gallery6#all">
+      Actual <strong>gallery6</strong> content
+    </template>
+
+    <button id="add-new-section">Add new section</button>
+    <button id="add-new-template">Add new template</button>
+  </body>
+
+  <script>
+    document.getElementById('add-new-section').addEventListener('click', () => {
+      const maxSectionNumber = Array.from(
+        document.querySelectorAll('section[marker]')
+      )
+        .map((s) => s.getAttribute('marker'))
+        .reduce((max, marker) => {
+          const number = parseInt(marker.replace('gallery', ''));
+          return Math.max(max, number);
+        }, 0);
+
+      console.log('maxSectionNumber', maxSectionNumber);
+      const header = document.createElement('h1');
+      header.textContent = 'Test ' + (maxSectionNumber + 1);
+      const section = document.createElement('section');
+      section.setAttribute('marker', 'gallery' + (maxSectionNumber + 1));
+      section.innerHTML = '<?start>Loading...<?end>';
+      document.body.appendChild(header);
+      document.body.appendChild(section);
+    });
+
+    document
+      .getElementById('add-new-template')
+      .addEventListener('click', () => {
+        const maxSectionNumber = Array.from(
+          document.querySelectorAll('section[marker]')
+        )
+          .map((s) => s.getAttribute('marker'))
+          .reduce((max, marker) => {
+            const number = parseInt(marker.replace('gallery', ''));
+            return Math.max(max, number);
+          }, 0);
+
+        console.log('maxSectionNumber', maxSectionNumber);
+        const template = document.createElement('template');
+        template.setAttribute('for', 'gallery' + maxSectionNumber);
+        template.innerHTML =
+          'Actual <strong>gallery' + maxSectionNumber + '</strong> content';
+        document.body.appendChild(template);
+      });
+  </script>
+</html>
