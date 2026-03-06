@@ -192,7 +192,7 @@ For this reason, a cleaner alternative is to provide nesting with actual DOM ele
 </div>
 ```
 
-Both of these options (use of `name` attributes, or use of DOM elements to provide the nesting structure) are supported for nesting.
+Both of these options (nesting processing instructions within the same direct parent element, or use of DOM elements to provide the nesting structure) are supported for nesting.
 
 ## Marker APIs
 
