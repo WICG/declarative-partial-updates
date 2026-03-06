@@ -48,7 +48,9 @@ The processing instructions and everything between them is replaced, so the resu
 </section>
 ```
 
-The `<?end>` processing instruction is optional. If it is not present, the template is assumed to end at the end of the current element.
+The `<?end>` processing instruction is optional, but recommended for clarity. If it is not present, the template is assumed to end at the end of the current element.
+
+The `<?end>` processing instruction closes the nearest open `<?start>` processing instruction. This means processing instructions cannot partially overlap (for example, open a, open b, close a, close b) since the `<?end>` would close the nearest open `<?start>`. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
 
 To insert at a single point, a single `<?marker>` is used:
 
@@ -86,8 +88,6 @@ To support multiple ranges, processing instructions can be named. Any number of 
 </template>
 ```
 
-`<?end>` processing instructions can optionally include a `name` attribute. If the `name` attribute is present, it must match the `name` attribute of the corresponding `<?start>` processing instruction. If the `name` attribute is not present, it is assumed to match any open `<?start>` processing instruction(s) within this element. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
-
 Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
 
 ```html
@@ -109,10 +109,11 @@ Multiple `<?marker>` elements without place-holder content is also supported in 
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the nearest `<?end>` sibling, or the closing of it's element.
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
-- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended.
+- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended (effectively the missing PI is assumed to exist at the end of the element).
 - Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
 ### Interleaved patching
@@ -151,7 +152,7 @@ In this example, the search results populate in three steps while the product ca
 
 ### Nested patching
 
-Since processing instructions are flat in the DOM, they are not nested like actual DOM elements. To support nested markers within the same direct element you should explicitly provide an `<?end>` with a `name` to faciliate matching and avoid unexpected results.
+Processing ican be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the nearest `<?start>` processing instruction.
 
 For example, to support named processing instructions for "all results" in the previous example and also specific numbered results, you should provide `<?end>` with a `name` that matches its `<?start>` processing instruction:
 
@@ -160,20 +161,18 @@ For example, to support named processing instructions for "all results" in the p
   <?start name="all-results">
   <?start name="part-one">
   Placeholder content
-  <?end name="part-one">
+  <?end>
   <hr>
   <?start name="part-two">
   Placeholder content
-  <?end name="part-two">
-  <?end name="all-results">
+  <?end>
+  <?end>
 </div>
 ```
 
-In the previous example if `name` attributes were not provided on the `<?end>` processing instructions, the browser would have to track which `<?start>` the `<?end>` was closing by implementing a virtual nesting (or stack) of processing instructions. That would be complex and error prone and so is not supported.
+Note that, since processing instructions are not DOM elements, they are not technically nested (hence shown without intentaion).
 
-Instead, if `name` attributes were not provided, what would actually happen is that the first `<?end>` would close both the `<?start name="all-results">` and `<?start name="part-one">` processing instructions and the final `<?end>` would be ignored, which would lead to unexpected results. This is why the `name` attribute is recommended on `<?end>` processing instructions when nesting is desired.
-
-A perhaps cleaner alternative, if you prefer not to use `name` attributes on the `<?end>` processing instructions, is to provide nesting with actual DOM elements such as `<div>`s and separate markers:
+For this reason, a cleaner alternative is to provide nesting with actual DOM elements such as `<div>`s and separate markers:
 
 ```html
 <div marker="results">
@@ -192,8 +191,6 @@ A perhaps cleaner alternative, if you prefer not to use `name` attributes on the
   <?end>
 </div>
 ```
-
-Since there is no nesting within the same element here, the `name` attributes are not required on either the `<?start>` or `<?end>` processing instructions and the intention is clear. However, you may still provide them if you wish.
 
 Both of these options (use of `name` attributes, or use of DOM elements to provide the nesting structure) are supported for nesting.
 
