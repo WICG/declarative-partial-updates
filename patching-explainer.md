@@ -22,11 +22,9 @@ Patches can be be applied later in the page lifecycle using JavaScript, see [int
 
 ### Proposed markup
 
-Proposing to introduce processing instructions into HTML.
-Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
+Proposing to introduce processing instructions (PIs) into HTML. Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
 
-All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet`) would be parsed as such.
-and a few special "targets" would be used towards marking: `start`, `end`, and `marker`, the latter being a "void".
+All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet`) would be parsed as such. A few special "targets" would be used towards marking: `start`, `end`, and `marker`, the latter being a "void".
 
 Example where a placeholder is replaced with actual content:
 
@@ -113,7 +111,7 @@ A few details about patching:
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
-- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended (effectively the missing PI is assumed to exist at the end of the element).
+- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended (effectively, the missing PI is assumed to exist at the end of the element).
 - Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
 ### Interleaved patching
@@ -121,8 +119,8 @@ A few details about patching:
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div range="product-carousel"><?start>Loading...</div>
-<div range="search-results"><?start>Loading...</div>
+<div range="product-carousel"><?start>Loading...<?end></div>
+<div range="search-results"><?start>Loading...<?end></div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
@@ -152,7 +150,7 @@ In this example, the search results populate in three steps while the product ca
 
 ### Nested patching
 
-Processing ican be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the nearest `<?start>` processing instruction.
+Processing can be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the nearest `<?start>` processing instruction.
 
 For example, to support named processing instructions for "all results" in the previous example and also specific numbered results:
 
