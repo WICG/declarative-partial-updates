@@ -2,6 +2,10 @@ import globals from 'globals';
 import pluginJs from '@eslint/js';
 
 export default [
+  {
+    ignores: ['node_modules', 'dist/'],
+  },
+
   // 1. Global Recommended Config
   pluginJs.configs.recommended,
 

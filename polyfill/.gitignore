@@ -7,3 +7,4 @@ node_modules
 
 # Generated TypeScript files and build data
 tsconfig.tsbuildinfo
+dist/

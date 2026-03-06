@@ -35,7 +35,7 @@ function configurePlugins(opts = {}) {
 export default [
   {
     input: 'dist/modules/declarative-partial-updates-polyfill.js',
-    plugins: configurePlugins({ isBrowser: true, minify: true }),
+    plugins: configurePlugins({isBrowser: true, minify: true}),
     output: {
       format: 'esm',
       file: './dist/declarative-partial-updates-polyfill.js',
@@ -43,7 +43,7 @@ export default [
   },
   {
     input: 'dist/modules/declarative-partial-updates-polyfill.js',
-    plugins: configurePlugins({ isBrowser: false, minify: true }),
+    plugins: configurePlugins({isBrowser: false, minify: true}),
     output: {
       format: 'cjs',
       file: './dist/declarative-partial-updates-polyfill.cjs',

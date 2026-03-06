@@ -10,7 +10,10 @@
     if (!section) {
       return;
     }
-    const walker = document.createTreeWalker(section, NodeFilter.SHOW_COMMENT);
+    const walker = document.createTreeWalker(
+      section,
+      NodeFilter.SHOW_PROCESSING_INSTRUCTION | NodeFilter.SHOW_COMMENT
+    );
     walker.currentNode = startNode;
     let endNode: Comment | null;
     while ((endNode = walker.nextNode() as Comment)) {
@@ -38,7 +41,7 @@
     if (section) {
       const walker = document.createTreeWalker(
         section,
-        NodeFilter.SHOW_COMMENT
+        NodeFilter.SHOW_PROCESSING_INSTRUCTION | NodeFilter.SHOW_COMMENT
       );
       let node: Comment | null;
       while ((node = walker.nextNode() as Comment)) {

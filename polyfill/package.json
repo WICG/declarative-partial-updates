@@ -74,7 +74,7 @@
     "typescript": "^5.9.3"
   },
   "lint-staged": {
-    "**/*.js": "eslint --fix --ignore-path .gitignore",
-    "**/*.{cjs,html,js,ts}": "prettier --write --ignore-path .gitignore"
+    "**/*.js": "eslint --fix --ignore-path .gitignore dist/",
+    "**/*.{cjs,html,js,ts}": "prettier --write --ignore-path .gitignore dist/"
   }
 }

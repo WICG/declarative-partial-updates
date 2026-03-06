@@ -8,7 +8,7 @@
         if (!section) {
             return;
         }
-        const walker = document.createTreeWalker(section, NodeFilter.SHOW_COMMENT);
+        const walker = document.createTreeWalker(section, NodeFilter.SHOW_PROCESSING_INSTRUCTION | NodeFilter.SHOW_COMMENT);
         walker.currentNode = startNode;
         let endNode;
         while ((endNode = walker.nextNode())) {
@@ -32,7 +32,7 @@
         const [name, hash] = template.getAttribute('for')?.split('#') || [];
         const section = document.querySelector(`section[marker="${name}"]`);
         if (section) {
-            const walker = document.createTreeWalker(section, NodeFilter.SHOW_COMMENT);
+            const walker = document.createTreeWalker(section, NodeFilter.SHOW_PROCESSING_INSTRUCTION | NodeFilter.SHOW_COMMENT);
             let node;
             while ((node = walker.nextNode())) {
                 const data = node.data.trim();
