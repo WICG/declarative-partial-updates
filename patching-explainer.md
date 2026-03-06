@@ -46,7 +46,7 @@ The processing instructions and everything between them is replaced, so the resu
 </section>
 ```
 
-The `<?end>` processing instruction is optional, but recommended for clarity. If it is not present, the template is assumed to end at the end of the current element.
+The `<?end>` processing instruction is optional, but recommended for clarity. If it is not present, the patch range is assumed to end at the end of the current element.
 
 The `<?end>` processing instruction closes the nearest open `<?start>` processing instruction. This means processing instructions cannot partially overlap (for example, open a, open b, close a, close b) since the `<?end>` would close the nearest open `<?start>`. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
 
