@@ -22,11 +22,9 @@ Patches can be be applied later in the page lifecycle using JavaScript, see [int
 
 ### Proposed markup
 
-Proposing to introduce processing instructions into HTML.
-Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
+Proposing to introduce processing instructions (PIs) into HTML. Those are already supported in XML and in the DOM spec, and are currently parsed as bogus comments.
 
-All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet`) would be parsed as such.
-and a few special "targets" would be used towards marking: `start`, `end`, and `marker`, the latter being a "void".
+All processing instructions (apart from block-listed ones like `<?xml` and `<?xml-stylesheet`) would be parsed as such. A few special "targets" would be used towards marking: `start`, `end`, and `marker`, the latter being a "void".
 
 Example where a placeholder is replaced with actual content:
 
@@ -48,6 +46,10 @@ The processing instructions and everything between them is replaced, so the resu
 </section>
 ```
 
+The `<?end>` processing instruction is optional, but recommended for clarity. If it is not present, the patch range is assumed to end at the end of the current element.
+
+The `<?end>` processing instruction closes the nearest open `<?start>` processing instruction. This means processing instructions cannot partially overlap (for example, open a, open b, close a, close b) since the `<?end>` would close the nearest open `<?start>`. See also [Nested Patching](#nested-patching) for more considerations here with nested ranges.
+
 To insert at a single point, a single `<?marker>` is used:
 
 ```html
@@ -66,13 +68,13 @@ To support multiple ranges, processing instructions can be named. Any number of 
 
 ```html
 <div marker="results">
- <?start name="part-one">
- Placeholder content
- <?end>
- <hr>
- <?start name="part-two">
- Placeholder content
- <?end>
+  <?start name="part-one">
+  Placeholder content
+  <?end>
+  <hr>
+  <?start name="part-two">
+  Placeholder content
+  <?end>
 </div>
 
 <template for="results#part-one">
@@ -88,9 +90,9 @@ Multiple `<?marker>` elements without place-holder content is also supported in 
 
 ```html
 <div marker="results">
- <?marker name="part-one">
- <hr>
- <?marker name="part-two">
+  <?marker name="part-one">
+  <hr>
+  <?marker name="part-two">
 </div>
 
 <template for="results#part-one">
@@ -102,14 +104,16 @@ Multiple `<?marker>` elements without place-holder content is also supported in 
 </template>
 ```
 
+When `<?start>` or `<?marker>` processing instructions are named, the template `for` attribute has to include the name as well, separated by `#` for the template to be valid and patching to occur.
+
 A few details about patching:
 
-- Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error.
-- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction would match the next `<?end>` sibling.
+- Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error (note since templates are hidden by default, templates without a valid `for` will not be visible on the page to the user, but they will be visible in the DOM to the developer).
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction matches the nearest unmatched `<?end>` sibling (or the closing of its parent element is no `<?end>` is found).
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
-- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` PI is still there, it is inserted before that node. Otherwise, it is appended.
+- New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` processing instruction is still there, it is inserted before that node. Otherwise, it is appended (effectively, the missing processing instruction is assumed to exist at the end of the element).
 - Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
 ### Interleaved patching
@@ -117,8 +121,8 @@ A few details about patching:
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div range="product-carousel"><?start>Loading...</div>
-<div range="search-results"><?start>Loading...</div>
+<div range="product-carousel"><?start>Loading...<?end></div>
+<div range="search-results"><?start>Loading...<?end></div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
@@ -145,6 +149,50 @@ In this example, the search results populate in three steps while the product ca
   <!-- no new marker needed in the last patch (but would be harmless) -->
 </template>
 ```
+
+### Nested patching
+
+Processing can be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the nearest `<?start>` processing instruction.
+
+For example, to support named processing instructions for "all results" in the previous example and also specific numbered results:
+
+```html
+<div marker="results">
+  <?start name="all-results">
+  <?start name="part-one">
+  Placeholder content
+  <?end>
+  <hr>
+  <?start name="part-two">
+  Placeholder content
+  <?end>
+  <?end>
+</div>
+```
+
+Note that, since processing instructions are not DOM elements, they are not technically nested (hence shown without intentaion).
+
+For this reason, a cleaner alternative is to provide nesting with actual DOM elements such as `<div>`s and separate markers:
+
+```html
+<div marker="results">
+  <?start>
+  <div marker="part-one">
+    <?start>
+    Placeholder content
+    <?end>
+  </div>
+  <hr>
+  <div marker="part-two">
+    <?start>
+    Placeholder content
+    <?end>
+  </div>
+  <?end>
+</div>
+```
+
+Both of these options (nesting processing instructions within the same direct parent element, or use of DOM elements to provide the nesting structure) are supported for nesting.
 
 ## Marker APIs
 
@@ -198,13 +246,15 @@ Named ranges created by processing instructions are similar to the named highlig
 
 See https://github.com/w3c/csswg-drafts/issues/13381 for discussion.
 
+Note however that presently, ranges cannot partially overlap while custom highlights can.
+
 ## DOM Parts integration
 
 [DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of processing instructions to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
 
 ### Implicit markers
 
-To simplify the common case of replacing all children of an element without requiring a `<!start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
+To simplify the common case of replacing all children of an element without requiring a `<?start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
 
 ```html
 <section range="gallery:all">
@@ -244,9 +294,9 @@ Enabling remote fetching of patch content would act as a script in terms of CSP,
 
 ### Marker pointers on `Element`
 
-The main proposal treats `<!start>` and `<!end>` as two nodes, which can appear in any number and order. Error handling is done when trying to apply a `<template>` patch.
+The main proposal treats `<?start>` and `<?end>` as two nodes, which can appear in any number and order. Error handling is done when trying to apply a `<template>` patch.
 
-An alternative is that the parser doesn't create `Marker` nodes, but instead sets pointers `element.beforeFirstMarker` and `element.afterLastMarker`. Serializing would insert `<!start>` and `<!end>` at the appropriate places.
+An alternative is that the parser doesn't create `Marker` nodes, but instead sets pointers `element.beforeFirstMarker` and `element.afterLastMarker`. Serializing would insert `<?start>` and `<?end>` at the appropriate places.
 
 The chief downside of this approach is that it requires bookkeeping similar to live `Range` objects.
 
