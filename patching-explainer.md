@@ -64,6 +64,8 @@ To insert at a single point, a single `<?marker>` is used:
 </template>
 ```
 
+Note: These examples ignore extra white space introduced for simplicity and readability. Developers may need to consider such white space issues in certain circumstances.
+
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error (note since templates are hidden by default, templates without a valid `for` will not be visible on the page to the user, but they will be visible in the DOM to the developer).
