@@ -29,8 +29,8 @@ All processing instructions (apart from block-listed ones like `<?xml` and `<?xm
 Example where a placeholder is replaced with actual content:
 
 ```html
-<section marker="gallery">
-  <?start>Loading...<?end>
+<section>
+  <?start name="gallery">Loading...<?end>
 </section>
 
 <template for="gallery">
@@ -41,7 +41,7 @@ Example where a placeholder is replaced with actual content:
 The processing instructions and everything between them is replaced, so the resulting DOM is:
 
 ```html
-<section marker="gallery">
+<section>
   Actual gallery content
 </section>
 ```
@@ -53,9 +53,9 @@ The `<?end>` processing instruction closes the nearest open `<?start>` processin
 To insert at a single point, a single `<?marker>` is used:
 
 ```html
-<ul marker="list">
+<ul>
   <li>first item</li>
-  <?marker>
+  <?marker name="list">
   <li>last item</li>
 </ul>
 
@@ -64,52 +64,12 @@ To insert at a single point, a single `<?marker>` is used:
 </template>
 ```
 
-To support multiple ranges, processing instructions can be named. Any number of ranges can be exposed, and the template has to address the specific one:
-
-```html
-<div marker="results">
-  <?start name="part-one">
-  Placeholder content
-  <?end>
-  <hr>
-  <?start name="part-two">
-  Placeholder content
-  <?end>
-</div>
-
-<template for="results#part-one">
-  <p>Actual 1st part of the content</p>
-</template>
-
-<template for="results#part-two">
-  <p>Actual 2nd part of the content</p>
-</template>
-```
-
-Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
-
-```html
-<div marker="results">
-  <?marker name="part-one">
-  <hr>
-  <?marker name="part-two">
-</div>
-
-<template for="results#part-one">
-  <p>Actual 1st part of the content</p>
-</template>
-
-<template for="results#part-two">
-  <p>Actual 2nd part of the content</p>
-</template>
-```
-
-When `<?start>` or `<?marker>` processing instructions are named, the template `for` attribute has to include the name as well, separated by `#` for the template to be valid and patching to occur.
+Note: These examples ignore extra white space introduced for simplicity and readability. Developers may need to consider such white space issues in certain circumstances.
 
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error (note since templates are hidden by default, templates without a valid `for` will not be visible on the page to the user, but they will be visible in the DOM to the developer).
-- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction matches the nearest unmatched `<?end>` sibling (or the closing of its parent element is no `<?end>` is found).
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction matches the next unmatched `<?end>` sibling (or the closing of its parent element is no `<?end>` is found).
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
@@ -121,8 +81,8 @@ A few details about patching:
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
 
 ```html
-<div range="product-carousel"><?start>Loading...<?end></div>
-<div range="search-results"><?start>Loading...<?end></div>
+<div><?start name="product-carousel">Loading...<?end></div>
+<div><?start name="search-results">Loading...<?end></div>
 ```
 
 In this example, the search results populate in three steps while the product carousel populates in one step in between:
@@ -131,7 +91,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>first result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <?marker>
+  <?marker name="search-results">
 </template>
 
 <template for="product-carousel">
@@ -141,7 +101,7 @@ In this example, the search results populate in three steps while the product ca
 <template for="search-results">
   <p>second result</p>
   <!-- a new marker is added at the end for the following patch -->
-  <?marker>
+  <?marker name="search-results">
 </template>
 
 <template for="search-results">
@@ -152,12 +112,12 @@ In this example, the search results populate in three steps while the product ca
 
 ### Nested patching
 
-Processing can be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the nearest `<?start>` processing instruction.
+Processing can be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the next unmatched `<?start>` processing instruction.
 
-For example, to support named processing instructions for "all results" in the previous example and also specific numbered results:
+For example, to support processing instructions for "all results" in the previous example and also specific numbered results:
 
 ```html
-<div marker="results">
+<div>
   <?start name="all-results">
   <?start name="part-one">
   Placeholder content
@@ -175,16 +135,16 @@ Note that, since processing instructions are not DOM elements, they are not tech
 For this reason, a cleaner alternative is to provide nesting with actual DOM elements such as `<div>`s and separate markers:
 
 ```html
-<div marker="results">
-  <?start>
-  <div marker="part-one">
-    <?start>
+<div>
+  <?start name="all-results">
+  <div>
+    <?start name="part-one">
     Placeholder content
     <?end>
   </div>
   <hr>
-  <div marker="part-two">
-    <?start>
+  <div>
+    <?start name="part-two">
     Placeholder content
     <?end>
   </div>
@@ -198,8 +158,6 @@ Both of these options (nesting processing instructions within the same direct pa
 
 The new `<?marker>`, `<?start>`, and `<?end>` nodes would be represented with the `ProcessingInstruction` interface. That interface would receive `getAttribute`, `setAttribute` methods etc. See https://github.com/whatwg/dom/pull/1454.
 
-To allow scripts to use markers in the same way a declarative patching would, an `element.markerRange("list")` method is introduced, returning a `Range` object spanning the same nodes that would be replaced.
-
 ## Interaction with script-initiated patching
 
 Streaming into an element using script is being pursued [separately](https://github.com/WICG/declarative-partial-updates/blob/main/dynamic-markup-revamped-explainer.md), but will also work with patching.
@@ -210,7 +168,7 @@ For example:
 ```html
 <!-- load the document shell -->
 <div id=container>
-  <div marker="results">
+  <div>
     <?start name="next-result">
     Loading...
     <?end>
@@ -221,13 +179,13 @@ For example:
   async function update_results() {
   const writer = container.streamAppendHTMLUnsafe().getWriter();
    await writer.write(`
-      <template for=results#next-result>
+      <template for="next-result">
         Result 1
         <?marker name="next-result">
       </template>
     `);
    await writer.write(`
-      <template for=results#next-result>
+      <template for="next-result">
         Result 2
         <?marker name="next-result">
       </template>
@@ -252,32 +210,6 @@ Note however that presently, ranges cannot partially overlap while custom highli
 
 [DOM Parts](https://github.com/WICG/webcomponents/blob/gh-pages/proposals/DOM-Parts.md) could make use of processing instructions to annotate ranges created by the "{{}}" syntax, so that the ranges are represented in the DOM and not just in the `<template>` and JS APIs.
 
-### Implicit markers
-
-To simplify the common case of replacing all children of an element without requiring a `<?start>` node, the `marker` attribute could have a microsyntax to target ranges. Example:
-
-```html
-<section range="gallery:all">
-  Loading...
-</section>
-
-<template for="gallery">
-  Actual gallery content
-</template>
-```
-
-Appending could also be supported with another keyword:
-
-```html
-<ul range="gallery:last">
-  <li>first item</li>
-</ul>
-
-<template for="gallery">
-  <li>second item</li>
-</template>
-```
-
 ### Avoiding overwriting with identical content
 
 Some content might need to remain unchanged in certain conditions. For example, displaying a chat widget in all pages but the home, but not reloading it between pages.
@@ -291,6 +223,11 @@ This can be done with a `patchsrc` attribute.
 Enabling remote fetching of patch content would act as a script in terms of CSP, with a CORS-only request, and would be sanitized with the same HTML/trusted-types restrictions as patching using script.
 
 ## Alternatives considered
+
+### A `marker` attribute
+
+Having to name the marker as an element attribute on the processing instruction parent element was considered as an mXSS protection, in case downstream sanitizers let processing instructions pass through.
+However, as mainstream up to date sanitizers don't let processing instructions through in their default configuration it was felt this was an non-issue.
 
 ### Marker pointers on `Element`
 
