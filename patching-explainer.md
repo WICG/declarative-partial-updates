@@ -64,55 +64,16 @@ To insert at a single point, a single `<?marker>` is used:
 </template>
 ```
 
-To support multiple ranges, processing instructions can be named. Any number of ranges can be exposed, and the template has to address the specific one:
-
-```html
-<div>
-  <?start name="part-one">
-  Placeholder content
-  <?end>
-  <hr>
-  <?start name="part-two">
-  Placeholder content
-  <?end>
-</div>
-
-<template for="part-one">
-  <p>Actual 1st part of the content</p>
-</template>
-
-<template for="part-two">
-  <p>Actual 2nd part of the content</p>
-</template>
-```
-
-Multiple `<?marker>` elements without place-holder content is also supported in a similar manner:
-
-```html
-<div>
-  <?marker name="part-one">
-  <hr>
-  <?marker name="part-two">
-</div>
-
-<template for="part-one">
-  <p>Actual 1st part of the content</p>
-</template>
-
-<template for="part-two">
-  <p>Actual 2nd part of the content</p>
-</template>
-```
-
 A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error (note since templates are hidden by default, templates without a valid `for` will not be visible on the page to the user, but they will be visible in the DOM to the developer).
-- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction matches the nearest unmatched `<?end>` sibling (or the closing of its parent element is no `<?end>` is found).
+- `<?end>` does not have a `name` attribute. A `<?start>` processing instruction matches the next unmatched `<?end>` sibling (or the closing of its parent element is no `<?end>` is found).
 - If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
 - New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` processing instruction is still there, it is inserted before that node. Otherwise, it is appended (effectively, the missing processing instruction is assumed to exist at the end of the element).
 - Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
+
 
 ### Interleaved patching
 
@@ -217,7 +178,7 @@ For example:
   async function update_results() {
   const writer = container.streamAppendHTMLUnsafe().getWriter();
    await writer.write(`
-      <template for=next-result>
+      <template for="next-result">
         Result 1
         <?marker name="next-result">
       </template>
