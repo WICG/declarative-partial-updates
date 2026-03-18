@@ -174,7 +174,7 @@ For this reason, a cleaner alternative is to provide nesting with actual DOM ele
 
 ```html
 <div>
-  <?start>
+  <?start name="all-results">
   <div>
     <?start name="part-one">
     Placeholder content
