@@ -224,7 +224,7 @@ Enabling remote fetching of patch content would act as a script in terms of CSP,
 
 ### A `marker` attribute
 
-Having to name the marker as an element attribute on the processing instruction parent element was considered as an XSS protection, in case downstream sanitizers let processing instructions pass through.
+Having to name the marker as an element attribute on the processing instruction parent element was considered as an mXSS protection, in case downstream sanitizers let processing instructions pass through.
 However, as mainstream up to date sanitizers don't let processing instructions through in their default configuration it was felt this was an non-issue.
 
 ### Marker pointers on `Element`
