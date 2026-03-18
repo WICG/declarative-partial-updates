@@ -110,7 +110,7 @@ In this example, the search results populate in three steps while the product ca
 
 ### Nested patching
 
-Processing can be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the nearest `<?start>` processing instruction.
+Processing can be nested within a single element. In this case the browser will handle matching the `<?end>` processing instruction with the next unmatched `<?start>` processing instruction.
 
 For example, to support processing instructions for "all results" in the previous example and also specific numbered results:
 
