@@ -74,7 +74,6 @@ A few details about patching:
 - New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` processing instruction is still there, it is inserted before that node. Otherwise, it is appended (effectively, the missing processing instruction is assumed to exist at the end of the element).
 - Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
-
 ### Interleaved patching
 
 An element can be patched multiple times and patches for different elements can be interleaved. This allows for updates to different parts of the document to be interleaved. For example:
