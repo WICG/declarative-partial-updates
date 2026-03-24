@@ -10,11 +10,11 @@
     <h1>Out of order streaming with start/end markers</h1>
 
     <table>
-      <tbody marker="data">
+      <tbody>
         <tr>
           <td>Before</td>
         </tr>
-        <?marker>
+        <?marker name="data">
         <tr>
           <td>After</td>
         </tr>
@@ -22,7 +22,7 @@
     </table>
 
     <template for="data">
-      <?start>
+      <?start name="data">
       <tr>
         <td>Data</td>
       </tr>
@@ -33,7 +33,7 @@
       <tr>
         <td>Data 1</td>
       </tr>
-      <?marker>
+      <?marker name="data">
     </template>
 
     <template for="data">
