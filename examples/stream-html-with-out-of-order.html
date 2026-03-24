@@ -8,7 +8,7 @@
   </head>
   <body>
     <h1>Stream HTML with out of order patches</h1>
-    <div id="root" marker="data"><?start>Loading...</div>
+    <div id="root"><?start name="data">Loading...</div>
 
     <script>
       const root = document.getElementById("root");
@@ -20,7 +20,7 @@
         for (let i = 0; i < 100; ++i) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await writer.write(
-            `<template for=data><?start>${i}</template>`,
+            `<template for=data><?start name="data">${i}</template>`,
           );
         }
         writer.close();
