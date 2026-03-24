@@ -123,34 +123,37 @@ interface TrustedSetHTMLUnsafeOptions {
 }
 
 typedef (SetHTMLUnsafeOptions or TrustedHTMLParserOptions) UnsafeHTMLSetterOptions;
-typedef (SetHTMLOptions or TrustedHTMLParserOptions) SafeHTMLSetterOptions;
 
 [Exposed=Window]
 mixin interface ElementOrShadowRoot {
-  void setHTML((DOMString or TrustedHTML) html, SafeHTMLSetterOptions options);
+  void setHTML(DOMString html, SetHTML options);
   void setHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
-  void beforeHTML((DOMString or TrustedHTML) html, SafeHTMLSetterOptions options);
-  void beforeHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
-  void afterHTML((DOMString or TrustedHTML) html, SafeHTMLSetterOptions options);
-  void afterHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
-  void appendHTML((DOMString or TrustedHTML) html, SafeHTMLSetterOptions options);
+  void appendHTML(DOMString html, SetHTMLOptions options);
   void appendHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
-  void prependHTML((DOMString or TrustedHTML) html, SafeHTMLSetterOptions options);
+  void prependHTML(DOMString html, SetHTMLOptions options);
   void prependHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
-  void replaceWithHTML((DOMString or TrustedHTML) html, SafeHTMLSetterOptions options);
-  void replaceWithHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
-  WritableStream streamHTML(SafeHTMLSetterOptions options);
+  WritableStream streamHTML(SetHTMLOptions options);
   WritableStream streamHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
-  WritableStream streamBeforeHTML(SafeHTMLSetterOptions options);
-  WritableStream streamBeforeHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
-  WritableStream streamAfterHTML(SafeHTMLSetterOptions options);
-  WritableStream streamAfterHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
-  WritableStream streamAppendHTML(SafeHTMLSetterOptions options);
+  WritableStream streamAppendHTML(SetHTMLOptions options);
   WritableStream streamAppendHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
-  WritableStream streamPrependHTML(SafeHTMLSetterOptions options);
+  WritableStream streamPrependHTML(SetHTMLOptions options);
   WritableStream streamPrependHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
-  WritableStream streamReplaceWithHTML(SafeHTMLSetterOptions options);
+};
+
+[Exposed=Window]
+mixin interface ChildNode {
+  void beforeHTML(DOMString html, SetHTMLOptions options);
+  void beforeHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
+  void afterHTML(DOMString html, SetHTMLOptions options);
+  void afterHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
+  void replaceWithHTML(DOMString html, SetHTMLOptions options);
+  void replaceWithHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
+  WritableStream streamReplaceWithHTML(SetHTMLOptions options);
   WritableStream streamReplaceWithHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
+  WritableStream streamBeforeHTML(SetHTMLOptions options);
+  WritableStream streamBeforeHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
+  WritableStream streamAfterHTML(SetHTMLOptions options);
+  WritableStream streamAfterHTMLUnsafe(optional UnsafeHTMLSetterOptions options = {});
 };
 ```
 
