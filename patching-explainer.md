@@ -262,7 +262,8 @@ Weaknesses of this design are:
 
 - Doesn't support replacing arbitrary ranges of nodes, only an element or all of its children.
 - In order to support patching `<title>`, which uses the [RCDATA tokenizer state](https://html.spec.whatwg.org/multipage/parsing.html#rcdata-state), the tag name of the target element must be repeated. This is because switching to the RCDATA (or RAWTEXT) state in a `<template>` element would change how the content is parsed in supporting and non-supporting parsers, which could be a security concern.
-- `prepend` can fail if the original first child of the element is removed, meaning that a patch can fail mid-stream, requiring some error handling/reporting.
+
+These constraint seemed to restrictive for early adopters and frameworks looking at this API - a range of the DOM to be later updated cannot be constrained in advance to an "append"/"prepend"/"replace all" - often this range is an arbitrary range in the DOM defined by the user of the platform/framework.
 
 ### Using a new node type
 
