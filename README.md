@@ -1,7 +1,7 @@
 # Declarative partial updates
 
 HTML primitives for updating parts of a document without a full page refresh
-Addresses https://github.com/whatwg/html/issues/2142 and https://github.com/whatwg/html/issues/2791 in a unified manner.
+Addresses [HTML streaming](https://github.com/whatwg/html/issues/2142), and potentially sets the stage for [client side includes](https://github.com/whatwg/html/issues/2791)
 
 ## Status of this document
 This is an living explainer. It is continuously updated as we receive more feedback and update the design and the prototypes.
