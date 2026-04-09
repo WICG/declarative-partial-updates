@@ -38,6 +38,11 @@ This leaves it up to the author to make sure relative paths in a fragment are mo
 
 A future opt-in enhancement of this can try to tackle re-basing URLs but it's a big undertaking.
 
+## Relationship with [HTML modules](https://github.com/WICG/webcomponents/issues/645)
+
+In some sense, this is more of a [client side include](https://github.com/whatwg/html/issues/2791) than an HTML module, because of theh important fact the imported fragment is cloned and applied in place.
+The "module-ness" of this is similar to text or JSON modules, where the content is in the module tree and fetched like a module, but is not mutable in a way that affects all of its importers.
+
 ## Security
 
 As mentioned before, this proposal makes use of the sanitizer by default, and unsafe inclusion of HTML should be opted in with an "unsafe" attribute.
