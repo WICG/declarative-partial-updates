@@ -28,3 +28,17 @@ The main issue with this approach is that overuse of client-side includes can be
 However, this performance drawback is very context dependent.
 In some cases, adding markup asynchronously rather than having to multiplex it in the server or passing it through JS setters can be a performance win.
 Like with JS modules, bundlers are very mature and authors can make the decision of whether to bundle the markup or fetch it client-side based on their specific context, and we should look at adding this to the toolbox as an expansion of the options rather than as a footgun.
+
+## Relative paths in fragment
+
+This proposal deliberately *does not* deal with resolving relative paths in the fragment, which is an issue discussed extensively in https://github.com/WICG/webcomponents/issues/645.
+For keeping this solution focused on the problem space of updating the DOM declaratively, the current semantics of inserting fragments to the document are maintained.
+This leaves it up to the author to make sure relative paths in a fragment are modified to match the document, if desired.
+
+A future opt-in enhancement of this can try to tackle re-basing URLs but it's a big undertaking.
+
+## Security
+
+As mentioned before, this proposal makes use of the sanitizer by default, and unsafe inclusion of HTML should be opted in with an "unsafe" attribute.
+
+
