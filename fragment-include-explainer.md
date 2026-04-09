@@ -20,6 +20,7 @@ Taking from the [HTML modules](https://github.com/WICG/webcomponents/issues/645)
 - A fragment script is sanitized (safe mode) by default.
 - A fragment script can have an `unsafe` attribute. The `unsafe` attribute can be empty or have a `run-script` value that would make the patch run scripts.
 - A fragment script has module semantics, in terms of idempotency. The fragment is a `DocumentFragment` in the module tree, and can be mutated, but is cloned and appended when imported so mutations don't affect past imports.
+- The above means that you can also `import fragment from "something.html" { type: "fragment" }` and it would clone a `DocumentFragment` to your JS.
 - The `async` and `defer` attributes work the same way as for JS scripts.
 
 ## Performance
