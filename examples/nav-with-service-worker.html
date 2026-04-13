@@ -14,11 +14,21 @@
   </main>
 </body>
 <script>
+
+  async function navigate(url) {
+    const page = new URL(url).searchParams.get("page") || 1;
+    const stream = document.body.streamAppendHTMLUnsafe();
+    const response = await fetch("/content?page=" + page);
+    await response.body
+      .pipeThrough(new TextDecoderStream())
+      .pipeTo(stream);
+  }
   const loaded = new Promise((resolve) => {
     window.onload = async () => {
       navigator.serviceWorker.register("./sw.js");
       await navigator.serviceWorker.ready;
       console.log("Service worker ready");
+      await navigate(location.href);
       resolve();
     };
   });
@@ -28,14 +38,8 @@
       event.intercept({
         async handler() {
           await loaded;
-          const url = new URL(event.destination.url);
-          const page = url.searchParams.get("page");
-          const stream = document.body.streamAppendHTMLUnsafe();
-          const response = await fetch("/content?page=" + page);
-          await response.body
-            .pipeThrough(new TextDecoderStream())
-            .pipeTo(stream);
-        },
+          await navigate(event.destination.url);
+        }
       });
     }
   });
