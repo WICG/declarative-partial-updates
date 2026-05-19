@@ -224,7 +224,7 @@ Enabling remote fetching of patch content would act as a script in terms of CSP,
 
 ## Alternatives considered
 
-### A `marker` attribute
+### A `marker` attribute
 
 Having to name the marker as an element attribute on the processing instruction parent element was considered as an mXSS protection, in case downstream sanitizers let processing instructions pass through.
 However, as mainstream up to date sanitizers don't let processing instructions through in their default configuration it was felt this was an non-issue.
@@ -265,7 +265,7 @@ Weaknesses of this design are:
 
 These constraint seemed to restrictive for early adopters and frameworks looking at this API - a range of the DOM to be later updated cannot be constrained in advance to an "append"/"prepend"/"replace all" - often this range is an arbitrary range in the DOM defined by the user of the platform/framework.
 
-### Using a new node type
+### Using a new node type
 
 Instead of using processing instructions, one of the alternatives was treating it as a node type, and perhaps allowing something like `<!marker>`.
 However, creating a new type can be incompatible with tools and extensions that rely on XML and HTML being roughly compatible in terms of DOM,
