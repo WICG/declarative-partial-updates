@@ -8,7 +8,7 @@ While this opens up a lot of new options, this has a few limitations that were s
 2. A patch is interleaved within the original response, requiring the server to multiplex content from different sources.
 3. A patch cannot be independently sanitized. It inherits the safety features of its embedder.
 
-## Proposed solution
+## Proposed solution
 
 See also https://github.com/WICG/webcomponents/issues/645 and https://github.com/whatwg/html/issues/2791
 
@@ -23,14 +23,14 @@ Taking from the [HTML modules](https://github.com/WICG/webcomponents/issues/645)
 - The above means that you can also `import fragment from "something.html" { type: "fragment" }` and it would clone a `DocumentFragment` to your JS.
 - The `async` and `defer` attributes work the same way as for JS scripts.
 
-## Performance
+## Performance
 
 The main issue with this approach is that overuse of client-side includes can be a performance anti-pattern vs. multiplexing in the server.
 However, this performance drawback is very context dependent.
 In some cases, adding markup asynchronously rather than having to multiplex it in the server or passing it through JS setters can be a performance win.
 Like with JS modules, bundlers are very mature and authors can make the decision of whether to bundle the markup or fetch it client-side based on their specific context, and we should look at adding this to the toolbox as an expansion of the options rather than as a footgun.
 
-## Relative paths in fragment
+## Relative paths in fragment
 
 This proposal deliberately *does not* deal with resolving relative paths in the fragment, which is an issue discussed extensively in https://github.com/WICG/webcomponents/issues/645.
 For keeping this solution focused on the problem space of updating the DOM declaratively, the current semantics of inserting fragments to the document are maintained.
@@ -43,7 +43,7 @@ A future opt-in enhancement of this can try to tackle re-basing URLs but it's a 
 In some sense, this is more of a [client side include](https://github.com/whatwg/html/issues/2791) than an HTML module, because of theh important fact the imported fragment is cloned and applied in place.
 The "module-ness" of this is similar to text or JSON modules, where the content is in the module tree and fetched like a module, but is not mutable in a way that affects all of its importers.
 
-## Security
+## Security
 
 As mentioned before, this proposal makes use of the sanitizer by default, and unsafe inclusion of HTML should be opted in with an "unsafe" attribute.
 
