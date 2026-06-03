@@ -1,15 +1,13 @@
 # Declarative Route Matching
 
-[@noamr](https://github.com/noamr) and [@dbaron](https://github.com/dbaron), September 2025 / December 2025
-
-(This document is currently partway through being updated to reflect the current state of the work.)
+[@noamr](https://github.com/noamr) and [@dbaron](https://github.com/dbaron)
 
 # Related links
 
 * [current css-navigation-1 specification draft](https://drafts.csswg.org/css-navigation-1/)
 * [current specification issues (open and closed)](https://github.com/w3c/csswg-drafts/issues?q=label%3Acss-navigation-1%20is%3Aissue)
 * initial syntax discussion for HTML route matching: https://github.com/WICG/declarative-partial-updates/issues/46
-* initial discussion for CSS route matching: https://github.com/w3c/csswg-drafts/issues/12594
+* Discussion for CSS route matching: https://github.com/w3c/csswg-drafts/issues/12594
 
 # Motivation and Use Cases
 
@@ -38,6 +36,7 @@ This means adding features that:
 * match patterns of URLs by exposing [URL Patterns](https://urlpattern.spec.whatwg.org/) in CSS
 * apply styles conditionally based on the origin and destination of the current navigation, so that transitions between particular sets of URLs (whether separate documents or separate states/routes within a single page app) can be styled
 * style an HTML link based on its target matching both the origin or destination of the current navigation *and* matching a particular URL pattern, which allows matching the correct item within the list in a list-to-details or details-to-list transition.
+* apply styles based on the history type (e.g. back/forward) and phase (e.g. loading/committed) of the navigaiton
 
 ## Navigation-aware styling
 ### Framework routers
@@ -74,13 +73,10 @@ function Navbar() {
 What if it could look like this?
 ```html
 <style>
-  @route (to: home) {
-     a:remote-link + spinner { opacity: 100%; }
-  }
-
-  @route (to: about) {
-     a:remote-link { color: grey }
-  }
+  @route --home { pathname: "/"; base-url: document; }
+  @route --about { pathname: "/about"; base-url: document; }
+  :active-navigation(to --home) + spinner { opacity: 100%; }
+  :active-navigation(to --about) { color: grey }
 </style>
 <nav>
   <a href="/">Home</a>
@@ -106,20 +102,7 @@ navigation.addEventListener("navigate", e => {
 
 ## Two-phase preview view transitions
 
-See https://github.com/w3c/csswg-drafts/issues/12829
-
-When performing a cross-document view-transition, the transition often has to delay until the next document is ready.
-By using route-matching, we can render a "preview" of the new state using style only, and transition to that instantly, before continuing to the final content.
-
-```css
-@route (to: article) {
-   .article-skeleton { display: block }
-}
-
-@navigation {
-  view-transition: with-preview;
-}
-```
+See [two-phase view transitions explainer](https://github.com/w3c/csswg-drafts/blob/main/css-view-transitions-2/two-phase-transition-explainer.md#solution-2-declarative-preview-view-transitions--navigation-preview-state)
 
 ## Declarative same-document view transitions
 
@@ -146,13 +129,193 @@ navigation.addEventListener("navigate", e => {
 });
 ```
 
-## Style based on current route
+<h1>CSS Navigations 1</h1>
+
+
+The scope of `css-navigation-1` is to:
+* change style conditionally (importantly including view transition) based on current navigation state
+* apply style to links that participate in navigations
+
+<h2>URL patterns</h2>
+
+One main issue with URL matching is that URL comparison is notoriously finicky.
+For example, a link to the `/about` page might be written as `/about`, `/about/`, or even `/about?utm_source=something`.
+
+This has been addressed by the [URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API), by allowing
+a `URLPattern` to act as a "matcher" - a set of rules to extract parameters from a URL or match it against another URL.
+
+The `css-navigation-1` happily adopts the concept of URL patterns.
+
+<h2>Routes</h2>
+
+The `css-navigation-1` spec exposes a `@route` rule, which allows naming a URL or url pattern for use by conditional `@navigation` rules or link styling.
+```css
+@route --home {
+  pathname: "/";
+  base-url: document;
+}
+```
+
+A `@route` can be a URL pattern or a URL.
+
+In addition, the `url-pattern(string)` function can be used to define a quick URL pattern without having to name it.
+
+<h2>Active navigation state</h2>
+
+Both link matching and conditional navigation styling rely on the concept of "active navigation state".
+The active navigation state is defined in terms of the HTML standard, and contains:
+* The old & new URLs
+* The old & new history index
+* type (push, replace, traverse, reload)
+* phase (loading, ready, committed)
+* The source element (clicked link, form, or submit button)
+
+The CSS exposed definitions all rely on this state and reflect it.
+
+This state is processed differently based on one of the following scenarios:
+* For a same-document navigation, it relies on the navigation API and on its definition of whether a navigation is "committed".
+* For a cross-document navigation, it starts when the navigation is initiated, and ends in the first frame of the new page.
+
+When same-document navigations occur before the new page is rendered, the cross-document navigation takes precedence,
+as the same-document navigation is "non-visual" so cannot be styled.
+
+
+<h2>Conditional navigation styling</h2>
+
+The `@navigation` at rule, as well as its corresponding `if (navigation())` clause, matches the rule with the above active navigation state.
+
+
+### URL matching
+
+```css
+@navigation (from: --home) { ... }
+@navigation (to: --about) { ... }
+@navigation (between: --home and --about) { ... }
+@navigation (with: url-pattern("/*")) { ... }
+@navigation (at: url("/exact/?a=b")) { ... }
+```
+
+The `from`, `to`, `with`, and `at` queries define which URL to match in the active navigation state.
+The `from` and `to` URLs are always the old & new ones, while `with` and `at` start as being equivalent to `from` and `to`, and swap when the navigation is committed, either by a same-document navigation API commit, or by the pages swapping in a cross-document navigation.
+
+
+### Phase matching
+
+```css
+@navigation (phase: loading) { ... }
+@navigation (phase: ready) { ... }
+@navigation (phase: committed) { ... }
+```
+
+The `phase` query represents the phase of the active navigation state.
+The `ready` phase is a bit special, and is only active in a (same-origin) cross-document navigation when the new document is ready but not swapped yet, e.g. for the purpose of showing a [preview](https://github.com/w3c/csswg-drafts/blob/main/css-view-transitions-2/two-phase-transition-explainer.md#solution-2-declarative-preview-view-transitions--navigation-preview-state) or for capturing the old state of a cross-document view transition.
+
+
+<h3>Navigation type matching</h3>
+
+```css
+@navigation (history: navigate) { ... }
+@navigation (history: reload) { ... }
+@navigation (history: traverse) { ... }
+@navigation (history: back) { ... }
+@navigation (history: forward) { ... }
+```
+
+The `history` query matches with the active navigation state's navigation type and session history indices.
+It can help style different view transitions (or any other navigation-based style) differently based on the type of navigation.
+e.g.:
+
+```css
+@view-transition {
+  navigation: auto;
+  types: slide-from-right;
+}
+
+@navigation (history: back) {
+  @view-transition {
+    navigation: auto;
+    types: slide-from-left;  
+  }
+}
+```
+
+## Link matching
+
+Apart from conditionally styling based on a navigation, links can be styled if they participate in a navigation.
+
+### Link matching by route
+
+The `:link-to` pseudo-class doesn't take navigation into account, but allows for matching a link URL without resorting to string matching of the `href` attribute:
+
+```css
+a:link-to(--home) { ... }
+a:link-to(url-pattern("/about")) { ... }
+a:link-to(url("/exact?a=1")) { ... }
+```
+
+### Matching the navigation's source element
+
+The navigation's [source element](https://html.spec.whatwg.org/multipage/#navigation-source-element) is a link, form, or submit button.
+
+The `:trigger-link` pseudo class allows styling that particular link, for the course of the navigation:
+
+```css
+:trigger-link { animation-name: blink; } 
+```
+
+Note that `:trigger-link` only matches link elements (similar to `:any-link`).
+
+### Matching a link that matches the active navigation
+
+While `:trigger-link` is useful for matching the actual link that was clicked, for some use cases it is not sufficient.
+For example, when going from movie details to a movie list full of thumbnails, the particular thumbnail of the movie should be style,
+however it was not clicked!
+
+The `:active-navigation` pseudo-class uses route-matching, similar to `@navigation`, to match a link with an active navigation:
+
+```css
+@route --movie-list {
+  pathname: "/*/movies";
+  base-url: document;
+}
+
+@route --movie-details {
+  pathname: "/*/movie/:id";
+  base-url: document;
+}
+
+@navigation ((at: --movie-details) and (with: --movie-list)) {
+  .hero { view-transition-name: hero-or-thumb }
+}
+
+@navigation (at: --movie-list) {
+  a:active-navigation(with --movie-details) {
+    .thumb { view-transition-name: hero-or-thumb }
+  }
+}
+```
+
+When matching a link with an active navigation, by default the link's `href` URL is compared against the navigation URL.
+However, when a URL pattern route is given like in the above example, each of these links are processed by the given URL pattern
+and the resulting named groups are matched. This allows comparing a navigation URL with a link in a "lossy" way that allows ignoring
+some URL parameters while respecting others.
+
+To illustrate, the above `:active-navigation` rule would match the following:
+* a link to `/en/movie/123` when navigating to or from `/en/movie/123`
+* a link to `/en/movie/123` when navigating to or from `/fr/movie/123`
+* a link to `/en/movie/123?from=list` when navigating to or from `/es/movie/123#scroll-here`
+
+This might seem confusing at first but this "non-exact" match of URLs is essential given how URLs can carry multiple bits of information.
+
+# Potential future enhancements
+
+## Future enhancement: Style based on current route
 In addition to the curation of the navigation itself, it is a common technique in modern web apps to have a "shell" that is common between pages and mostly static, and an "outlet" area for the dynamic content.
 However, some parts of the shell often still have some dynamic parts that appear on "some" pages or in some scenarios, or appear different based on the current page.
 
 For example, a chat widget or members area might only appear in certain pages. A "related" `<aside>` element might only appear in article pages.
 
-# The initial proposed solution: HTML route map with CSS reflection
+## Future enhancement: HTML route map with CSS reflection
 - Routes are declared in HTML, to avoid requiring all the stylesheets to know the different route URLs or leak those URLs directly, and also to allow future enhancements that are not necessarily style-based.
 - A route at is core is a named `URLPattern`.
 - Matching a route can be toggle-like event target, similar to media-query matching. It can help responding to specific route changes without having to intercept *all* navigations.
@@ -181,36 +344,6 @@ For example, a chat widget or members area might only appear in certain pages. A
 </body>
 ```
 
-## CSS reflection
-
-Naming a set of these rules in HTML already gives us something that CSS can build on:
-```css
-@route (home) {
-  #chat-widget { display: none; } 
-}
-
-nav {
-  a:remote-link(pending) .spinner {
-    animation: spin;
-  }
-}
-
-/* navigation-based view-transition can work out of the box
-   because we can count on the final CSS state */
-@view-transition {
-  navigation: auto;
-}
-
-/* or be route-specific */
-@route (to: article) {
-  @view-transition {
-    navigation: auto;
-    types: slide-3d;
-  }
-}
-```
-
-# Potential future enhancements
 ## Declarative interception & history-handling
 
 In addition to CSS reflection, some basic navigation interception capabilities can be provided out of the box:
