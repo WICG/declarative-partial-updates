@@ -257,17 +257,17 @@ a:link-to(url("/exact?a=1")) { ... }
 
 The navigation's [source element](https://html.spec.whatwg.org/multipage/#navigation-source-element) is a link, form, or submit button.
 
-The `:trigger-link` pseudo class allows styling that particular link, for the course of the navigation:
+The `:nav-source` pseudo class allows styling that particular link, for the course of the navigation:
 
 ```css
-:trigger-link { animation-name: blink; } 
+:nav-source { animation-name: blink; } 
 ```
 
-Note that `:trigger-link` only matches link elements (similar to `:any-link`).
+Note that `:nav-source` only matches link elements (similar to `:any-link`).
 
 ### Matching a link that matches the active navigation
 
-While `:trigger-link` is useful for matching the actual link that was clicked, for some use cases it is not sufficient.
+While `:nav-source` is useful for matching the actual link that was clicked, for some use cases it is not sufficient.
 For example, when going from movie details to a movie list full of thumbnails, the particular thumbnail of the movie should be style,
 however it was not clicked!
 
