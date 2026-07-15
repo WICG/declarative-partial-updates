@@ -70,11 +70,10 @@ A few details about patching:
 
 - Templates with a valid `for` attribute are not attached to the DOM, while templates that don't apply are attached to signal an error (note since templates are hidden by default, templates without a valid `for` will not be visible on the page to the user, but they will be visible in the DOM to the developer).
 - `<?end>` does not have a `name` attribute. A `<?start>` processing instruction matches the next unmatched `<?end>` sibling (or the closing of its parent element is no `<?end>` is found).
-- If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent.
+- If the patching element is not a direct child of `<body>`, the target element has to have a common ancestor with the patching element's parent. The exception for `<body>` is to allow patching of `<head>` markers.
 - The patch template has to be in the same tree (shadow) scope as the target element.
 - When the template's target is discovered, the content between the markers is removed, but the markers are left in the tree until the template is closed.
 - New content is always inserted into the element with the corresponding marker attribute. If the original `<?end>` or `<?marker>` processing instruction is still there, it is inserted before that node. Otherwise, it is appended (effectively, the missing processing instruction is assumed to exist at the end of the element).
-- Marker targets have two parts: the element identifier and the marker name, separated by `#`. The marker name is optional.
 
 ### Interleaved patching
 
