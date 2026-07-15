@@ -7,7 +7,10 @@ While this opens up a lot of new options, this has a few limitations that were s
 1. A patch *always* streams, and there is no declarative way to make it apply in one batch when desired.
 2. A patch is interleaved within the original response, requiring the server to multiplex content from different sources.
 3. A patch cannot be independently sanitized. It inherits the safety features of its embedder.
-4. The template is still part of a normal HTML stream, so there's no particular observability to latency and errors.
+
+A few relevant missing things, addition to `<template for>`:
+1. Client-side sanitization is only possible when inserting markup using script. HTML is unsafe by default, unless it is JS-inserted.
+2. There is no standard way to observe latency and errors when streaming different parts of HTML
 
 ## Proposed solution
 
