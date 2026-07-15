@@ -7,21 +7,26 @@ While this opens up a lot of new options, this has a few limitations that were s
 1. A patch *always* streams, and there is no declarative way to make it apply in one batch when desired.
 2. A patch is interleaved within the original response, requiring the server to multiplex content from different sources.
 3. A patch cannot be independently sanitized. It inherits the safety features of its embedder.
+4. The template is still part of a normal HTML stream, so there's no particular observability to latency and errors.
 
 ## Proposed solution
 
 See also https://github.com/WICG/webcomponents/issues/645 and https://github.com/whatwg/html/issues/2791
 
-Proposing that `<template for>` solves the problem of *where to put the markup*, and that the problem of *where does the markup come from* is somewhat separate.
+Proposing that `<template for>` solves the problem of *where to put the markup*, and that the problem of *where does the markup come from* and how it is applied is somewhat separate.
 Taking from the [HTML modules](https://github.com/WICG/webcomponents/issues/645) and [client side includes](https://github.com/whatwg/html/issues/2791) proposal, suggesting to do something like this:
 
-- `<script type=fragment src="fragment.html">` includes a fragment of HTML in place, without streaming it.
-- `<script type=fragment>escaped-html</script>` can work with inline HTML as well, but it has to be escaped.
-- A fragment script is sanitized (safe mode) by default.
-- A fragment script can have an `unsafe` attribute. The `unsafe` attribute can be empty or have a `run-script` value that would make the patch run scripts.
-- A fragment script has module semantics, in terms of idempotency. The fragment is a `DocumentFragment` in the module tree, and can be mutated, but is cloned and appended when imported so mutations don't affect past imports.
-- The above means that you can also `import fragment from "something.html" { type: "fragment" }` and it would clone a `DocumentFragment` to your JS.
-- The `async` and `defer` attributes work the same way as for JS scripts.
+- `<fragment src="fragment.html">` includes a fragment of HTML in place, without streaming it.
+- `<fragment><!-- any HTML --></fragment>` can work with inline HTML as well. (this is why it's not a `<script>` element)
+- A fragment is sanitized (safe mode) by default.
+- A fragment can have an `unsafe` attribute. The `unsafe` attribute can be empty or have a `run-script` value that would make the patch run scripts.
+- In the future when we support sanitizer presets, a `sanitizer` attribute can point to an HTML sanitization preset name.
+- A fragment can have a boolean `buffered` attribute. If it is set, the fragment only applies when the parser sees its end tag. 
+- A fragment with `type="module"` (or a boolean `module` attribute?) has module semantics, in terms of idempotency. The fragment is a `DocumentFragment` in the module tree, and can be mutated, but is cloned and appended when imported so mutations don't affect past imports.
+- The above means that you can also `import fragment from "something.html" { type: "fragment" }` and it would clone a sanitized `DocumentFragment` to your JS.
+- The script attributes `async` and `defer`, `nonce`, `blocking`, `crossorigin` and `referrerpolicy` work similar to the script element.
+- Loading or applying a fragment creates its own performance entry, allowing observability of latency as well as errors.
+- Potentially, this allows a CSP directive to allow fetching sanitized HTML fragments withour resorting to `script-src`.
 
 ## Performance
 
@@ -46,5 +51,7 @@ The "module-ness" of this is similar to text or JSON modules, where the content 
 ## Security
 
 As mentioned before, this proposal makes use of the sanitizer by default, and unsafe inclusion of HTML should be opted in with an "unsafe" attribute.
+It is built with security thinking from the start, lending itself to declarative inclusion of sanitized HTML as easy as including images.
 
+There are, of course, a lot of details to tackle to make this secure in practice.
 
