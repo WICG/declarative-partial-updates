@@ -19,12 +19,12 @@ See also https://github.com/WICG/webcomponents/issues/645 and https://github.com
 Proposing that `<template for>` solves the problem of *where to put the markup*, and that the problem of *where does the markup come from* and how it is applied is somewhat separate.
 Taking from the [HTML modules](https://github.com/WICG/webcomponents/issues/645) and [client side includes](https://github.com/whatwg/html/issues/2791) proposal, suggesting to do something like this:
 
-- `<fragment src="fragment.html">` includes a fragment of HTML in place, without streaming it.
+- `<fragment src="fragment.html">` includes a fragment of HTML in place (streamed).
 - `<fragment><!-- any HTML --></fragment>` can work with inline HTML as well. (this is why it's not a `<script>` element)
 - A fragment is sanitized (safe mode) by default.
 - A fragment can have an `unsafe` attribute. The `unsafe` attribute can be empty or have a `run-script` value that would make the patch run scripts.
 - In the future when we support sanitizer presets, a `sanitizer` attribute can point to an HTML sanitization preset name.
-- A fragment can have a boolean `buffered` attribute. If it is set, the fragment only applies when the parser sees its end tag. 
+- A fragment can have a boolean `buffered` attribute. If it is set, the fragment only applies when the parser sees its end tag, as in, it is not streamed. 
 - A fragment with `type="module"` (or a boolean `module` attribute?) has module semantics, in terms of idempotency. The fragment is a `DocumentFragment` in the module tree, and can be mutated, but is cloned and appended when imported so mutations don't affect past imports.
 - The above means that you can also `import fragment from "something.html" { type: "fragment" }` and it would clone a sanitized `DocumentFragment` to your JS.
 - The script attributes `async` and `defer`, `nonce`, `blocking`, `crossorigin` and `referrerpolicy` work similar to the script element.
