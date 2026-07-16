@@ -179,7 +179,23 @@ This leaves it up to the author to make sure relative paths in an included fragm
 The "module-ness" of this is similar to text or JSON modules, where the content is in the module tree and fetched like a module, but is not mutable in a way that affects all of its importers. In JS, you can do:
 `import fragment from "something.html" { type: "fragment" }` which returns a cloned, sanitized `DocumentFragment`.
 
+## Prior Art & Considerations Not Tackled
+
+### 1. Server-Side and Edge Includes
+- **SSI (Server-Side Includes):** E.g. `<!--#include virtual="/header.html" -->`. Standard synchronous markup inclusion compiled server-side.
+- **ESI (Edge-Side Includes):** E.g. `<esi:include src="http://example.com/header.html" />`. CDN-level edge assembly.
+  - *Considerations Not Tackled:* ESI features complex caching parameters (`max-age`), conditional routing via `<esi:choose>`, and edge-side variable interpolation. Our proposal delegates caching entirely to HTTP caching headers, and does not provide template conditional syntax.
+
+### 2. Client-Side Userland Libraries
+- **`h-include` (Gustaf Nilsson Kotte):** A popular custom element `<h-include src="...">` fetching external HTML and injecting it.
+  - *Considerations Not Tackled:* `h-include` supports extracting a specific DOM subtree from the response using a CSS selector (e.g. `src="page.html" select="#main-content"`). While powerful, this requires parsing the entire document and discarding most of it. Our proposal targets pure raw fragments to optimize network payload and parsing overhead.
+- **HTMX (`hx-get="..." hx-trigger="load"`):** Extends standard elements with declarative AJAX.
+  - *Considerations Not Tackled:* HTMX supports rich event-driven execution triggers (hover, click, scroll, form updates) and dynamic HTTP response header processing. Our proposal focuses solely on loading subresources as part of standard HTML parser initialization/layout updates.
+- **Turbo Frames (`<turbo-frame src="...">`):** Part of Hotwire, isolates page sub-regions for partial navigation.
+  - *Considerations Not Tackled:* Turbo Frames intercept form submissions and link clicks inside the frame to hijack browser navigation. Our proposal is a layout and include primitive, not a navigation routing engine.
+
 ## Alternatives considered
+
 
 ### 1. Introducing a bespoke `<fragment>` element
 An alternative is introducing a new bespoke element specifically for in-place or targeted updates, e.g. `<fragment src="fragment.html">` or `<fragment>Inline</fragment>`.
