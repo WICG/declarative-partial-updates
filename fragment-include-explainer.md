@@ -20,49 +20,32 @@ The proposed [Declarative Out-of-order streaming specification](https://github.c
 
 ## Proposed solution
 
-Proposing to extend the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `active` attribute, as well as fetching attributes (`src`, `crossorigin`, `referrerpolicy`, `nonce`, `integrity`, `blocking`).
+We propose extending the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `for`, `src`, `async`, `buffered`, and `sanitize` attributes.
 
 ### Activation Model and Modes
-The operational mode of the `<template>` element is explicitly declared and activated using the `active` attribute
-which accepts a space-separated list of configuration tokens (represented as a `DOMTokenList` in JS):
-  - **`buffered`**: Parses content into a detached buffer and renders it atomically on stream completion.
-  - **`unsafe`**: Disables sanitization, allowing full HTML fragment parsing and script execution.
-  - **`async`**: Configures the network fetch (`src` present) to be asynchronous and non-blocking relative to document parsing.
 
+An HTML `<template>` is active if it has a `for` attribute, a `src` attribute, or both. If both attributes are absent, it behaves as a classic inert template.
 
-#### Default `active` Resolution
-To determine the template's activation state and delivery/safety modes, the browser resolves the `active` token list using the following ordered algorithm:
-
-1. **If the `active` attribute is explicitly present**:
-   Use the declared token list (e.g. `active=""` resolves to streaming, sanitized; `active="buffered"` resolves to buffered, sanitized).
-2. **Else if the `src` attribute is present**:
-   Resolve the activation state to **`""`** (streaming, sanitized).
-3. **Else if the `for` attribute is present**:
-   Resolve the activation state to **`"unsafe"`** (streaming, unsanitized, matching existing "patching" behavior).
-4. **Otherwise**:
-   Resolve to **`null`** (inert classic template behavior).
-
-
-Targeting is controlled via the `for` attribute:
-- **Targeted Activation (`for="target-name"`)**:
+#### Targeting and Placement
+- **Targeted Include (`for="target-name"`)**:
   Applies the template content to a targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Content is inserted **before** the `<?end>` or `<?marker>` node.
-- **In-place Activation (omitted or empty `for` with active template)**:
-  Inserts the content in-place at the template's position in the HTML stream.
+- **In-place Include (omitted `for` or empty `for=""` / `for`)**:
+  Inserts the content in-place at the template's position in the HTML stream. If `for` is omitted entirely but `src` is present, it defaults to an in-place include.
 
 ```html
-<!-- Inert template (legacy behavior, does not render) -->
+<!-- Inert template (does not render) -->
 <template id="menu-tpl">
   <li>Menu Item</li>
 </template>
 
-<!-- Active in-place rendering (streaming, sanitized) -->
-<template active>
+<!-- Active in-place rendering (inline streaming, unsafe by default) -->
+<template for>
   <p>Renders progressively in-place.</p>
 </template>
 
-<!-- Active in-place rendering (buffered, sanitized) -->
-<template active="buffered">
-  <p>Renders atomically once fully parsed.</p>
+<!-- Active in-place rendering (buffered, unsafe by default) -->
+<template for buffered>
+  <p>Renders atomically once inline parsing is complete.</p>
 </template>
 
 <!-- Targeted rendering (streaming, unsafe by default) -->
@@ -73,34 +56,46 @@ Targeting is controlled via the `for` attribute:
   <p>Streams contents directly into the gallery section.</p>
 </template>
 
-<!-- Targeted rendering (buffered, sanitized) -->
+<!-- Targeted rendering (buffered, sanitized explicitly) -->
 <section id="comments">
   <?start name="comments-patch">Loading...<?end>
 </section>
-<template for="comments-patch" active="buffered">
-  <p>Inserts atomically once comments are fully parsed.</p>
+<template for="comments-patch" buffered sanitize>
+  <p>Inserts atomically once comments are fully parsed, with scripts stripped.</p>
 </template>
 ```
 
-During active non-targeted template processing (streaming or buffered), the browser temporarily attaches the `<template>` element to the DOM at its declared position to act as the parser's insertion anchor. Incoming content is parsed and inserted directly **before** the template element. Once parsing/streaming completes (network EOF or closing tag), the template element is detached and removed, leaving **zero DOM footprint** in the final tree.
+During active in-place template processing (streaming or buffered), the browser temporarily attaches the `<template>` element to the DOM at its declared position to act as the parser's insertion anchor. Incoming content is parsed and inserted directly **before** the template element. Once processing completes (network EOF or closing tag), the template element is detached and removed, leaving **zero DOM footprint** in the final tree.
 
 ### Resource Fetching and Script Attributes
-When the `src` attribute is present, the template fetches its HTML payload over the network.
-- `<template active="async" src="fragment.html"></template>`
-- Reuses `<script>`'s other network configuration attributes: `blocking`, `nonce`, `crossorigin`, and `referrerpolicy`. Async/non-blocking behavior is controlled directly by the `async` token in the `active` token list.
 
+When the `src` attribute is present, the template fetches its HTML payload over the network.
+- **`async` (boolean)**: Configures the network fetch to be asynchronous and non-blocking relative to document parsing. If absent, the fetch is blocking (synchronous include).
+- Reuses `<script>`'s other network configuration attributes: `blocking`, `nonce`, `crossorigin`, and `referrerpolicy`.
+
+```html
+<!-- Synchronous blocking in-place include (sanitized by default) -->
+<template src="header.html"></template>
+
+<!-- Asynchronous non-blocking targeted include (sanitized by default) -->
+<div id="content">
+  <?start name="main-content">Loading...<?end>
+</div>
+<template for="main-content" src="content.html" async></template>
+```
 
 ### Buffering vs. Streaming
-- **Streaming (Default active mode)**:
-  If the `buffered` token is absent (e.g. `<template active>`), content is progressively parsed and inserted into the live DOM before the marker/template anchor.
-- **Buffered (`active="buffered"`)**:
-  The browser parses the content directly into the template's own `content` DocumentFragment property. Once parsing completes, the sanitized contents of this DocumentFragment are cloned and inserted in a single batch.
 
+The delivery mode is configured using the boolean `buffered` attribute:
+- **Streaming (Default, `buffered` absent)**:
+  Content is progressively parsed and inserted into the live DOM before the marker/template anchor as network chunks arrive.
+- **Buffered (`buffered` present)**:
+  The browser parses the content directly into the template's own `content` DocumentFragment property. Once parsing completes, the sanitized contents of this DocumentFragment are cloned and inserted in a single atomic update.
 
 ```html
 <!-- 1. Streaming (Progressive Render) -->
 <!-- In-place: elements render as they arrive from network -->
-<template active src="feed-stream.html"></template>
+<template src="feed-stream.html" async></template>
 
 <!-- Targeted: rows stream progressively into tbody without foster-parenting -->
 <table>
@@ -108,41 +103,50 @@ When the `src` attribute is present, the template fetches its HTML payload over 
     <?start name="rows-patch"><tr><td>Loading rows...</td></tr><?end>
   </tbody>
 </table>
-<template for="rows-patch" src="rows.html"></template>
+<template for="rows-patch" src="rows.html" async></template>
 
 
 <!-- 2. Buffered (Atomic Render once complete) -->
 <!-- In-place: parsed to template.content first, inserted in one single batch on EOF -->
-<template active="buffered" src="dialog-modal.html"></template>
+<template src="dialog-modal.html" async buffered></template>
 
 <!-- Targeted: comments block is parsed fully to fragment and inserted atomically -->
 <section id="comments-section">
   <?start name="comments-patch">Loading comments...<?end>
 </section>
-<template for="comments-patch" active="buffered" src="comments.html"></template>
+<template for="comments-patch" src="comments.html" async buffered></template>
 ```
 
 ### Security & Sanitization
-- **Explicitly Activated (`active` present)**: **Sanitized by default**. To disable sanitization and execute scripts, include the `unsafe` token in the `active` token list.
-- **Implicitly Activated (`for` present, `active` omitted)**: **Unsafe by default** (implicitly resolves to `active="unsafe"`), matching standard patching behavior.
+
+Security safety is configured via the `sanitize` attribute, which accepts either an empty value (`sanitize` or `sanitize=""`) or `sanitize="unsafe"`.
+
+#### Default Safety Resolution
+To optimize security and compatibility, the default safety behavior is determined by the presence of the `src` attribute:
+1. **External Includes (`src` is present)**: **Sanitized by default**.
+   - If `sanitize` is omitted, it defaults to safe sanitization.
+   - To execute scripts, the author must explicitly opt-out with `sanitize="unsafe"`.
+2. **Inline Templates (`src` is absent)**: **Unsafe by default**.
+   - If `sanitize` is omitted, script execution is allowed (preserving compatibility with standard patching behavior).
+   - To enable sanitization on inline content, the author must explicitly declare `sanitize`.
 
 ```html
-<!-- Explicit active: sanitized by default (scripts stripped) -->
-<template active src="user-profile.html"></template>
+<!-- External: sanitized by default (scripts stripped) -->
+<template src="user-profile.html" async></template>
 
-<!-- Explicit active with unsafe token: unsanitized (allows script execution) -->
-<template active="unsafe" src="ad.html"></template>
+<!-- External with unsafe token: unsanitized (allows script execution) -->
+<template src="ad.html" async sanitize="unsafe"></template>
 
-<!-- Explicit active buffered with unsafe token -->
-<template active="buffered unsafe" src="modal-widget.html"></template>
+<!-- External buffered with unsafe token -->
+<template src="modal-widget.html" async buffered sanitize="unsafe"></template>
 
-<!-- Implicit active: unsafe by default (script runs) -->
+<!-- Inline: unsafe by default (script runs) -->
 <template for="gallery">
   <script>alert(1)</script>
 </template>
 
-<!-- Implicit active, but sanitized: explicit active (without unsafe) overrides default -->
-<template for="gallery" active>
+<!-- Inline but sanitized: explicit sanitize attribute overrides default -->
+<template for="gallery" sanitize>
   <div>User input: <script>alert(1)</script></div>
 </template>
 ```
@@ -151,10 +155,10 @@ When the `src` attribute is present, the template fetches its HTML payload over 
 To allow granular security configuration for declarative includes, this proposal integrates with Content Security Policy (CSP):
 
 1. **`fragment-src` Directive (New):**
-   Governs which origins are allowed to serve HTML subresources fetched via `<template active src="url">`. Fallback defaults to `default-src`.
-   Since standard active templates (without the `unsafe` token) are sanitized by default (scripts stripped), pages can allow a relaxed `fragment-src` policy (e.g. allowing third-party CDNs or CMS domains) without exposing themselves to script-execution vulnerabilities.
+   Governs which origins are allowed to serve HTML subresources fetched via `<template src="url">`. Fallback defaults to `default-src`.
+   Since standard active templates (without `sanitize="unsafe"`) are sanitized by default (scripts stripped), pages can allow a relaxed `fragment-src` policy (e.g. allowing third-party CDNs or CMS domains) without exposing themselves to script-execution vulnerabilities.
 2. **`script-src` Enforcement:**
-   If a template includes the `unsafe` token (e.g. `<template active="unsafe" src="...">`), any inline `<script>` tags parsed from the fetched HTML must pass standard `script-src` policies (e.g. nonce or hash checks) to be allowed to execute.
+   If a template includes `sanitize="unsafe"`, any inline `<script>` tags parsed from the fetched HTML must pass standard `script-src` policies (e.g. nonce or hash checks) to be allowed to execute.
 
 ## Performance
 
@@ -254,10 +258,10 @@ This makes errors or latency difficult to observe, unlike the `<template>` based
 
 10. **Do features in this specification enable new script execution/loading mechanisms?**
     Yes. By importing external HTML subresources, the feature allows loading and parsing HTML which may contain scripts. 
-    **Mitigation:** The proposal enforces security-by-default for explicitly activated templates. Explicitly declaring `active` (e.g. `<template active src="...">`) enables HTML sanitization by default, stripping out all script tags and event handler attributes before DOM insertion. To execute scripts, authors must explicitly opt-out of sanitization by including the `unsafe` token in the `active` token list (e.g., `active="unsafe"`). 
+    **Mitigation:** The proposal enforces security-by-default for external resource includes. When `src` is present, HTML sanitization is enabled by default, stripping out all script tags and event handler attributes before DOM insertion. To execute scripts, authors must explicitly opt-out of sanitization by setting `sanitize="unsafe"`.
     Furthermore, fetching external templates is governed by Content Security Policy (CSP):
-    * The new **`fragment-src`** directive controls which origins are allowed to serve HTML payloads for active templates. Because templates are sanitized by default, sites can configure a relaxed `fragment-src` policy for trusted CDN content without allowing script-injection paths.
-    * If `unsafe` is declared, any inline `<script>` tags loaded from the template must strictly comply with the document's standard **`script-src`** directives (e.g., matching nonce/hash).
+    * The new **`fragment-src`** directive controls which origins are allowed to serve HTML payloads for active templates. Because external templates are sanitized by default, sites can configure a relaxed `fragment-src` policy for trusted CDN content without allowing script-injection paths.
+    * If `sanitize="unsafe"` is declared, any inline `<script>` tags loaded from the template must strictly comply with the document's standard **`script-src`** directives (e.g., matching nonce/hash).
 
 
 11. **Do features in this specification allow an origin to access other devices?**
@@ -270,10 +274,11 @@ This makes errors or latency difficult to observe, unlike the `<template>` based
     N/A.
 
 14. **How does this specification distinguish between behavior in first-party and third-party contexts?**
-    Subresources fetched via `<template active src="...">` are subject to standard Cross-Origin Resource Sharing (CORS) rules. Cross-origin templates require CORS headers to be read.
+    Subresources fetched via `<template src="...">` are subject to standard Cross-Origin Resource Sharing (CORS) rules. Cross-origin templates require CORS headers to be read.
 
 15. **How do the features in this specification work in the context of a browser’s Private Browsing or Incognito mode?**
     Standard subresource caching and partitioning rules apply.
+
 
 16. **Does this specification have both "Security Considerations" and "Privacy Considerations" sections?**
     Yes, these will be integrated into the HTML Standard.
