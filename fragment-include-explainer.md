@@ -71,8 +71,7 @@ During active in-place template processing (streaming or buffered), the browser 
 ### Resource Fetching and Script Attributes
 
 When the `src` attribute is present, the template fetches its HTML payload over the network.
-- **`async` (boolean)**: Configures the network fetch to be asynchronous and non-blocking relative to document parsing. If absent, the fetch is blocking (synchronous include).
-- Reuses `<script>`'s other network configuration attributes: `blocking`, `nonce`, `crossorigin`, and `referrerpolicy`.
+- Reuses `<script>`'s other network configuration attributes: `async`, `blocking`, `nonce`, `crossorigin`, and `referrerpolicy`.
 
 ```html
 <!-- Synchronous blocking in-place include (sanitized by default) -->
