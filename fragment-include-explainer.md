@@ -16,45 +16,268 @@ A few relevant missing features in `<template for>` are:
 
 See also https://github.com/WICG/webcomponents/issues/645 and https://github.com/whatwg/html/issues/2791
 
-Proposing that `<template for>` solves the problem of *where to put the markup*, and that the problem of *where does the markup come from* and how it is applied is somewhat separate.
-Taking from the [HTML modules](https://github.com/WICG/webcomponents/issues/645) and [client side includes](https://github.com/whatwg/html/issues/2791) proposal, suggesting to do something like this:
+Proposing to extend the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `for` attribute and the `src` attribute.
 
-- `<fragment src="fragment.html">` includes a fragment of HTML in place (streamed).
-- `<fragment><!-- any HTML --></fragment>` can work with inline HTML as well. (this is why it's not a `<script>` element)
-- A fragment is sanitized (safe mode) by default.
-- A fragment can have an `unsafe` attribute. The `unsafe` attribute can be empty or have a `run-script` value that would make the patch run scripts.
-- In the future when we support sanitizer presets, a `sanitizer` attribute can point to an HTML sanitization preset name.
-- A fragment can have a boolean `buffered` attribute. If it is set, the fragment only applies when the parser sees its end tag, as in, it is not streamed. 
-- A fragment with `type="module"` (or a boolean `module` attribute?) has module semantics, in terms of idempotency. The fragment is a `DocumentFragment` in the module tree, and can be mutated, but is cloned and appended when imported so mutations don't affect past imports.
-- The above means that you can also `import fragment from "something.html" { type: "fragment" }` and it would clone a sanitized `DocumentFragment` to your JS.
-- The script attributes `async` and `defer`, `nonce`, `blocking`, `crossorigin` and `referrerpolicy` work similar to the script element.
-- Loading or applying a fragment creates its own performance entry, allowing observability of latency as well as errors.
-- Potentially, this allows a CSP directive to allow fetching sanitized HTML fragments withour resorting to `script-src`.
+##### 1. Activation Model and Modes
+The operational mode of the `<template>` element is explicitly declared and activated using the `active` and `for` attributes:
+- **Omitted (Default)**:
+  Standard HTML `<template>` behavior. The template is parsed inertly into `template.content` and does not render or run scripts.
+- **`active` (Token List)**:
+  Activates the template by accepting a space-separated list of configuration tokens (represented as a `DOMTokenList` in JS):
+  - **`buffered`**: Parses content into a detached buffer and renders it atomically on stream completion.
+  - **`unsafe`**: Disables sanitization entirely, allowing full HTML fragment parsing and script execution.
+  - **`async`**: Configures the network fetch (`src` present) to be asynchronous and non-blocking relative to document parsing.
+
+
+##### Default `active` Resolution
+To determine the template's activation state and delivery/safety modes, the browser resolves the `active` token list using the following ordered algorithm:
+
+1. **If the `active` attribute is explicitly present**:
+   Use the declared token list (e.g. `active=""` resolves to streaming, sanitized; `active="buffered"` resolves to buffered, sanitized).
+2. **Else if the `src` attribute is present**:
+   Resolve the activation state to **`""`** (streaming, sanitized).
+3. **Else if the `for` attribute is present**:
+   Resolve the activation state to **`"unsafe"`** (streaming, unsanitized, matching default patching behavior).
+4. **Otherwise**:
+   Resolve to **`null`** (inert classic template behavior).
+
+
+Targeting is controlled via the `for` attribute:
+- **Targeted Activation (`for="target-name"`)**:
+  Applies the template content to a targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Content is inserted **before** the `<?end>` or `<?marker>` node.
+- **In-place Activation (omitted or empty `for` with active template)**:
+  Inserts the content in-place at the template's position in the HTML stream.
+
+```html
+<!-- Inert template (legacy behavior, does not render) -->
+<template id="menu-tpl">
+  <li>Menu Item</li>
+</template>
+
+<!-- Active in-place rendering (streaming, sanitized) -->
+<template active>
+  <p>Renders progressively in-place.</p>
+</template>
+
+<!-- Active in-place rendering (buffered, sanitized) -->
+<template active="buffered">
+  <p>Renders atomically once fully parsed.</p>
+</template>
+
+<!-- Targeted rendering (streaming, unsafe by default) -->
+<section id="gallery">
+  <?start name="gallery-patch">Loading...<?end>
+</section>
+<template for="gallery-patch">
+  <p>Streams contents directly into the gallery section.</p>
+</template>
+
+<!-- Targeted rendering (buffered, sanitized) -->
+<section id="comments">
+  <?start name="comments-patch">Loading...<?end>
+</section>
+<template for="comments-patch" active="buffered">
+  <p>Inserts atomically once comments are fully parsed.</p>
+</template>
+```
+
+
+
+During active template processing (streaming or buffered), the browser temporarily attaches the `<template>` element to the DOM at its declared position to act as the parser's insertion anchor. Incoming content is parsed and inserted directly **before** the template element. Once parsing/streaming completes (network EOF or closing tag), the template element is detached and removed, leaving **zero DOM footprint** in the final tree.
+
+### 2. Resource Fetching and Script Attributes
+When the `src` attribute is present, the template fetches its HTML payload over the network.
+- `<template active="async" src="fragment.html"></template>`
+- Reuses `<script>`'s other network configuration attributes: `blocking`, `nonce`, `crossorigin`, and `referrerpolicy`. Async/non-blocking behavior is controlled directly by the `async` token in the `active` token list.
+- Loading or applying a template include creates its own performance entry for latency and error observability.
+
+
+### 3. Buffering vs. Streaming
+- **Streaming (Default active mode)**:
+  If the `buffered` token is absent (e.g. `<template active>`), content is progressively parsed and inserted into the live DOM before the marker/template anchor.
+- **Buffered (`active="buffered"`)**:
+  The browser parses the content directly into the template's own `content` DocumentFragment property. Once parsing completes, the sanitized contents of this DocumentFragment are cloned and inserted in a single batch.
+
+
+```html
+<!-- 1. Streaming (Progressive Render) -->
+<!-- In-place: elements render as they arrive from network -->
+<template active src="feed-stream.html"></template>
+
+<!-- Targeted: rows stream progressively into tbody without foster-parenting -->
+<table>
+  <tbody id="table-rows">
+    <?start name="rows-patch"><tr><td>Loading rows...</td></tr><?end>
+  </tbody>
+</table>
+<template for="rows-patch" src="rows.html"></template>
+
+
+<!-- 2. Buffered (Atomic Render once complete) -->
+<!-- In-place: parsed to template.content first, inserted in one single batch on EOF -->
+<template active="buffered" src="dialog-modal.html"></template>
+
+<!-- Targeted: comments block is parsed fully to fragment and inserted atomically -->
+<section id="comments-section">
+  <?start name="comments-patch">Loading comments...<?end>
+</section>
+<template for="comments-patch" active="buffered" src="comments.html"></template>
+```
+
+### 4. Security & Sanitization
+- **Explicitly Activated (`active` present)**: **Sanitized by default**. To disable sanitization and execute scripts, include the `unsafe` token in the `active` token list.
+- **Implicitly Activated (`for` present, `active` omitted)**: **Unsafe by default** (implicitly resolves to `active="unsafe"`), matching standard patching behavior.
+
+```html
+<!-- Explicit active: sanitized by default (scripts stripped) -->
+<template active src="user-profile.html"></template>
+
+<!-- Explicit active with unsafe token: unsanitized (allows script execution) -->
+<template active="unsafe" src="ad.html"></template>
+
+<!-- Explicit active buffered with unsafe token -->
+<template active="buffered unsafe" src="modal-widget.html"></template>
+
+<!-- Implicit active: unsafe by default (script runs) -->
+<template for="gallery">
+  <script>alert(1)</script>
+</template>
+
+<!-- Implicit active, but sanitized: explicit active (without unsafe) overrides default -->
+<template for="gallery" active>
+  <div>User input: <script>alert(1)</script></div>
+</template>
+```
+
+#### Content Security Policy (CSP) Integration
+To allow granular security configuration for declarative includes, this proposal integrates with Content Security Policy (CSP):
+
+1. **`fragment-src` Directive (New):**
+   Governs which origins are allowed to serve HTML subresources fetched via `<template active src="url">`. Fallback defaults to `default-src`.
+   Since standard active templates (without the `unsafe` token) are sanitized by default (scripts stripped), pages can allow a relaxed `fragment-src` policy (e.g. allowing third-party CDNs or CMS domains) without exposing themselves to script-execution vulnerabilities.
+2. **`script-src` Enforcement:**
+   If a template includes the `unsafe` token (e.g. `<template active="unsafe" src="...">`), any inline `<script>` tags parsed from the fetched HTML must pass standard `script-src` policies (e.g. nonce or hash checks) to be allowed to execute.
 
 ## Performance
 
 The main issue with this approach is that overuse of client-side includes can be a performance anti-pattern vs. multiplexing in the server.
 However, this performance drawback is very context dependent.
 In some cases, adding markup asynchronously rather than having to multiplex it in the server or passing it through JS setters can be a performance win.
-Like with JS modules, bundlers are very mature and authors can make the decision of whether to bundle the markup or fetch it client-side based on their specific context, and we should look at adding this to the toolbox as an expansion of the options rather than as a footgun.
+Like with JS modules, bundlers are very mature and authors can make the decision of whether to bundle the markup or fetch it client-side based on their specific context.
 
-## Relative paths in fragment
+## Relative paths in templates
 
-This proposal deliberately *does not* deal with resolving relative paths in the fragment, which is an issue discussed extensively in https://github.com/WICG/webcomponents/issues/645.
+This proposal deliberately *does not* deal with resolving relative paths in the included content.
 For keeping this solution focused on the problem space of updating the DOM declaratively, the current semantics of inserting fragments to the document are maintained.
-This leaves it up to the author to make sure relative paths in a fragment are modified to match the document, if desired.
-
-A future opt-in enhancement of this can try to tackle re-basing URLs but it's a big undertaking.
+This leaves it up to the author to make sure relative paths in an included fragment are modified to match the document, if desired.
 
 ## Relationship with [HTML modules](https://github.com/WICG/webcomponents/issues/645)
 
-In some sense, this is more of a [client side include](https://github.com/whatwg/html/issues/2791) than an HTML module, because of the important fact the imported fragment is cloned and applied in place.
-The "module-ness" of this is similar to text or JSON modules, where the content is in the module tree and fetched like a module, but is not mutable in a way that affects all of its importers.
+The "module-ness" of this is similar to text or JSON modules, where the content is in the module tree and fetched like a module, but is not mutable in a way that affects all of its importers. In JS, you can do:
+`import fragment from "something.html" { type: "fragment" }` which returns a cloned, sanitized `DocumentFragment`.
 
-## Security
+## Alternatives considered
 
-As mentioned before, this proposal makes use of the sanitizer by default, and unsafe inclusion of HTML should be opted in with an "unsafe" attribute.
-It is built with security thinking from the start, lending itself to declarative inclusion of sanitized HTML as easy as including images.
+### 1. Introducing a bespoke `<fragment>` element
+An alternative is introducing a new bespoke element specifically for in-place or targeted updates, e.g. `<fragment src="fragment.html">` or `<fragment>Inline</fragment>`.
 
-There are, of course, a lot of details to tackle to make this secure in practice.
+**Why it wasn't chosen:**
+1. **HTML Parser Foster-parenting:** Unrecognized/custom elements (and standard layout elements that aren't specific table components) are subject to foster-parenting by the HTML parser. Placing `<fragment>` inside a table (e.g. `<table><tbody><fragment src="rows.html"></fragment></tbody></table>`) will cause the parser to throw it outside the table structure, breaking streaming updates for tables. Modifying HTML parsing table rules is a non-starter due to cross-browser backward compatibility.
+2. **Layout Footprint:** Keeping `<fragment>` in the DOM (even with `display: contents`) pollutes the sibling structure, breaking CSS selectors like `:first-child`, `:nth-child`, and sibling combinators (`+`/`~`), as well as JS DOM traversal APIs (`nextSibling`). 
+
+
+### 2. Extending the `<script>` element
+Another alternative is using `<script>` to fetch and render markup:
+- `<script type="text/html" src="fragment.html"></script>`
+
+**Why it wasn't chosen:**
+The HTML parser treats the content of `<script>` tags as raw text until it matches a closing `</script>` tag. This means any inline markup containing nested `<script>` tags would require escaping the closing tags (e.g. as `<\/script>`). This is a substantial developer footgun for inline templates. Furthermore, inserting arbitrary markup inside table tags from a `<script>` elements can trigger foster-parenting.
+
+### 3. Composing `<script>` and `<template>`
+A third alternative is composing the two elements such that `<template active>` acts as the layout/activation wrapper, and a nested `<script type="fragment">` executes to fetch and insert the external resource:
+- `<template active buffered><script type="fragment" src="fragment.html"></script></template>`
+
+**Why it wasn't chosen:**
+While this separation of concerns is clean for external resource loading (keeping fetch controls on the script and routing/layout on the template), it falls short for inline content. If inline content is written directly inside a `<template active>` container:
+```html
+<template active>
+  <div>Inline content markup</div>
+</template>
+```
+There is no associated script tag to declare sanitization preferences (like `unsafe` or `sanitizer`). To support sanitizing inline content, the `<template>` element itself would have to support sanitization attributes directly. Doing so duplicates all safety/security configuration onto the template, defeating the purpose of separating concerns via composition.
+
+However, composition (with `<template>` as the outer element) retains the key advantage of being allowed inside tables without foster-parenting issues.
+
+
+## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
+
+1. **What information does this feature expose, and for what purposes?**
+   It does not expose new user information. It provides a declarative mechanism to fetch and insert HTML fragments, which is already possible via standard fetch APIs and `element.innerHTML` or `element.setHTML()`. Network fetch statistics and latency are exposed via the Performance timeline, matching standard subresource guidelines.
+
+2. **Do features in your specification expose the minimum amount of information necessary to implement the intended functionality?**
+   Yes.
+
+3. **Do the features in your specification expose personal information, personally-identifiable information (PII), or information derived from either?**
+   No.
+
+4. **How do the features in your specification deal with sensitive information?**
+   N/A.
+
+5. **Does data exposed by your specification carry related but distinct information that may not be obvious to users?**
+   No.
+
+6. **Do the features in your specification introduce state that persists across browsing sessions?**
+   No.
+
+7. **Do the features in your specification expose information about the underlying platform to origins?**
+   No.
+
+8. **Does this specification allow an origin to send data to the underlying platform?**
+   No.
+
+9. **Do features in this specification enable access to device sensors?**
+   No.
+
+10. **Do features in this specification enable new script execution/loading mechanisms?**
+    Yes. By importing external HTML subresources, the feature allows loading and parsing HTML which may contain scripts. 
+    **Mitigation:** The proposal enforces security-by-default for explicitly activated templates. Explicitly declaring `active` (e.g. `<template active src="...">`) enables HTML sanitization by default, stripping out all script tags and event handler attributes before DOM insertion. To execute scripts, authors must explicitly opt-out of sanitization by including the `unsafe` token in the `active` token list (e.g., `active="unsafe"`). 
+    Furthermore, fetching external templates is governed by Content Security Policy (CSP):
+    * The new **`fragment-src`** directive controls which origins are allowed to serve HTML payloads for active templates. Because templates are sanitized by default, sites can configure a relaxed `fragment-src` policy for trusted CDN content without allowing script-injection paths.
+    * If `unsafe` is declared, any inline `<script>` tags loaded from the template must strictly comply with the document's standard **`script-src`** directives (e.g., matching nonce/hash).
+
+
+11. **Do features in this specification allow an origin to access other devices?**
+    No.
+
+12. **Do features in this specification allow an origin some measure of control over a user agent's native UI?**
+    No.
+
+13. **What temporary identifiers do the features in this specification create or expose to the web?**
+    N/A.
+
+14. **How does this specification distinguish between behavior in first-party and third-party contexts?**
+    Subresources fetched via `<template active src="...">` are subject to standard Cross-Origin Resource Sharing (CORS) rules. Cross-origin templates require CORS headers to be read.
+
+15. **How do the features in this specification work in the context of a browser’s Private Browsing or Incognito mode?**
+    Standard subresource caching and partitioning rules apply.
+
+16. **Does this specification have both "Security Considerations" and "Privacy Considerations" sections?**
+    Yes, these will be integrated into the HTML Standard.
+
+17. **Do features in your specification enable origins to downgrade default security protections?**
+    No. Active templates default to a sanitized safe-mode, with an explicit opt-out via `unsafe`.
+
+18. **What happens when a document that uses your feature is kept alive in BFCache (instead of getting destroyed) after navigation, and potentially gets reused on future navigations back to the document?**
+    No specific impact; active templates are parsed and detached at parsing time, leaving no active network fetches running in BFCache.
+
+19. **What happens when a document that uses your feature gets disconnected?**
+    If an active template is disconnected from the document while a network fetch is in progress, the fetch is aborted.
+
+20. **Does your spec define when and how new kinds of errors should be raised?**
+    To some extent, though this needs to be further developed.
+
+21. **Does your feature allow sites to learn about the user's use of assistive technology?**
+    No.
+
+
 
