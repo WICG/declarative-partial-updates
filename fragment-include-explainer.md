@@ -1,35 +1,36 @@
-# Fragment include
+# Fragment Include
 
 ## Overview
-The introduction of [patching](https://github.com/WICG/declarative-partial-updates/blob/main/patching-explainer.md) allows HTML to stream out of order declaratively.
-While this opens up a lot of new options, this has a few limitations that were said to be addressed as future enhancements:
 
-1. A patch *always* streams, and there is no declarative way to make it apply in one batch when desired.
-2. A patch is interleaved within the original response, requiring the server to multiplex content from different sources.
-3. A patch cannot be independently sanitized. It inherits the safety features of its embedder.
+One of the longest-standing design gaps in the HTML standard is the lack of a native, declarative client-side include mechanism (see [WHATWG Issue #2791](https://github.com/whatwg/html/issues/2791)). Historically, developers have relied on Server-Side Includes (SSI), Edge-Side Includes (ESI), or custom JavaScript fetch-and-inject scripts to compose HTML modularly.
 
-A few relevant missing features in `<template for>` are:
-1. Client-side sanitization is only possible when inserting markup using script. HTML is unsafe by default, unless it is JS-inserted.
-2. There is no standard way to observe latency and errors when streaming different parts of HTML
+While server-side composition is highly performant for many use cases, it is not always the optimal trade-off:
+1. **Tooling & Multiplexing Complexity:** Forcing the server to multiplex and assemble all page elements on every request increases runtime complexity, especially for auxiliary widgets (e.g., ads, sidebars, related feeds) that could be fetched asynchronously.
+2. **Client-Side Sanitization Gap:** Server-side templating engines do not have access to the browser's native client-side sanitization context. Performing safety filtering at the server level often relies on custom, downstream sanitizers that can easily fall out of sync with browser security updates.
+3. **Ergonomic Dev-Time Modularity:** In modern web development, standard ergonomics favor modular development enablers. Similar to how JS Modules (`import`) allow developers to author modular code while letting build/optimization tooling (like bundlers) handle merging if necessary, HTML needs an equivalent modular primitive.
+
+## Relationship to HTML Patching
+
+The proposed [Declarative Out-of-order streaming specification](https://github.com/WICG/declarative-partial-updates/blob/main/patching-explainer.md) addresses out-of-order streaming of markup. While patching offers a powerful streaming update model, it has several limitations when applied to client-side resource inclusion:
+
+1. **Mandatory Streaming:** Patches always stream directly into the live DOM chunk-by-chunk. There is no declarative way to buffer the template content and render it atomically once parsing completes to avoid layout jank.
+2. **Mandatory Multiplexing:** Patches must be interleaved inside the main HTML response stream, requiring the server to run interleaving and multiplexing logic.
+3. **No Independent Sanitization:** Patches inherit the safety/sanitization permissions of their parent context. They cannot easily be configured to sanitize untrusted content separately.
+
 
 ## Proposed solution
 
-See also https://github.com/WICG/webcomponents/issues/645 and https://github.com/whatwg/html/issues/2791
+Proposing to extend the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `active` attribute, as well as fetching attributes (`src`, `crossorigin`, `referrerpolicy`, `nonce`, `integrity`, `blocking`).
 
-Proposing to extend the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `for` attribute and the `src` attribute.
-
-##### 1. Activation Model and Modes
-The operational mode of the `<template>` element is explicitly declared and activated using the `active` and `for` attributes:
-- **Omitted (Default)**:
-  Standard HTML `<template>` behavior. The template is parsed inertly into `template.content` and does not render or run scripts.
-- **`active` (Token List)**:
-  Activates the template by accepting a space-separated list of configuration tokens (represented as a `DOMTokenList` in JS):
+### Activation Model and Modes
+The operational mode of the `<template>` element is explicitly declared and activated using the `active` attribute
+which accepts a space-separated list of configuration tokens (represented as a `DOMTokenList` in JS):
   - **`buffered`**: Parses content into a detached buffer and renders it atomically on stream completion.
-  - **`unsafe`**: Disables sanitization entirely, allowing full HTML fragment parsing and script execution.
+  - **`unsafe`**: Disables sanitization, allowing full HTML fragment parsing and script execution.
   - **`async`**: Configures the network fetch (`src` present) to be asynchronous and non-blocking relative to document parsing.
 
 
-##### Default `active` Resolution
+#### Default `active` Resolution
 To determine the template's activation state and delivery/safety modes, the browser resolves the `active` token list using the following ordered algorithm:
 
 1. **If the `active` attribute is explicitly present**:
@@ -37,7 +38,7 @@ To determine the template's activation state and delivery/safety modes, the brow
 2. **Else if the `src` attribute is present**:
    Resolve the activation state to **`""`** (streaming, sanitized).
 3. **Else if the `for` attribute is present**:
-   Resolve the activation state to **`"unsafe"`** (streaming, unsanitized, matching default patching behavior).
+   Resolve the activation state to **`"unsafe"`** (streaming, unsanitized, matching existing "patching" behavior).
 4. **Otherwise**:
    Resolve to **`null`** (inert classic template behavior).
 
@@ -81,18 +82,15 @@ Targeting is controlled via the `for` attribute:
 </template>
 ```
 
+During active non-targeted template processing (streaming or buffered), the browser temporarily attaches the `<template>` element to the DOM at its declared position to act as the parser's insertion anchor. Incoming content is parsed and inserted directly **before** the template element. Once parsing/streaming completes (network EOF or closing tag), the template element is detached and removed, leaving **zero DOM footprint** in the final tree.
 
-
-During active template processing (streaming or buffered), the browser temporarily attaches the `<template>` element to the DOM at its declared position to act as the parser's insertion anchor. Incoming content is parsed and inserted directly **before** the template element. Once parsing/streaming completes (network EOF or closing tag), the template element is detached and removed, leaving **zero DOM footprint** in the final tree.
-
-### 2. Resource Fetching and Script Attributes
+### Resource Fetching and Script Attributes
 When the `src` attribute is present, the template fetches its HTML payload over the network.
 - `<template active="async" src="fragment.html"></template>`
 - Reuses `<script>`'s other network configuration attributes: `blocking`, `nonce`, `crossorigin`, and `referrerpolicy`. Async/non-blocking behavior is controlled directly by the `async` token in the `active` token list.
-- Loading or applying a template include creates its own performance entry for latency and error observability.
 
 
-### 3. Buffering vs. Streaming
+### Buffering vs. Streaming
 - **Streaming (Default active mode)**:
   If the `buffered` token is absent (e.g. `<template active>`), content is progressively parsed and inserted into the live DOM before the marker/template anchor.
 - **Buffered (`active="buffered"`)**:
@@ -124,7 +122,7 @@ When the `src` attribute is present, the template fetches its HTML payload over 
 <template for="comments-patch" active="buffered" src="comments.html"></template>
 ```
 
-### 4. Security & Sanitization
+### Security & Sanitization
 - **Explicitly Activated (`active` present)**: **Sanitized by default**. To disable sanitization and execute scripts, include the `unsafe` token in the `active` token list.
 - **Implicitly Activated (`for` present, `active` omitted)**: **Unsafe by default** (implicitly resolves to `active="unsafe"`), matching standard patching behavior.
 
@@ -184,7 +182,6 @@ An alternative is introducing a new bespoke element specifically for in-place or
 **Why it wasn't chosen:**
 1. **HTML Parser Foster-parenting:** Unrecognized/custom elements (and standard layout elements that aren't specific table components) are subject to foster-parenting by the HTML parser. Placing `<fragment>` inside a table (e.g. `<table><tbody><fragment src="rows.html"></fragment></tbody></table>`) will cause the parser to throw it outside the table structure, breaking streaming updates for tables. Modifying HTML parsing table rules is a non-starter due to cross-browser backward compatibility.
 2. **Layout Footprint:** Keeping `<fragment>` in the DOM (even with `display: contents`) pollutes the sibling structure, breaking CSS selectors like `:first-child`, `:nth-child`, and sibling combinators (`+`/`~`), as well as JS DOM traversal APIs (`nextSibling`). 
-
 
 ### 2. Extending the `<script>` element
 Another alternative is using `<script>` to fetch and render markup:
