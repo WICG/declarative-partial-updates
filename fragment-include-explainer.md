@@ -8,7 +8,7 @@ While this opens up a lot of new options, this has a few limitations that were s
 2. A patch is interleaved within the original response, requiring the server to multiplex content from different sources.
 3. A patch cannot be independently sanitized. It inherits the safety features of its embedder.
 
-A few relevant missing things, addition to `<template for>`:
+A few relevant missing features in `<template for>` are:
 1. Client-side sanitization is only possible when inserting markup using script. HTML is unsafe by default, unless it is JS-inserted.
 2. There is no standard way to observe latency and errors when streaming different parts of HTML
 
@@ -48,7 +48,7 @@ A future opt-in enhancement of this can try to tackle re-basing URLs but it's a 
 
 ## Relationship with [HTML modules](https://github.com/WICG/webcomponents/issues/645)
 
-In some sense, this is more of a [client side include](https://github.com/whatwg/html/issues/2791) than an HTML module, because of theh important fact the imported fragment is cloned and applied in place.
+In some sense, this is more of a [client side include](https://github.com/whatwg/html/issues/2791) than an HTML module, because of the important fact the imported fragment is cloned and applied in place.
 The "module-ness" of this is similar to text or JSON modules, where the content is in the module tree and fetched like a module, but is not mutable in a way that affects all of its importers.
 
 ## Security
