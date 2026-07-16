@@ -20,7 +20,7 @@ The proposed [Declarative Out-of-order streaming specification](https://github.c
 
 ## Proposed solution
 
-We propose extending the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `for`, `src`, `async`, `buffered`, and `sanitize` attributes.
+We propose extending the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `for`, `src`,`buffered`, and `sanitize` attributes, as well as resource fetching attributes (`nonce`, `blocking`, `crossorigin`, `referrerpolicy`).
 
 ### Activation Model and Modes
 
