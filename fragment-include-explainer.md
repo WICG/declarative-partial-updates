@@ -207,6 +207,8 @@ However, composition (with `<template>` as the outer element) retains the key ad
 
 ### 4. Global `fragment` attribute composed with Script and Template
 Another alternative is introducing a global attribute (e.g. `fragment="..."`) that resides on the destination DOM container to handle sanitization and buffering, composed with `<script type="fragment">` for fetching and `<template for>` for out-of-order routing:
+- **Sanitization without inclusion:** `<div fragment><a onclick="alert('hi')">X</a></div>`
+- **Buffering without inclusion:** `<div fragment="buffered"><!-- lots of content... --></div>`
 - **In-place Include:** `<div fragment><script type="fragment" src="fragment.html"></script></div>`
 - **Targeted Include:** `<tbody fragment="buffered"><?marker name="rows"?></tbody>` paired with `<template for="rows"><script type="fragment" src="rows.html"></script></template>`
 
