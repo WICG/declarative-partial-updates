@@ -31,7 +31,7 @@ An HTML `<template>` is active if it has a `for` attribute, a `src` attribute, o
 - **Targeted Include (`for="target-name"`)**:
   Applies the template content to a targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Content is inserted **before** the `<?end>` or `<?marker>` node.
 - **In-place Include (empty `for=""` / `for`)**:
-  Inserts the content in-place at the template's position in the HTML stream. If `for` is omitted entirely but `src` is present, it defaults to an in-place include.
+  Inserts the content in-place at the template's position in the HTML stream.
 
 ```html
 <!-- Inert template (does not render) -->
@@ -76,7 +76,7 @@ When the `src` attribute is present, the template fetches its HTML payload over 
 
 ```html
 <!-- Synchronous blocking in-place include (sanitized by default) -->
-<template src="header.html"></template>
+<template src="header.html" for=""></template>
 
 <!-- Asynchronous non-blocking targeted include (sanitized by default) -->
 <div id="content">
