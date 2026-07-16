@@ -27,9 +27,10 @@ We propose extending the `<template>` element to support native, client-side HTM
 An HTML `<template>` is active if it has a `for` attribute, a `src` attribute, or both. If both attributes are absent, it behaves as a classic inert template.
 
 #### Targeting and Placement
+- **Omitted `for`**: classic inert template
 - **Targeted Include (`for="target-name"`)**:
   Applies the template content to a targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Content is inserted **before** the `<?end>` or `<?marker>` node.
-- **In-place Include (omitted `for` or empty `for=""` / `for`)**:
+- **In-place Include (empty `for=""` / `for`)**:
   Inserts the content in-place at the template's position in the HTML stream. If `for` is omitted entirely but `src` is present, it defaults to an in-place include.
 
 ```html
