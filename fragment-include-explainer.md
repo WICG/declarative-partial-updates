@@ -213,7 +213,8 @@ Another alternative is introducing a global attribute (e.g. `fragment="..."`) th
 - **Targeted Include:** `<tbody fragment="buffered"><?marker name="rows"?></tbody>` paired with `<template for="rows"><script type="fragment" src="rows.html"></script></template>`
 
 **Why it wasn't chosen:**
-1. **Attribute-Based Tree Builder Redirection:** If a developer writes inline content with scripts inside an element annotated with `fragment` (e.g. `<div fragment>some <script>alert(1)</script></div>`), preventing eager script execution requires the HTML tree builder to dynamically redirect parsed tokens into a detached `DocumentFragment` buffer rather than appending them directly to the active element node. In standard HTML parsing, tree builder insertion logic is determined *solely* by the tag name and the current parser context stack. Changing tree builder destination behavior based on arbitrary tag attributes introduces new complexity to the HTML parser construction phase.
+1. **Observability:** While the content is buffering, it's simply not anywhere in the DOM, but rather kept inside the parser intertnally.
+This makes errors or latency difficult to observe, unlike the `<template>` based behavior where the content accumulates in the template until it is ready to be swapped in.
 
 2. **Verbosity:** Placing includes in-place requires writing both a wrapper tag (`<div fragment>`) and a nested loader tag (`<script type="fragment">`), which is significantly more verbose for simple inclusions than `<template active src="fragment.html">`.
 3. **Action at a Distance for Safety Configuration:** The security policy (`unsafe`) is configured on the *target container* (e.g., `<div fragment="unsafe">`) rather than on the resource loading stream. If a container receives patches/inclusions from multiple independent templates, it must declare `unsafe` globally, potentially allowing script execution from an untrusted template stream.
