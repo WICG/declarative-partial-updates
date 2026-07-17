@@ -184,26 +184,36 @@ As page fragments load asynchronously and stream progressive updates, applicatio
 1. **Attribution:** Which `<template>` include or patch caused a given DOM insertion?
 2. **Lifecycle:** When did a streaming update start, progress, and successfully complete (or fail)?
 
-Standard DOM `MutationObserver` observes the *result* of a mutation (a list of added nodes) but lacks context about the *cause* (the parser-native template stamping). Furthermore, since active templates are detached and removed from the DOM immediately upon completion, they are not stable targets for direct event listeners.
+Standard DOM `MutationObserver` observes the *result* of a mutation (a list of added nodes) but lacks context about the *cause* (the parser-native template stamping). Furthermore, since active and successful templates are detached and removed from the DOM immediately upon completion, they are not stable targets for direct event listeners.
 
 To solve this, we propose extending the standard `MutationObserver` API to optionally attribute mutations to their initiating template.
 
-### Proposed API Extension: `attributeTemplatePatches`
+### Proposed API Extension: `patchLifecycle`
 
 We propose adding a new configuration flag to `MutationObserverInit` and extending the `MutationRecord` interface:
 
 ```webidl
 // Extension to MutationObserver options
 partial dictionary MutationObserverInit {
-  boolean attributeTemplatePatches = false;
+  boolean patchLifecycle = false;
 };
 
 // Extension to MutationRecord
 partial interface MutationRecord {
-  readonly attribute HTMLTemplateElement? initiatorElement;
-  readonly attribute unsigned long long? patchId;
-  readonly attribute DOMString? patchPhase;      // "started" | "updating" | "settled"
-  readonly attribute DOMString? patchOutcome;    // "complete" | "target-not-found" | "network-error"
+  readonly attribute sequence<PatchRecord> patches;
+};
+
+enum PatchStatus {
+  "active",
+  "done",
+  "target-not-found"
+};
+
+interface PatchRecord {
+  readonly attribute HTMLTemplateElement template;
+  readonly attribute PatchStatus status;
+  readonly attribute ProcessingInstruction startMarker;
+  readonly attribute ProcessingInstruction endMarker;
 };
 ```
 
@@ -212,38 +222,43 @@ partial interface MutationRecord {
 ```javascript
 const observer = new MutationObserver((records) => {
   for (const record of records) {
-    if (record.initiatorElement) {
-      const template = record.initiatorElement;
-      console.log(`[Patch ${record.patchId}] Target: ${template.getAttribute('for')}`);
-      console.log(`Phase: ${record.patchPhase}`); // e.g. "started", "updating", "settled"
+    if (record.patches && record.patches.length > 0) {
+      for (const patch of record.patches) {
+        const template = patch.template;
+        console.log(`Mutation caused by template targeting: ${template.getAttribute('for')}`);
+        console.log(`Status: ${patch.status}`); // "active" | "done" | "target-not-found"
+        console.log(`Range Markers:`, patch.startMarker, patch.endMarker);
 
-      if (record.patchPhase === "settled") {
-        console.log(`Finished loading from: ${template.getAttribute('src') || 'inline'}`);
-        console.log(`Outcome: ${record.patchOutcome}`); // "complete" | "network-error"
+        if (patch.status === "done") {
+          console.log(`Finished loading from: ${template.getAttribute('src') || 'inline'}`);
+        }
       }
     }
   }
 });
 
-// Observe the tree root, enabling template patch attribution
+// Observe the tree root, enabling template patch lifecycle tracking
 observer.observe(document.documentElement, {
   childList: true,
   subtree: true,
-  attributeTemplatePatches: true
+  patchLifecycle: true
 });
 ```
 
 #### Behavioral Rules and Semantics
 
-1. **Attribution (`initiatorElement`):**
-   When `attributeTemplatePatches` is `true`, any DOM changes performed by an active template will populate `initiatorElement` with a reference to the `<template>` element. This reference remains valid even after the browser detaches and discards the template element from the DOM.
-2. **Streaming Correlation (`patchId`):**
-   Each execution of an active template (whether processing an inline template or a network stream) is allocated a unique, opaque `patchId`. Multiple streaming chunks arriving from the same source stream will produce separate `MutationRecord`s with the same `patchId`, allowing the observer to correlate the chunks.
-3. **Phase Flags (`patchPhase` and `patchOutcome`):**
-   - **`"started"`**: Fired on the first mutation record associated with the patch.
-   - **`"updating"`**: Fired on intermediate streaming chunks.
-   - **`"settled"`**: Fired on the final mutation record once the parser reaches the template closing tag or network EOF.
-   - If a patch fails to apply (e.g. the targeted `for="..."` marker is not found in the DOM, or a network request fails), the browser will queue a terminal `MutationRecord` with `patchPhase: "settled"` and an empty `addedNodes` list, specifying `patchOutcome: "target-not-found"` or `"network-error"`.
+1. **The `patches` Sequence:**
+   When `patchLifecycle` is `true`, any DOM mutation generated by active templates will contain a non-empty `patches` array on the `MutationRecord`. This lists all patches that contributed to that specific record's mutations.
+2. **`PatchRecord` Properties:**
+   - **`template`**: References the `<template>` element that initiated the change. This reference remains valid even after the browser detaches and discards the template element from the DOM.
+   - **`status`**:
+     - `"active"`: Fired during progressive parsing and streaming.
+     - `"done"`: Fired on the terminal mutation record once the parser reaches the template closing tag or network EOF.
+     - `"target-not-found"`: Fired if target resolution fails.
+   - **`startMarker` / `endMarker`**: Direct references to the `ProcessingInstruction` boundary nodes (`<?start name="...">` and `<?end>`) representing the targeted destination range. If the target is a single insertion point (marker-only), both properties point to the same `ProcessingInstruction` node.
+3. **Empty/Failure Notifications:**
+   If a patch fails to resolve its target (firing `"target-not-found"`), the browser will queue a `MutationRecord` containing an empty `addedNodes` list, with a `patches` array containing a `PatchRecord` indicating the failure status.
+
 
 ## Prior Art & Considerations Not Tackled
 
