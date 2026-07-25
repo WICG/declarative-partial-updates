@@ -20,7 +20,7 @@ The proposed [Declarative Out-of-order streaming specification](https://github.c
 
 ## Proposed solution
 
-We propose extending the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `for`, `src`,`buffered`, and `sanitize` attributes, as well as resource fetching attributes (`nonce`, `blocking`, `crossorigin`, `referrerpolicy`).
+We propose extending the `<template>` element to support native, client-side HTML includes and dynamic content updates by introducing the `for`, `src`,`buffer`, and `sanitize` attributes, as well as resource fetching attributes (`nonce`, `crossorigin`, `referrerpolicy`).
 
 ### Activation Model and Modes
 
@@ -45,7 +45,7 @@ An HTML `<template>` is active if it has a `for` attribute, a `src` attribute, o
 </template>
 
 <!-- Active in-place rendering (buffered, unsafe by default) -->
-<template for buffered>
+<template for buffer>
   <p>Renders atomically once inline parsing is complete.</p>
 </template>
 
@@ -61,41 +61,42 @@ An HTML `<template>` is active if it has a `for` attribute, a `src` attribute, o
 <section id="comments">
   <?start name="comments-patch">Loading...<?end>
 </section>
-<template for="comments-patch" buffered sanitize>
+<template for="comments-patch" buffer sanitize>
   <p>Inserts atomically once comments are fully parsed, with scripts stripped.</p>
 </template>
 ```
 
 During active in-place template processing (streaming or buffered), the browser temporarily attaches the `<template>` element to the DOM at its declared position to act as the parser's insertion anchor. Incoming content is parsed and inserted directly **before** the template element. Once processing completes (network EOF or closing tag), the template element is detached and removed, leaving **zero DOM footprint** in the final tree.
 
-### Resource Fetching and Script Attributes
+### Resource Fetching and Attributes
 
-When the `src` attribute is present, the template fetches its HTML payload over the network.
-- Reuses `<script>`'s other network configuration attributes: `async`, `blocking`, `nonce`, `crossorigin`, and `referrerpolicy`.
+When the `src` attribute is present, the template asynchronously fetches its HTML payload over the network.
+- Reuses network configuration attributes like `nonce`, `crossorigin`, and `referrerpolicy`.
+- Unlike `<script>`, it does not support `async`, `defer`, or `blocking`. All fetches are non-blocking by default. Synchronous parser-blocking fetches are considered a performance footgun. Developers looking to avoid Flash of Unstyled Content (FOUC) should use CSS (e.g., hiding the container until populated, as seen in "islands architecture") rather than relying on parser-blocking DOM insertion.
 
 ```html
-<!-- Synchronous blocking in-place include (sanitized by default) -->
+<!-- Asynchronous in-place include (sanitized by default) -->
 <template src="header.html" for=""></template>
 
-<!-- Asynchronous non-blocking targeted include (sanitized by default) -->
+<!-- Asynchronous targeted include (sanitized by default) -->
 <div id="content">
   <?start name="main-content">Loading...<?end>
 </div>
-<template for="main-content" src="content.html" async></template>
+<template for="main-content" src="content.html"></template>
 ```
 
 ### Buffering vs. Streaming
 
-The delivery mode is configured using the boolean `buffered` attribute:
-- **Streaming (Default, `buffered` absent)**:
+The delivery mode is configured using the boolean `buffer` attribute:
+- **Streaming (Default, `buffer` absent)**:
   Content is progressively parsed and inserted into the live DOM before the marker/template anchor as network chunks arrive.
-- **Buffered (`buffered` present)**:
+- **Buffered (`buffer` present)**:
   The browser parses the content directly into the template's own `content` DocumentFragment property. Once parsing completes, the sanitized contents of this DocumentFragment are cloned and inserted in a single atomic update.
 
 ```html
 <!-- 1. Streaming (Progressive Render) -->
 <!-- In-place: elements render as they arrive from network -->
-<template src="feed-stream.html" async></template>
+<template src="feed-stream.html"></template>
 
 <!-- Targeted: rows stream progressively into tbody without foster-parenting -->
 <table>
@@ -103,18 +104,18 @@ The delivery mode is configured using the boolean `buffered` attribute:
     <?start name="rows-patch"><tr><td>Loading rows...</td></tr><?end>
   </tbody>
 </table>
-<template for="rows-patch" src="rows.html" async></template>
+<template for="rows-patch" src="rows.html"></template>
 
 
 <!-- 2. Buffered (Atomic Render once complete) -->
 <!-- In-place: parsed to template.content first, inserted in one single batch on EOF -->
-<template src="dialog-modal.html" async buffered></template>
+<template src="dialog-modal.html" buffer></template>
 
 <!-- Targeted: comments block is parsed fully to fragment and inserted atomically -->
 <section id="comments-section">
   <?start name="comments-patch">Loading comments...<?end>
 </section>
-<template for="comments-patch" src="comments.html" async buffered></template>
+<template for="comments-patch" src="comments.html" buffer></template>
 ```
 
 ### Security & Sanitization
@@ -132,13 +133,13 @@ To optimize security and compatibility, the default safety behavior is determine
 
 ```html
 <!-- External: sanitized by default (scripts stripped) -->
-<template src="user-profile.html" async></template>
+<template src="user-profile.html"></template>
 
 <!-- External with unsafe token: unsanitized (allows script execution) -->
-<template src="ad.html" async sanitize="unsafe"></template>
+<template src="ad.html" sanitize="unsafe"></template>
 
 <!-- External buffered with unsafe token -->
-<template src="modal-widget.html" async buffered sanitize="unsafe"></template>
+<template src="modal-widget.html" buffer sanitize="unsafe"></template>
 
 <!-- Inline: unsafe by default (script runs) -->
 <template for="gallery">
@@ -267,48 +268,48 @@ observer.observe(document.documentElement, {
 
 ## Alternatives considered
 
+### 1. Extending the `<script>` element (`type="html"`)
+An alternative approach considered was extending the `<script>` element with two new types (`type="html"` and `type="unsafehtml"`), reusing `<script>` for fetching while composing it with `<template>` for buffering and routing (e.g., `<template for><script type="html" src="..."></script></template>`).
 
-### 1. Introducing a bespoke `<fragment>` element
+**Why it wasn't chosen:**
+1. **Magical Composition / Inertness:** When a script is appended to a `<template>`'s DocumentFragment, it is technically inert. To make the composed buffering approach work, the `<script>` would need to know it is inside a buffering `<template>` to initiate fetching despite being in an inert fragment. Splitting the `buffer` and `for` attributes across the template while using the script solely as a loader creates an annoying duplication and awkward architectural coupling.
+2. **Parser-Blocking Performance Footgun:** `<script>` natively supports parser-blocking fetching (and implicitly blocks unless `async` or `defer` is present). We do not want to encourage or easily enable parser-blocking HTML inclusion, as it is a massive performance footgun. Developers should use CSS to hide/show regions (like in "islands architecture") rather than relying on blocking the HTML parser.
+3. **Sanitization Duplication for Inline Content:** While separating concerns is clean for external resources (keeping fetch controls on the script and routing on the template), it falls short for inline content. If inline content is written directly inside a `<template for>` container:
+   ```html
+   <template for>
+     <div>Inline content markup</div>
+   </template>
+   ```
+   There is no associated script tag to declare sanitization preferences. To support sanitizing inline content, the `<template>` element itself would have to support sanitization attributes directly. Doing so duplicates all safety/security configuration onto the template, defeating the entire purpose of separating concerns via composition.
+
+
+
+### 2. Introducing a bespoke `<fragment>` element
 An alternative is introducing a new bespoke element specifically for in-place or targeted updates, e.g. `<fragment src="fragment.html">` or `<fragment>Inline</fragment>`.
 
 **Why it wasn't chosen:**
-1. **HTML Parser Foster-parenting:** Unrecognized/custom elements (and standard layout elements that aren't specific table components) are subject to foster-parenting by the HTML parser. Placing `<fragment>` inside a table (e.g. `<table><tbody><fragment src="rows.html"></fragment></tbody></table>`) will cause the parser to throw it outside the table structure, breaking streaming updates for tables. Modifying HTML parsing table rules is a non-starter due to cross-browser backward compatibility.
-2. **Layout Footprint:** Keeping `<fragment>` in the DOM (even with `display: contents`) pollutes the sibling structure, breaking CSS selectors like `:first-child`, `:nth-child`, and sibling combinators (`+`/`~`), as well as JS DOM traversal APIs (`nextSibling`). 
+1. **Layout Footprint:** Keeping `<fragment>` in the DOM (even with `display: contents`) pollutes the sibling structure, breaking CSS selectors like `:first-child`, `:nth-child`, and sibling combinators (`+`/`~`), as well as JS DOM traversal APIs (`nextSibling`). This is a fundamental flaw for a generic layout primitive.
+2. **HTML Parser Foster-parenting:** Unrecognized/custom elements (and standard layout elements that aren't specific table components) are subject to foster-parenting by the HTML parser. Placing `<fragment>` directly inside a table (e.g. `<table><tbody><fragment src="rows.html"></fragment></tbody></table>`) will cause the parser to throw it outside the table structure. While this can be mitigated by wrapping it in a `<template for>`, requiring developers to wrap elements just to bypass parser constraints is annoying and unergonomic compared to natively script-supporting elements like `<template>`. 
 
-### 2. Extending the `<script>` element
+### 3. Extending the `<script>` element for raw text
 Another alternative is using `<script>` to fetch and render markup:
 - `<script type="text/html" src="fragment.html"></script>`
 
 **Why it wasn't chosen:**
-The HTML parser treats the content of `<script>` tags as raw text until it matches a closing `</script>` tag. This means any inline markup containing nested `<script>` tags would require escaping the closing tags (e.g. as `<\/script>`). This is a substantial developer footgun for inline templates. Furthermore, inserting arbitrary markup inside table tags from a `<script>` elements can trigger foster-parenting.
-
-### 3. Composing `<script>` and `<template>`
-A third alternative is composing the two elements such that `<template active>` acts as the layout/activation wrapper, and a nested `<script type="fragment">` executes to fetch and insert the external resource:
-- `<template active buffered><script type="fragment" src="fragment.html"></script></template>`
-
-**Why it wasn't chosen:**
-While this separation of concerns is clean for external resource loading (keeping fetch controls on the script and routing/layout on the template), it falls short for inline content. If inline content is written directly inside a `<template active>` container:
-```html
-<template active>
-  <div>Inline content markup</div>
-</template>
-```
-There is no associated script tag to declare sanitization preferences (like `unsafe` or `sanitizer`). To support sanitizing inline content, the `<template>` element itself would have to support sanitization attributes directly. Doing so duplicates all safety/security configuration onto the template, defeating the purpose of separating concerns via composition.
-
-However, composition (with `<template>` as the outer element) retains the key advantage of being allowed inside tables without foster-parenting issues.
+The HTML parser treats the content of `<script>` tags as raw text until it matches a closing `</script>` tag. This means any inline markup containing nested `<script>` tags would require escaping the closing tags (e.g. as `<\/script>`). This is a substantial developer footgun for inline templates. Furthermore, inserting arbitrary markup inside table tags from a `<script>` element can trigger foster-parenting.
 
 ### 4. Global `fragment` attribute composed with Script and Template
 Another alternative is introducing a global attribute (e.g. `fragment="..."`) that resides on the destination DOM container to handle sanitization and buffering, composed with `<script type="fragment">` for fetching and `<template for>` for out-of-order routing:
 - **Sanitization without inclusion:** `<div fragment><a onclick="alert('hi')">X</a></div>`
-- **Buffering without inclusion:** `<div fragment="buffered"><!-- lots of content... --></div>`
+- **Buffering without inclusion:** `<div fragment="buffer"><!-- lots of content... --></div>`
 - **In-place Include:** `<div fragment><script type="fragment" src="fragment.html"></script></div>`
-- **Targeted Include:** `<tbody fragment="buffered"><?marker name="rows"?></tbody>` paired with `<template for="rows"><script type="fragment" src="rows.html"></script></template>`
+- **Targeted Include:** `<tbody fragment="buffer"><?marker name="rows"?></tbody>` paired with `<template for="rows"><script type="fragment" src="rows.html"></script></template>`
 
 **Why it wasn't chosen:**
-1. **Observability:** While the content is buffering, it's simply not anywhere in the DOM, but rather kept inside the parser intertnally.
+1. **Observability:** While the content is buffering, it's simply not anywhere in the DOM, but rather kept inside the parser internally.
 This makes errors or latency difficult to observe, unlike the `<template>` based behavior where the content accumulates in the template until it is ready to be swapped in.
 
-2. **Verbosity:** Placing includes in-place requires writing both a wrapper tag (`<div fragment>`) and a nested loader tag (`<script type="fragment">`), which is significantly more verbose for simple inclusions than `<template active src="fragment.html">`.
+2. **Verbosity:** Placing includes in-place requires writing both a wrapper tag (`<div fragment>`) and a nested loader tag (`<script type="fragment">`), which is significantly more verbose for simple inclusions than `<template src="fragment.html">`.
 3. **Action at a Distance for Safety Configuration:** The security policy (`unsafe`) is configured on the *target container* (e.g., `<div fragment="unsafe">`) rather than on the resource loading stream. If a container receives patches/inclusions from multiple independent templates, it must declare `unsafe` globally, potentially allowing script execution from an untrusted template stream.
 
 
