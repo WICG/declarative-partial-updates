@@ -312,8 +312,23 @@ This makes errors or latency difficult to observe, unlike the `<template>` based
 2. **Verbosity:** Placing includes in-place requires writing both a wrapper tag (`<div fragment>`) and a nested loader tag (`<script type="fragment">`), which is significantly more verbose for simple inclusions than `<template src="fragment.html">`.
 3. **Action at a Distance for Safety Configuration:** The security policy (`unsafe`) is configured on the *target container* (e.g., `<div fragment="unsafe">`) rather than on the resource loading stream. If a container receives patches/inclusions from multiple independent templates, it must declare `unsafe` globally, potentially allowing script execution from an untrusted template stream.
 
+### 5. Deconstructed Primitives (Global `sanitize`/`buffer` attributes + `<script>` loader)
+Another alternative is decomposing these features into separate, composable primitives rather than bundling them into `<template>`:
+- A global `sanitize` attribute that strips scripts/handlers from descendants *only during parsing*.
+- Reusing `<script type="html" src="...">` or `type="unsafehtml"` for fetching.
+- A global `buffer` attribute that registers a `:buffer` CSS pseudo-class (applying `display: none` by default) to hide the container until the included HTML and its stylesheets are loaded.
 
+Example usage:
+```html
+<div sanitize buffer>
+  <script type="html" src="header.html"></script>
+</div>
+```
 
+**Why it wasn't chosen:**
+1. **DOM Pollution / Transient Directive Abuse:** Because `sanitize` and `buffer` are parser-only instructions, they serve no runtime purpose once loading completes. However, they remain permanently in the DOM as attributes. The loader `<script>` tag also remains as a dead node. Furthermore, wrapping includes in-place forces developers to either introduce unnecessary wrapper elements (like `<div>` which can violate layout nesting rules in lists or tables) or apply the attribute to the parent container permanently.
+2. **Hidden Initialization Layout Failures:** Progressive rendering inside a container hidden via `display: none` (the default `:buffer` styling) means that any inline scripts (in `unsafe` mode) execute immediately upon being parsed. If those scripts attempt to calculate layout dimensions (e.g. `offsetWidth` or `getBoundingClientRect()`), they will receive `0`. This causes layout-dependent widgets (carousels, charts, maps) to initialize in a broken state. In contrast, `<template>` parses into an inert DocumentFragment, delaying script execution until the entire fragment is atomically inserted into the active tree with correct dimensions.
+3. **False Security Contracts:** A permanent global `sanitize` attribute in the DOM looks like a runtime security contract. Developers might easily assume that it sanitizes dynamic JavaScript DOM insertions (like `div.innerHTML = ...`), whereas it only works during parser-level tree construction, creating a false sense of security.
 
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
