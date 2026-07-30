@@ -127,6 +127,27 @@ The delivery mode is configured using the boolean `buffer` attribute:
 <template for="comments-patch" src="comments.html" buffer></template>
 ```
 
+### Advanced Buffering: Resource Preloading
+
+To prevent Flash of Unstyled Content (FOUC) or layout shifts caused by subresources loaded *inside* a buffered template, authors can declare critical preloads directly within the template stream:
+
+```html
+<!-- Inside widget.html -->
+<link rel="preload" href="widget.css" as="style">
+<link rel="modulepreload" href="widget.js">
+
+<div class="widget-body">
+  <link rel="stylesheet" href="widget.css">
+  <p>Widget Content</p>
+</div>
+```
+
+**Behavior & Spec Integration:**
+1. **Immediate Fetch (Non-inert):** As a spec exception, when the HTML parser is tokenizing content into a `<template buffer>`'s active `content` DocumentFragment, any parsed `<link rel="preload">` or `<link rel="modulepreload">` elements immediately initiate network fetches despite being inside an inert fragment.
+2. **Buffer Activation Gating:** The presence of these preloads acts as an implicit rendering block for the template. Once the main HTML stream for the template completes (EOF), the browser suspends the cloning and insertion of the DocumentFragment.
+3. **Atomic Commit:** The DocumentFragment is committed to the DOM in a single atomic update only after all registered preloads/modulepreloads have finished loading (or failed). Since critical stylesheets are already loaded in the memory cache, the subsequently parsed `<link rel="stylesheet">` applies immediately without layout jank.
+4. **Non-Parser Blocking:** The main document parser continues to parse and render content *after* the `</template>` element concurrently. Only the insertion of the template's own buffer is suspended.
+
 ### Security & Sanitization
 
 Security safety is configured via the `sanitize` attribute, which accepts either an empty value (`sanitize` or `sanitize=""`) or `sanitize="unsafe"`.
