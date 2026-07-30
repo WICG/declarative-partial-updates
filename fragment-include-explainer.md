@@ -85,6 +85,15 @@ When the `src` attribute is present, the template asynchronously fetches its HTM
 <template for="main-content" src="content.html"></template>
 ```
 
+### Lifecycle and Inline Fallbacks
+
+- **Inline Content with `src` (Ignored):** If a `<template>` declares a `src` attribute, any inline child content is ignored and discarded by the browser. Attempting to use inline content as a network fallback or dynamic placeholder introduces complex parser/network race conditions and rendering flashes. 
+  Instead, authors should place initial loading placeholders or fallbacks for non-supporting browsers directly in the target DOM range (e.g., inside the `<?start>`/`<?end>` tags), which will be naturally replaced once the template's stream begins.
+- **Template Disconnection (Abort):** If an active template is removed from the document (e.g. via `element.remove()`) or disconnected while its `src` retrieval is in progress:
+  - The network fetch is aborted immediately.
+  - In `buffer` mode, no DOM mutations occur.
+  - In streaming mode, any DOM nodes already appended remain in the document, but streaming and parsing halt immediately.
+
 ### Buffering vs. Streaming
 
 The delivery mode is configured using the boolean `buffer` attribute:
