@@ -1,4 +1,4 @@
-# Declarative Route Matching
+# Styling based on navigation state
 
 ## Authors:
 
