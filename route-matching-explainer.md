@@ -73,8 +73,8 @@ function Navbar() {
 What if it could look like this?
 ```html
 <style>
-  @route --home { pathname: "/"; base-url: document; }
-  @route --about { pathname: "/about"; base-url: document; }
+  @location --home { pathname: "/"; base-url: document; }
+  @location --about { pathname: "/about"; base-url: document; }
   :active-navigation(to --home) + spinner { opacity: 100%; }
   :active-navigation(to --about) { color: grey }
 </style>
@@ -148,15 +148,15 @@ The `css-navigation-1` happily adopts the concept of URL patterns.
 
 <h2>Routes</h2>
 
-The `css-navigation-1` spec exposes a `@route` rule, which allows naming a URL or url pattern for use by conditional `@navigation` rules or link styling.
+The `css-navigation-1` spec exposes a `@location` rule, which allows naming a URL or url pattern for use by conditional `@navigation` rules or link styling.
 ```css
-@route --home {
+@location --home {
   pathname: "/";
   base-url: document;
 }
 ```
 
-A `@route` can be a URL pattern or a URL.
+A `@location` can be a URL pattern or a URL.
 
 In addition, the `url-pattern(string)` function can be used to define a quick URL pattern without having to name it.
 
@@ -191,7 +191,6 @@ The `@navigation` at rule, as well as its corresponding `if (navigation())` clau
 @navigation (from: --home) { ... }
 @navigation (to: --about) { ... }
 @navigation (between: --home and --about) { ... }
-@navigation (with: url-pattern("/*")) { ... }
 @navigation (at: url("/exact/?a=b")) { ... }
 ```
 
@@ -264,48 +263,6 @@ The `:nav-source` pseudo class allows styling that particular link, for the cour
 ```
 
 Note that `:nav-source` only matches link elements (similar to `:any-link`).
-
-### Matching a link that matches the active navigation
-
-While `:nav-source` is useful for matching the actual link that was clicked, for some use cases it is not sufficient.
-For example, when going from movie details to a movie list full of thumbnails, the particular thumbnail of the movie should be style,
-however it was not clicked!
-
-The `:active-navigation` pseudo-class uses route-matching, similar to `@navigation`, to match a link with an active navigation:
-
-```css
-@route --movie-list {
-  pathname: "/*/movies";
-  base-url: document;
-}
-
-@route --movie-details {
-  pathname: "/*/movie/:id";
-  base-url: document;
-}
-
-@navigation ((at: --movie-details) and (with: --movie-list)) {
-  .hero { view-transition-name: hero-or-thumb }
-}
-
-@navigation (at: --movie-list) {
-  a:active-navigation(with --movie-details) {
-    .thumb { view-transition-name: hero-or-thumb }
-  }
-}
-```
-
-When matching a link with an active navigation, by default the link's `href` URL is compared against the navigation URL.
-However, when a URL pattern route is given like in the above example, each of these links are processed by the given URL pattern
-and the resulting named groups are matched. This allows comparing a navigation URL with a link in a "lossy" way that allows ignoring
-some URL parameters while respecting others.
-
-To illustrate, the above `:active-navigation` rule would match the following:
-* a link to `/en/movie/123` when navigating to or from `/en/movie/123`
-* a link to `/en/movie/123` when navigating to or from `/fr/movie/123`
-* a link to `/en/movie/123?from=list` when navigating to or from `/es/movie/123#scroll-here`
-
-This might seem confusing at first but this "non-exact" match of URLs is essential given how URLs can carry multiple bits of information.
 
 # Potential future enhancements
 
@@ -496,12 +453,15 @@ addEventListener("pagehide", () => {
 ```
 
 
-## Contain this in CSS
-Since the first use case for routes is driven by CSS, it is tempting to contain everything in CSS, including the URL patterns themselves.
-However, this means that:
-- all the 3rd party stylesheets that work with routes have access to the raw URL by defining their own URL patterns
-- We would need to create an HTML version of this once we connect routes with HTML UI
-- CSS "feels" like the wrong place to include a route map (arguably).
+## Define the locations in JS, and conditions in CSS
+There are certain drawbacks to including the locations in CSS
+- all the 3rd party stylesheets that work with routes have access to the document URLs, which restricts some 3p CSS from accessing this feature.
+- We would need to create an HTML version of this if we end up connecting routes with HTML UI
+- Concerns were raised that CSS "feels" like the wrong place to define routes.
+
+These are all true, but they don't preclude us from introducing HTML/JS based route definitions in the future and integrate them with this.
+However, when considering the main use case of styling navigation and links - *requiring* to define the locations in multiple places is mostly an artificial constraint,
+and the arguments against having this as an option are mostly aesthetic.
 
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
@@ -573,7 +533,13 @@ N/A
 20.  How does this specification distinguish between behavior in first-party and
      third-party contexts?
 
-N/A
+Only [origin-clean](https://drafts.csswg.org/cssom/#concept-css-style-sheet-origin-clean-flag)
+stylesheet can define URL patterns that are relative to the document's URL, to avoid leaking the calling origin to a no-cors cross-origin stylesheet.
+
+Note that even as is, the URL is not easy to decipher from the stylesheet, as the stylesheet would have to guess all the possible locations, put them into URL patterns,
+and hope that the user navigates to them, in order to trigger something that exfiltrates it like a `background-image` URL.
+
+This is likely more cumbersome than exfiltrating that kind of information based on the DOM itself, e.g. `data-*` attributes.
 
 21.  How do the features in this specification work in the context of a browser’s
      Private Browsing or Incognito mode?
