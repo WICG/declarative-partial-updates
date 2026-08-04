@@ -1,15 +1,67 @@
 # Declarative Route Matching
 
-[@noamr](https://github.com/noamr) and [@dbaron](https://github.com/dbaron)
+## Authors:
 
-# Related links
+- Noam Rosenthal ([@noamr](https://github.com/noamr))
+- David Baron ([@dbaron](https://github.com/dbaron))
 
-* [current css-navigation-1 specification draft](https://drafts.csswg.org/css-navigation-1/)
-* [current specification issues (open and closed)](https://github.com/w3c/csswg-drafts/issues?q=label%3Acss-navigation-1%20is%3Aissue)
-* initial syntax discussion for HTML route matching: https://github.com/WICG/declarative-partial-updates/issues/46
-* Discussion for CSS route matching: https://github.com/w3c/csswg-drafts/issues/12594
+## Participate
+- **Issue tracker:** [GitHub Issues for css-navigation-1](https://github.com/w3c/csswg-drafts/issues?q=label%3Acss-navigation-1+is%3Aissue)
+- **Discussion forum:** [Initial syntax discussion for HTML route matching](https://github.com/WICG/declarative-partial-updates/issues/46) and [CSS route matching discussion](https://github.com/w3c/csswg-drafts/issues/12594)
+- **Specification Draft:** [CSS Navigation Level 1](https://drafts.csswg.org/css-navigation-1/)
 
-# Motivation and Use Cases
+## Table of Contents
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+- [Authors:](#authors)
+- [Participate](#participate)
+- [Table of Contents](#table-of-contents)
+- [Introduction](#introduction)
+- [Motivation and Use Cases](#motivation-and-use-cases)
+  - [Goals](#goals)
+  - [Non-Goals](#non-goals)
+- [Navigation-aware styling](#navigation-aware-styling)
+  - [Framework routers](#framework-routers)
+  - [Vanilla](#vanilla)
+- [Two-phase preview view transitions](#two-phase-preview-view-transitions)
+- [Declarative same-document view transitions](#declarative-same-document-view-transitions)
+- [CSS Navigations 1](#css-navigations-1)
+  - [URL patterns](#url-patterns)
+  - [Locations](#locations)
+  - [Active navigation state](#active-navigation-state)
+  - [Conditional navigation styling](#conditional-navigation-styling)
+  - [URL matching](#url-matching)
+  - [Phase matching](#phase-matching)
+- [Link matching](#link-matching)
+  - [Link matching by location](#link-matching-by-location)
+  - [Matching the navigation's source element](#matching-the-navigations-source-element)
+- [Potential future enhancements](#potential-future-enhancements)
+  - [Future enhancement: Style based on current route](#future-enhancement-style-based-on-current-route)
+  - [Future enhancement: HTML route map with CSS reflection](#future-enhancement-html-route-map-with-css-reflection)
+  - [Declarative interception & history-handling](#declarative-interception--history-handling)
+  - [Declarative patch-based document updates](#declarative-patch-based-document-updates)
+  - [Mapping between "Open/closed" UI elements and URLs](#mapping-between-openclosed-ui-elements-and-urls)
+  - [Scroll/gesture-based navigation with lazy-loading](#scrollgesture-based-navigation-with-lazy-loading)
+  - [Element/route binding](#elementroute-binding)
+  - [Element-scoped route maps](#element-scoped-route-maps)
+- [Summary](#summary)
+- [Alternatives considered](#alternatives-considered)
+  - [Just use existing JavaScript](#just-use-existing-javascript)
+  - [Define the locations in JS, and conditions in CSS](#define-the-locations-in-js-and-conditions-in-css)
+- [Privacy and Security Considerations](#privacy-and-security-considerations)
+  - [Summary](#summary)
+  - [Detailed Self-Review Questionnaire: Security and Privacy](#detailed-self-review-questionnaire-security-and-privacy)
+- [Stakeholder Feedback / Opposition](#stakeholder-feedback--opposition)
+- [References & Acknowledgements](#references--acknowledgements)
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Introduction
+
+Declarative Route Matching introduces CSS extensions that allow styles to adapt dynamically based on the site's navigation state. By exposing URL Patterns in CSS, authors can conditionally apply styles and view transitions based on the origin, destination, phase, and history type (e.g., back/forward) of a navigation, as well as style the specific link that triggered the transition.
+
+Currently, orchestrating page transition styles—especially for complex patterns like list-to-details transitions or pending loading states—requires heavy, error-prone client-side scripting to manage state across pages or same-document updates. Declarative Route Matching moves this style orchestration directly to the browser, simplifying web development, improving performance, and ensuring a robust, native navigation experience.
+
+## Motivation and Use Cases
 
 [CSS View Transitions](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API)
 provide a way to animate transitions between views in a web site.
@@ -30,13 +82,17 @@ We talk about these as a "list to details" transition or "details to list" trans
 and this use case has been discussed for a while
 in [w3c/csswg-drafts#8209](https://github.com/w3c/csswg-drafts/issues/8209).
 
-The goal of this feature is to make it easier for authors to declaratively set up styles
-for this sort of transition.
-This means adding features that:
-* match patterns of URLs by exposing [URL Patterns](https://urlpattern.spec.whatwg.org/) in CSS
-* apply styles conditionally based on the origin and destination of the current navigation, so that transitions between particular sets of URLs (whether separate documents or separate states/routes within a single page app) can be styled
-* style an HTML link based on its target matching both the origin or destination of the current navigation *and* matching a particular URL pattern, which allows matching the correct item within the list in a list-to-details or details-to-list transition.
-* apply styles based on the history type (e.g. back/forward) and phase (e.g. loading/committed) of the navigaiton
+### Goals
+
+- **Declarative Navigation Styling:** Enable authors to style transitions conditionally based on the origin, destination, and history type (e.g., back/forward) of the active navigation.
+- **Expose URL Matching in CSS:** Provide a mechanism to match URL patterns directly within stylesheets using URL Patterns.
+- **Link-to-Navigation Association:** Allow styling individual HTML link elements depending on whether their target matches the destination or origin of the current navigation (e.g. for list-to-details transitions).
+- **Navigation Lifecycle Reflection:** Expose the loading phase/lifecycle (e.g., loading, ready, committed) to CSS to style transition states.
+
+### Non-Goals
+
+- **Replace Client-Side Routers:** This feature does not aim to replace frameworks or client-side libraries that manage DOM structure, data fetching, or component instantiation.
+- **Handle Server Fetching Logic:** This feature is focused on styling and transition curation, not on controlling network-level resource retrieval or server-side rendering logic.
 
 ## Navigation-aware styling
 ### Framework routers
@@ -129,14 +185,13 @@ navigation.addEventListener("navigate", e => {
 });
 ```
 
-<h1>CSS Navigations 1</h1>
-
+## CSS Navigations 1
 
 The scope of `css-navigation-1` is to:
 * change style conditionally (importantly including view transition) based on current navigation state
 * apply style to links that participate in navigations
 
-<h2>URL patterns</h2>
+### URL patterns
 
 One main issue with URL matching is that URL comparison is notoriously finicky.
 For example, a link to the `/about` page might be written as `/about`, `/about/`, or even `/about?utm_source=something`.
@@ -146,7 +201,7 @@ a `URLPattern` to act as a "matcher" - a set of rules to extract parameters from
 
 The `css-navigation-1` happily adopts the concept of URL patterns.
 
-<h2>Routes</h2>
+### Locations
 
 The `css-navigation-1` spec exposes a `@location` rule, which allows naming a URL or url pattern for use by conditional `@navigation` rules or link styling.
 ```css
@@ -160,7 +215,7 @@ A `@location` can be a URL pattern or a URL.
 
 In addition, the `url-pattern(string)` function can be used to define a quick URL pattern without having to name it.
 
-<h2>Active navigation state</h2>
+### Active navigation state
 
 Both link matching and conditional navigation styling rely on the concept of "active navigation state".
 The active navigation state is defined in terms of the HTML standard, and contains:
@@ -180,7 +235,7 @@ When same-document navigations occur before the new page is rendered, the cross-
 as the same-document navigation is "non-visual" so cannot be styled.
 
 
-<h2>Conditional navigation styling</h2>
+### Conditional navigation styling
 
 The `@navigation` at rule, as well as its corresponding `if (navigation())` clause, matches the rule with the above active navigation state.
 
@@ -210,7 +265,7 @@ The `phase` query represents the phase of the active navigation state.
 The `ready` phase is a bit special, and is only active in a (same-origin) cross-document navigation when the new document is ready but not swapped yet, e.g. for the purpose of showing a [preview](https://github.com/w3c/csswg-drafts/blob/main/css-view-transitions-2/two-phase-transition-explainer.md#solution-2-declarative-preview-view-transitions--navigation-preview-state) or for capturing the old state of a cross-document view transition.
 
 
-<h3>Navigation type matching</h3>
+#### Navigation type matching
 
 ```css
 @navigation (history: navigate) { ... }
@@ -242,7 +297,7 @@ e.g.:
 
 Apart from conditionally styling based on a navigation, links can be styled if they participate in a navigation.
 
-### Link matching by route
+### Link matching by location
 
 The `:link-to` pseudo-class doesn't take navigation into account, but allows for matching a link URL without resorting to string matching of the `href` attribute:
 
@@ -262,17 +317,15 @@ The `:nav-source` pseudo class allows styling that particular link, for the cour
 :nav-source { animation-name: blink; } 
 ```
 
-Note that `:nav-source` only matches link elements (similar to `:any-link`).
+## Potential future enhancements
 
-# Potential future enhancements
-
-## Future enhancement: Style based on current route
+### Future enhancement: Style based on current route
 In addition to the curation of the navigation itself, it is a common technique in modern web apps to have a "shell" that is common between pages and mostly static, and an "outlet" area for the dynamic content.
 However, some parts of the shell often still have some dynamic parts that appear on "some" pages or in some scenarios, or appear different based on the current page.
 
 For example, a chat widget or members area might only appear in certain pages. A "related" `<aside>` element might only appear in article pages.
 
-## Future enhancement: HTML route map with CSS reflection
+### Future enhancement: HTML route map with CSS reflection
 - Routes are declared in HTML, to avoid requiring all the stylesheets to know the different route URLs or leak those URLs directly, and also to allow future enhancements that are not necessarily style-based.
 - A route at is core is a named `URLPattern`.
 - Matching a route can be toggle-like event target, similar to media-query matching. It can help responding to specific route changes without having to intercept *all* navigations.
@@ -301,7 +354,7 @@ For example, a chat widget or members area might only appear in certain pages. A
 </body>
 ```
 
-## Declarative interception & history-handling
+### Declarative interception & history-handling
 
 In addition to CSS reflection, some basic navigation interception capabilities can be provided out of the box:
 - Intercepting without side effects (navigations that just change style)
@@ -327,7 +380,7 @@ This complements the CSS reflection and element binding features, as with those 
 </body>
 ```
 
-## Declarative patch-based document updates
+### Declarative patch-based document updates
 
 (Future vision of putting it all together)
 
@@ -351,7 +404,7 @@ The stream of interleved patches is fetched from the URL (or from the service wo
 
 When combined with scroll-based navigation, the patch stream can be fetched lazily as the bound element approaches the viewport, making lazy loading of scrollable content easier.
 
-## Mapping between "Open/closed" UI elements and URLs
+### Mapping between "Open/closed" UI elements and URLs
 Dialog/popover and other "openable" UI elements are currently openable by a button and something like a command invoker.
 However, sometimes an author would want to reflect this UI state in the URL, and have that URL lead to that UI state.
 
@@ -368,7 +421,7 @@ navigation.addEventListener("navigate", e => {
 });
 ```
 
-## Scroll/gesture-based navigation with lazy-loading
+### Scroll/gesture-based navigation with lazy-loading
 Some modern UIs (e.g. Instagram, TikTok) use scroll-snapping or carousels to navigate between app fragments in a way that maps nicely to URL navigation.
 For example, a URL retrieved from a QR code should not only scroll to the right app fragment but also render the correct state from the server.
 
@@ -377,7 +430,7 @@ While the web platform allows matching between scrolling and URLs using ID mappi
 - Uni-directional. The user scrolling to a fragment doesn't automatically change the URL
 - Loading content lazily based on element proximity to the viewport is cumbersome, and requires careful use of `IntersectionObserver` or `content-visiblity` (including the `contentvisibilityautostatechange` event).
 
-## Element/route binding
+### Element/route binding
 
 While CSS is a great fit for some use cases, including ones that display and hide visual elements based on route, this doesn't work well
 with UI elements that are more than visual, like dialogs and popovers, or elements that can be scrolled to.
@@ -413,58 +466,60 @@ document.routeMap.get("feed").addEventListener("prepare", e =>
 </script>
 ```
 
-## Element-scoped route maps
+### Element-scoped route maps
 
 Allow intercepting navigations and styling current routes in a way that's encapsulated for a certain element.
 This can allow using navigation-like features inside a component without necessarily affecting the document's URL/state.
 
 More details on that TBD.
 
-# Summary
+## Summary
 - Declarative route matching is about mapping between UI and URL navigation.
 - It is done by naming `URLPattern`s as routes, and mapping them to style (and later on to HTML-UI).
 - It can be used to offload the pending/optimistic aspect of navigations to the browser, also when using a framework router for the actual content updates.
 - It is also designed in a way that can be extended to be as a simple standalone router, when the route changes are limited to UI/style, alongside patching, or by integrating JS-based routing with its new events.
 
-# Alternatives considered
+## Alternatives considered
 
-## Just use existing JS
-It is possible today to polyfill most of these behaviors with a framework, or with custom states and web components, or by updating HTML attributes to reflect navigation state.
-However, incorporating this into the browser can shave off a lot of JS, and even to no JS in some cases, in a place that is generally performance sensitive and very user-visible (an interaction causing a navigation).
-In addition, the more this is coupled with navigation experiences, the harder it is to script in a way that's both performant and developer friendly.
+### Just use existing JavaScript
 
-Another big issue with using JS is that it requires the caller to properly clean up state. This can be tricky when cross-document navigations are involved, as it's not exactly clear when the state needs to be cleared.
-(But it does need to be cleared since the page might be restored from BFCache.)
+One option is to require authors to polyfill or manually implement all route matching and style changes in scripting using frameworks, web components, or global `navigate` event listeners.
 
-```js
-navigation.addEventListener("navigate", async event => {
-  const next_route_name = get_route_from(event.destination);
-  document.documentElement.classList.add("show-preview");
-  // Not intercepted, so need to clean it up. When? Maybe after
-  // pagehide? Will it actually run? Would developers remember to
-  // do this?
-  await new Promise(resolve => window.addEventListener("pagehide", resolve);
-  document.documentElement.classList.remove("show-preview");
-});
+#### Pros
+* **No browser changes required:** Works on the platform today.
+* **Ultimate flexibility:** Authors can write custom, arbitrary JS logic for any complex routing edge case.
 
-addEventListener("pagehide", () => {
-  // 
-});
-```
+#### Cons
+* **Heavy script overhead:** Adds extra JS execution and payload to performance-sensitive navigation paths.
+* **Complex state lifecycle:** Requires developers to manually coordinate active, pending, and transition styles, which is error-prone.
+* **BFCache issues:** Developers must remember to properly clear styles when pages are restored from BFCache, which is a common source of bugs.
 
+#### Reason for rejection
+Bringing route matching natively to the browser reduces developer boilerplate, avoids common BFCache memory/cleanup bugs, and moves style-based curation out of JS entirely.
 
-## Define the locations in JS, and conditions in CSS
-There are certain drawbacks to including the locations in CSS
-- all the 3rd party stylesheets that work with routes have access to the document URLs, which restricts some 3p CSS from accessing this feature.
-- We would need to create an HTML version of this if we end up connecting routes with HTML UI
-- Concerns were raised that CSS "feels" like the wrong place to define routes.
+---
 
-These are all true, but they don't preclude us from introducing HTML/JS based route definitions in the future and integrate them with this.
-However, when considering the main use case of styling navigation and links - *requiring* to define the locations in multiple places is mostly an artificial constraint,
-and the arguments against having this as an option are mostly aesthetic.
+### Define the locations in JS, and conditions in CSS
 
+Another alternative is to restrict route/location definitions exclusively to JS or HTML (e.g., using a markup-based route map), and only expose media-query-like matching rules in CSS.
 
-## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
+#### Pros
+* **Encapsulation:** Restricts third-party stylesheets from learning URL layouts by guessing URL patterns directly in CSS.
+* **Separation of Concerns:** Keeps route URLs in markup/script while CSS only references abstract route names.
+
+#### Cons
+* **Friction and duplication:** Authors must write and synchronize definitions across HTML, JS, and CSS just to style a transition.
+* **Limited styling flexibility:** Restricts CSS-only libraries or widgets from self-declaring transitions without coordinating with the page's host code.
+
+#### Reason for rejection
+While HTML/JS route definition is a natural future enhancement (which we plan to integrate), requiring it as a prerequisite adds unnecessary friction. Exposing declarative locations in CSS is highly developer-friendly and handles styling use cases directly.
+
+## Privacy and Security Considerations
+
+### Summary
+Exposing URL Patterns directly in CSS raises concerns about exposing the document URL to 3rd party CSS. To mitigate this, only origin-clean stylesheets can match relative URL patterns. Additionally, matching logic evaluates during the active navigation lifecycle, and is constrained to URL patterns that the author defines, limiting arbitrary sniffing of historic states.
+
+### Detailed Self-Review Questionnaire: Security and Privacy
 
 1.  What information does this feature expose,
      and for what purposes?
@@ -578,4 +633,16 @@ No
 
 Nothing
 
+## Stakeholder Feedback / Opposition
 
+- **Chromium / Google:** Positive (proposal authors include Chromium contributors, and prototyping is underway).
+- **Gecko / Mozilla:** No official signals yet.
+- **WebKit / Apple:** No official signals yet.
+- **Web Developers:** Positive interest, specifically around styling complex View Transitions (see discussion in [w3c/csswg-drafts#8209](https://github.com/w3c/csswg-drafts/issues/8209)).
+
+## References & Acknowledgements
+
+We would like to acknowledge the contributions of:
+- The designers and maintainers of the [URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API).
+- The contributors to the [CSS View Transitions](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API) specification.
+- Everyone who participated in discussions in [WICG/declarative-partial-updates#46](https://github.com/WICG/declarative-partial-updates/issues/46) and [w3c/csswg-drafts#12594](https://github.com/w3c/csswg-drafts/issues/12594).
