@@ -519,6 +519,8 @@ While HTML/JS route definition is a natural future enhancement (which we plan to
 ### Summary
 Exposing URL Patterns directly in CSS raises concerns about exposing the document URL to 3rd party CSS. To mitigate this, only origin-clean stylesheets can match relative URL patterns. Additionally, matching logic evaluates during the active navigation lifecycle, and is constrained to URL patterns that the author defines, limiting arbitrary sniffing of historic states.
 
+See https://github.com/w3c/csswg-drafts/issues/14266 for dicussion about this.
+
 ### Detailed Self-Review Questionnaire: Security and Privacy
 
 1.  What information does this feature expose,
@@ -588,13 +590,15 @@ N/A
 20.  How does this specification distinguish between behavior in first-party and
      third-party contexts?
 
-Only [origin-clean](https://drafts.csswg.org/cssom/#concept-css-style-sheet-origin-clean-flag)
-stylesheet can define URL patterns that are relative to the document's URL, to avoid leaking the calling origin to a no-cors cross-origin stylesheet.
+Yes, see https://github.com/w3c/csswg-drafts/issues/14266
 
-Note that even as is, the URL is not easy to decipher from the stylesheet, as the stylesheet would have to guess all the possible locations, put them into URL patterns,
+We currently propose to use the referrer of the stylesheet as the base URL, protected by the referrer policy.
+
+Note that even with that, there is new information available to the stylesheet, as the document's URL while navigating is not necessarily the referrer.
+Howevere, the URL is not easy to decipher from the stylesheet, as the stylesheet would have to guess all the possible locations, put them into URL patterns,
 and hope that the user navigates to them, in order to trigger something that exfiltrates it like a `background-image` URL.
 
-This is likely more cumbersome than exfiltrating that kind of information based on the DOM itself, e.g. `data-*` attributes.
+This is likely more cumbersome than exfiltrating that kind of information based on the DOM itself, e.g. using attribute selectors.
 
 21.  How do the features in this specification work in the context of a browser’s
      Private Browsing or Incognito mode?
