@@ -514,7 +514,8 @@ Another alternative is to restrict route/location definitions exclusively to JS 
 #### Reason for rejection
 While HTML/JS route definition is a natural future enhancement (which we plan to integrate), requiring it as a prerequisite adds unnecessary friction. Exposing declarative locations in CSS is highly developer-friendly and handles styling use cases directly.
 
-## Accessibility considerations
+
+## Accessibility considerations
 
 ### Skipping ARIA opportunities
 As with other features where JS is skipped in favor of a direct CSS representation of DOM state, this might encourage developers to avoid updating accessibility-related states like [`aria-busy`](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-busy).
