@@ -514,6 +514,18 @@ Another alternative is to restrict route/location definitions exclusively to JS 
 #### Reason for rejection
 While HTML/JS route definition is a natural future enhancement (which we plan to integrate), requiring it as a prerequisite adds unnecessary friction. Exposing declarative locations in CSS is highly developer-friendly and handles styling use cases directly.
 
+## Accessibility considerations
+
+### Skipping ARIA opportunities
+As with other features where JS is skipped in favor of a direct CSS representation of DOM state, this might encourage developers to avoid updating accessibility-related states like [`aria-busy`](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-busy).
+This is a conceptual trade-off, but in practice styling buttons or selecting view-transition names based on inbound/outbound location is not directly related to getting ARIA right for navigation.
+
+### Communicating the current link
+The spec allows styling the current link during a navigation, which is somewhat adjacent to [`aria-current`](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-current).
+However, that concept is not exactly the same, as indicating the "current" link in ARIA is something that works also outside the lifecycle of the navigation.
+
+If more accessibility considerations come up as we go along, we will update this explainer.
+
 ## Privacy and Security Considerations
 
 ### Summary
