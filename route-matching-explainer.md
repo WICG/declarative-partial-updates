@@ -311,10 +311,10 @@ a:link-to(url("/exact?a=1")) { ... }
 
 The navigation's [source element](https://html.spec.whatwg.org/multipage/#navigation-source-element) is a link, form, or submit button.
 
-The `:nav-source` pseudo class allows styling that particular link, for the course of the navigation:
+The `:navigation-source` pseudo class allows styling that particular link, for the course of the navigation:
 
 ```css
-:nav-source { animation-name: blink; } 
+:navigation-source { animation-name: blink; } 
 ```
 
 ## Potential future enhancements
