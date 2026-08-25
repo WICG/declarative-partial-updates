@@ -113,20 +113,16 @@ dictionary SetHTMLUnsafeOptions {
   boolean runScripts = false;
 };
 
-interface TrustedSetHTMLOptions {
-  (Sanitizer or SanitizerConfig or SanitizerPresets) sanitizer;
-}
-
-interface TrustedSetHTMLUnsafeOptions {
+interface TrustedParserOptions {
   (Sanitizer or SanitizerConfig or SanitizerPresets) sanitizer;  
   boolean runScripts;
 }
 
-typedef (SetHTMLUnsafeOptions or TrustedHTMLParserOptions) UnsafeHTMLSetterOptions;
+typedef (SetHTMLUnsafeOptions or TrustedParserOptions) UnsafeHTMLSetterOptions;
 
 [Exposed=Window]
 mixin interface ElementOrShadowRoot {
-  void setHTML(DOMString html, SetHTML options);
+  void setHTML(DOMString html, SetHTMLOptions options);
   void setHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
   void appendHTML(DOMString html, SetHTMLOptions options);
   void appendHTMLUnsafe((DOMString or TrustedHTML) html, optional UnsafeHTMLSetterOptions options = {});
