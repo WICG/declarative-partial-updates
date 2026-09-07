@@ -113,12 +113,12 @@ dictionary SetHTMLUnsafeOptions {
   boolean runScripts = false;
 };
 
-interface TrustedParserOptions {
+interface TrustedHTMLParserOptions {
   (Sanitizer or SanitizerConfig or SanitizerPresets) sanitizer;  
   boolean runScripts;
 }
 
-typedef (SetHTMLUnsafeOptions or TrustedParserOptions) UnsafeHTMLSetterOptions;
+typedef (SetHTMLUnsafeOptions or TrustedHTMLParserOptions) UnsafeHTMLSetterOptions;
 
 [Exposed=Window]
 mixin interface ElementOrShadowRoot {
