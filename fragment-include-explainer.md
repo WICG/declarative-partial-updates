@@ -267,20 +267,15 @@ See [parser-mutation-records-explainer.md](./parser-mutation-records-explainer.m
 ## Alternatives considered
 
 ### 1. Extending the `<script>` element (`type="html"`)
-An alternative approach considered was extending the `<script>` element with two new types (`type="html"` and `type="unsafehtml"`), reusing `<script>` for fetching while composing it with `<template>` for buffering and routing (e.g., `<template for><script type="html" src="..."></script></template>`).
+An alternative approach is extending `<script>` (e.g., `<script type="html" src="...">`), either as a standalone element that carries `src`, `buffer`, `sanitize`, and `for`, or composed inside `<template>` solely for fetching (`<template for buffer><script type="html" src="..."></script></template>`).
 
 **Why it wasn't chosen:**
-1. **Magical Composition / Inertness:** When a script is appended to a `<template>`'s DocumentFragment, it is technically inert. To make the composed buffering approach work, the `<script>` would need to know it is inside a buffering `<template>` to initiate fetching despite being in an inert fragment. Splitting the `buffer` and `for` attributes across the template while using the script solely as a loader creates an annoying duplication and awkward architectural coupling.
-2. **Parser-Blocking Performance Footgun:** `<script>` natively supports parser-blocking fetching (and implicitly blocks unless `async` or `defer` is present). We do not want to encourage or easily enable parser-blocking HTML inclusion, as it is a massive performance footgun. Developers should use CSS to hide/show regions (like in "islands architecture") rather than relying on blocking the HTML parser.
-3. **Sanitization Duplication for Inline Content:** While separating concerns is clean for external resources (keeping fetch controls on the script and routing on the template), it falls short for inline content. If inline content is written directly inside a `<template for>` container:
-   ```html
-   <template for>
-     <div>Inline content markup</div>
-   </template>
-   ```
-   There is no associated script tag to declare sanitization preferences. To support sanitizing inline content, the `<template>` element itself would have to support sanitization attributes directly. Doing so duplicates all safety/security configuration onto the template, defeating the entire purpose of separating concerns via composition.
-
-
+1. **Inline HTML cannot live in `<script>`:** Routing (`for`), buffering (`buffer`), and sanitization (`sanitize`) are needed for *inline* HTML streams just as much as for external (`src`) fetches. However, the HTML parser tokenizes `<script>` contents as raw text, requiring any nested `</script>` tags in inline markup to be escaped (e.g. `<\/script>`) and preventing normal HTML tokenization. Therefore, inline HTML *must* use `<template>`.
+2. **Imbalance and duplication between `<template>` and `<script>`:** Because inline HTML requires `for`, `buffer`, and `sanitize` on `<template>`, introducing `<script type="html" src="...">` for external fetches creates an awkward split:
+   - If `buffer`, `sanitize`, and `for` are placed on `<script>`, every attribute must be duplicated across both `<template>` (for inline markup) and `<script>` (for fetched markup), and `<script type="html">` would also have to self-destruct from the DOM after loading.
+   - If `for`, `buffer`, and `sanitize` stay on `<template>` while `<script>` only handles `src` (`<template for buffer><script type="html" src="..."></script></template>`), the parser has to special-case a `<script>` inside an otherwise-inert `<template>` fragment just to trigger a fetch.
+   Putting `src` directly on `<template>` keeps all four orthogonal controls (`for`, `src`, `buffer`, `sanitize`) on a single element.
+3. **Parser-Blocking Footgun:** `<script>` is parser-blocking by default unless `async` or `defer` is specified, whereas HTML fragment includes should always be non-blocking.
 
 ### 2. Introducing a bespoke `<fragment>` element
 An alternative is introducing a new bespoke element specifically for in-place or targeted updates, e.g. `<fragment src="fragment.html">` or `<fragment>Inline</fragment>`.
@@ -288,14 +283,7 @@ An alternative is introducing a new bespoke element specifically for in-place or
 **Why it wasn't chosen:**
 `<template>` already acts as a "self-destructing parser directive" for Declarative Shadow DOM (`<template shadowrootmode>`) and declarative partial updates (`<template for>`), where the parser consumes the `<template>` and routes its contents without leaving the `<template>` element in the DOM (and is already valid anywhere in the HTML grammar without foster-parenting). Extending `<template>` is a natural continuation of this existing mechanism, whereas introducing `<fragment>` would either require giving a second element this special self-destructing parser behavior or keeping `<fragment>` in the DOM (polluting sibling traversal and CSS selectors).
 
-### 3. Extending the `<script>` element for raw text
-Another alternative is using `<script>` to fetch and render markup:
-- `<script type="text/html" src="fragment.html"></script>`
-
-**Why it wasn't chosen:**
-The HTML parser treats the content of `<script>` tags as raw text until it matches a closing `</script>` tag. This means any inline markup containing nested `<script>` tags would require escaping the closing tags (e.g. as `<\/script>`). This is a substantial developer footgun for inline templates. Furthermore, inserting arbitrary markup inside table tags from a `<script>` element can trigger foster-parenting.
-
-### 4. Global `fragment` attribute composed with Script and Template
+### 3. Global `fragment` attribute composed with Script and Template
 Another alternative is introducing a global attribute (e.g. `fragment="..."`) that resides on the destination DOM container to handle sanitization and buffering, composed with `<script type="fragment">` for fetching and `<template for>` for out-of-order routing:
 - **Sanitization without inclusion:** `<div fragment><a onclick="alert('hi')">X</a></div>`
 - **Buffering without inclusion:** `<div fragment="buffer"><!-- lots of content... --></div>`
@@ -309,7 +297,7 @@ This makes errors or latency difficult to observe, unlike the `<template>` based
 2. **Verbosity:** Placing includes in-place requires writing both a wrapper tag (`<div fragment>`) and a nested loader tag (`<script type="fragment">`), which is significantly more verbose for simple inclusions than `<template src="fragment.html">`.
 3. **Action at a Distance for Safety Configuration:** The security policy (`unsafe`) is configured on the *target container* (e.g., `<div fragment="unsafe">`) rather than on the resource loading stream. If a container receives patches/inclusions from multiple independent templates, it must declare `unsafe` globally, potentially allowing script execution from an untrusted template stream.
 
-### 5. Deconstructed Primitives (Global `sanitize`/`buffer` attributes + `<script>` loader)
+### 4. Deconstructed Primitives (Global `sanitize`/`buffer` attributes + `<script>` loader)
 Another alternative is decomposing these features into separate, composable primitives rather than bundling them into `<template>`:
 - A global `sanitize` attribute that strips scripts/handlers from descendants *only during parsing*.
 - Reusing `<script type="html" src="...">` or `type="unsafehtml"` for fetching.
