@@ -8,7 +8,7 @@
 2. **Parser-consumed `<template>` elements (`templateAttributes` & `templateStatus`)**: `<template for>` and `<template shadowrootmode>` are pushed onto the parser's stack of open elements and redirect their parsed contents into a target container without the `<template>` itself ever entering the DOM tree.
 3. **Fragment parsing context (`parserContextElement`)**: When markup is parsed as a fragment (`streamHTML*`, `setHTML*`, `innerHTML`, or `<template for>` with a context element), the parser's `fragment context element` is lost once mutations land on descendant nodes.
 
-This explainer proposes a single opt-in (`{ parser: true }` on `MutationObserverInit`) that surfaces these three pieces of parser state directly on `MutationRecord`, along with a companion `Element.isParsing` property and custom element reactions (`parseEndCallback()` and `shadowRootAttachedCallback()`).
+This explainer proposes a single opt-in (`{ parser: true }` on `MutationObserverInit`) that surfaces these three pieces of parser state directly on `MutationRecord`, along with a companion `Element.isParsing` property and custom element reactions (`parsedCallback()` and `shadowRootAttachedCallback()`).
 
 ---
 
@@ -228,9 +228,9 @@ When the HTML parser runs with a `fragment context element`—such as `el.stream
 
 ### 4. Companion for Custom Elements ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287))
 
-Because custom elements already use lifecycle callbacks rather than `MutationObserver`, the same parser hooks power `Element.isParsing` (and `ShadowRoot.isParsing`) plus two custom element reactions—`parseEndCallback()` and `shadowRootAttachedCallback(shadowRoot)`:
+Because custom elements already use lifecycle callbacks rather than `MutationObserver`, the same parser hooks power `Element.isParsing` (and `ShadowRoot.isParsing`) plus two custom element reactions—`parsedCallback()` and `shadowRootAttachedCallback(shadowRoot)`:
 
-- `parseEndCallback()` is enqueued when the custom element finishes parsing (either when its end tag is popped from the parser's stack of open elements, or when a streaming fragment parser targeting the custom element as its `fragment context element` finishes).
+- `parsedCallback()` is enqueued when the custom element finishes parsing (either when its end tag is popped from the parser's stack of open elements, or when a streaming fragment parser targeting the custom element as its `fragment context element` finishes).
 - `shadowRootAttachedCallback(shadowRoot)` is enqueued when a `ShadowRoot` is attached to the custom element—whether declaratively via `<template shadowrootmode>` (before the shadow root's children are parsed, while `shadowRoot.isParsing` is `true`) or imperatively via `attachShadow()`.
 
 ```js
@@ -241,7 +241,7 @@ class MyWidget extends HTMLElement {
   shadowRootAttachedCallback(shadowRoot) {
     // Invoked for both <template shadowrootmode> and attachShadow()
   }
-  parseEndCallback() {
+  parsedCallback() {
     this.#initialize();
   }
   #initialize() {
@@ -348,7 +348,7 @@ Today, `observe(target, options)` throws a `TypeError` unless at least one of `c
    No.
 
 10. **Do features in this specification enable new script execution/loading mechanisms?**
-    No. `MutationObserver` callbacks continue to run at the standard microtask checkpoint, and custom element `parseEndCallback()` and `shadowRootAttachedCallback()` reactions run via the standard custom element reaction queue.
+    No. `MutationObserver` callbacks continue to run at the standard microtask checkpoint, and custom element `parsedCallback()` and `shadowRootAttachedCallback()` reactions run via the standard custom element reaction queue.
 
 11. **Do features in this specification allow an origin to access other devices?**
     No.
