@@ -16,7 +16,7 @@ This explainer proposes a single opt-in (`{ parser: true }` on `MutationObserver
 
 - **Element parse completion & streaming state**:
   - [whatwg/dom#662](https://github.com/whatwg/dom/issues/662) — Custom element callback/promise for "connected and parsed"
-  - [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809), [#619](https://github.com/WICG/webcomponents/issues/619), [#550](https://github.com/WICG/webcomponents/issues/550), & [whatwg/html#2235](https://github.com/whatwg/html/issues/2235) — Callbacks/notifications when the HTML parser finishes parsing an element's children
+  - [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809), [#619](https://github.com/WICG/webcomponents/issues/619), [#550](https://github.com/WICG/webcomponents/issues/550) — Callbacks/notifications when the HTML parser finishes parsing an element's children
   - [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) & [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578) — Reflecting whether an element is open on the parser stack (`isParsingChildren` / `:parsing`)
 - **Declarative partial updates & `<template for>` reflection**:
   - [whatwg/html#13008](https://github.com/whatwg/html/issues/13008) — Reflection of `<template for>` in `MutationObserver`
