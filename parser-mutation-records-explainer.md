@@ -24,7 +24,7 @@
 
 `MutationObserver` was designed to observe low-level DOM tree operations (node insertions, node removals, character data modifications, and attribute changes). However, when the **HTML parser** constructs or updates a DOM tree—especially across streaming network chunks, declarative partial updates (`<template for>`), declarative Shadow DOM (`<template shadowrootmode>`), or streaming fragment APIs (`element.streamHTML()`)—critical parser state is invisible in the resulting `MutationRecord`s:
 
-1. **Element completion (`parsedElements`)**: `addedNodes` reports a non-void element as soon as its *start tag* is parsed, when its subtree is still empty or half-streamed. No record is queued when its *end tag* is parsed.
+1. **Element completion (`parsedElements`)**: `addedNodes` reports an element as soon as its *start tag* is parsed, when its subtree is still empty or half-streamed. No record is queued when its *end tag* is parsed.
 2. **Parser-consumed `<template>` elements (`templateAttributes` & `templateStatus`)**: `<template for>` and `<template shadowrootmode>` are pushed onto the parser's stack of open elements and redirect their parsed contents into a target container without the `<template>` itself ever entering the DOM tree.
 3. **Fragment parsing context (`parserContextElement`)**: When markup is parsed as a fragment (`streamHTML*`, `setHTML*`, `innerHTML`, or `<template for>` with a context element), the parser's `fragment context element` is lost once mutations land on descendant nodes.
 
@@ -87,7 +87,7 @@ When an application streams or inserts HTML into a container via `sidebar.stream
 ### Non-Goals
 
 - **Buffering `<template for>` or `<template shadowrootmode>` mutations until `</template>`**: Streaming into the target as bytes arrive is fundamental to both features; observers must see incremental progress across chunks.
-- **Tracking completion of non-element nodes (`Text`, `Comment`, `ProcessingInstruction`) or void elements (`<img>`, `<br>`)**: Atomic tokens are already complete when inserted in `addedNodes`.
+- **Tracking completion of non-element nodes (`Text`, `Comment`, `ProcessingInstruction`)**: Only `Element` nodes appear in `parsedElements`.
 - **Replacing `PerformanceEntry` for sub-microtask RUM timing**: Observers can call `performance.mark()` in their callback to measure patch latency at microtask granularity ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)); if sub-microtask parser timestamps are needed in the future, a dedicated `PerformanceEntry` can be layered separately.
 
 ---
@@ -96,7 +96,7 @@ When an application streams or inserts HTML into a container via `sidebar.stream
 
 A single boolean option, `parser: true` in `MutationObserverInit`, opts an observer into four new readonly properties on `MutationRecord`:
 
-- `record.parsedElements`: A `NodeList` of non-void `Element`s that finished parsing (popped from the stack of open elements).
+- `record.parsedElements`: A `NodeList` of `Element`s that finished parsing (either when popped from the stack of open elements, or immediately upon insertion for void/self-closing elements).
 - `record.templateAttributes`: A `NamedNodeMap?` containing the attributes of the active parser-consumed `<template>` (`<template for>` or `<template shadowrootmode>`), or `null`.
 - `record.templateStatus`: `"start" | "update" | "end" | "abort"`, or `null`.
 - `record.parserContextElement`: The parser's `fragment context element` (`Element?`), or `null`.
@@ -164,12 +164,11 @@ partial interface MutationRecord {
 
 ### 1. Element completion and coalescing (`parsedElements`)
 
-Only non-void `Element`s pushed onto the parser's stack of open elements appear in `parsedElements` when popped (via an explicit end tag, an implied end tag, or parser termination):
+Every parser-inserted `Element` appears in `parsedElements` once the parser finishes parsing it (when popped from the stack of open elements via an explicit end tag, an implied end tag, or parser termination, or immediately after insertion for void and self-closing foreign elements):
 
-- **Same-chunk coalescing (zero extra records):** When an element opens *and* closes before the observer's record queue is flushed (the common case when `<p>Hello <span>world</span></p>` arrives in a single network chunk), the element is appended to `parsedElements` on the pending `childList` record that already holds it in `addedNodes`.
+- **Same-chunk coalescing (zero extra records):** When an element opens *and* closes before the observer's record queue is flushed (the common case when `<p>Hello <span>world</span></p>` arrives in a single network chunk, and always the case for void/self-closing elements like `<img>`, `<br>`, `<svg/>`), the element is appended to `parsedElements` on the pending `childList` record that already holds it in `addedNodes`. Because every completed element appears in `parsedElements`, consumers that want to process parsed elements only need to iterate `r.parsedElements` without special-casing void elements.
 - **Cross-chunk coalescing:** When an element `<article>` opens in chunk 1 (`addedNodes: [article], parsedElements: []`, with `article.parsing === true`) and closes in chunk 2 (`</div></section></article>`), all elements that finished parsing in chunk 2 are coalesced into `parsedElements` (`[div, section, article]`) on the pending `childList` record for that chunk (or a single `childList` record with `addedNodes: [], removedNodes: [], parsedElements: [div, section, article]`).
 - **Non-mixing guarantee across `<template>` boundaries ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** `parsedElements` only coalesces into a pending record that shares the exact same `(target, parserContextElement, templateAttributes, templateStatus)`. Records initiated by a `<template>` never merge with records outside that `<template>` or from a different `<template>`.
-- **Void and self-closing elements (`<img>`, `<br>`, `<svg/>`):** Never pushed onto the stack of open elements; `el.parsing` is already `false` when they appear in `addedNodes`, so they do not appear in `parsedElements`.
 - **Elements disconnected mid-parse ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662)) or discarded by sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)):** If a script removes an open element from the observed tree before its closing tag is parsed, or if the parser's sanitizer configuration discards an element so it never enters the target tree, popping it from the stack of open elements does not emit it in `parsedElements` for observers of that tree.
 
 ### 2. Parser-consumed `<template>` elements (`templateAttributes` & `templateStatus`)
@@ -255,9 +254,9 @@ We considered separate opt-in booleans for element completion vs. template metad
 - Unlike `type: "attributes"` (where `attributeFilter` prevents waking up an observer for high-frequency `style`/`class` mutations), a `<template>` start tag is parsed once and typically carries only 1–3 attributes (`for`, `shadowrootmode`, `data-*`) that are shared across all records of that `<template>`.
 - Since `for` and `shadowrootmode` are themselves attributes on `<template>`, exposing all `<template>` attributes on `templateAttributes` under a single `parser: true` option eliminates three extra dictionary/interface members while unifying `<template for>` and `<template shadowrootmode>`.
 
-### 4. Including `Text`, `Comment`, `ProcessingInstruction`, and void elements in `parsedNodes`
+### 4. Including `Text`, `Comment`, and `ProcessingInstruction` in `parsedNodes`
 
-Comments, processing instructions, doctypes, and void/self-closing elements (`<img>`, `<br>`, `<svg/>`) are atomic tokens in the HTML parser: they are already 100% complete when inserted in `addedNodes`. Including them (and `Text` nodes) in `parsedNodes` added noise without providing new lifecycle information, so `parsedElements` is scoped strictly to non-void `Element`s popped from the stack of open elements.
+Comments, processing instructions, and doctypes are atomic non-element tokens in the HTML parser, and `Text` nodes already report streaming appends via `characterData` records. Including non-element nodes in `parsedNodes` added noise and required consumers to filter `node instanceof Element`, so `parsedElements` is scoped strictly to `Element`s.
 
 ### 5. Firing DOM Events (`parseend`, `templatestart`, `templateend`)
 
