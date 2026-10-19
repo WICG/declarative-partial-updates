@@ -1,25 +1,5 @@
 # Explainer: Parser-Aware `MutationObserver` Records
 
-## Participate
-
-- **Declarative partial updates & `<template for>` reflection**:
-  - [whatwg/html#13008](https://github.com/whatwg/html/issues/13008) — Reflection of `<template for>` in `MutationObserver`
-  - [WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110) — Expose `<template for>` lifecycle events and timing
-  - [WICG/declarative-partial-updates#104](https://github.com/WICG/declarative-partial-updates/issues/104) — Failure semantics when a response ends before a streamed `<template for>` patch is closed
-  - [WICG/declarative-partial-updates#103](https://github.com/WICG/declarative-partial-updates/issues/103) — Preserving user-modified form/focus state when a patch replaces a containing range
-  - [WICG/declarative-partial-updates#21](https://github.com/WICG/declarative-partial-updates/issues/21) & [#26](https://github.com/WICG/declarative-partial-updates/pull/26) — Reflection & timing of patch status
-  - [whatwg/html#11818](https://github.com/whatwg/html/pull/11818) & [#13075](https://github.com/whatwg/html/issues/13075) — `<template for>` HTML parser specification and interaction with `shadowrootmode`
-- **Element parse completion & streaming state**:
-  - [whatwg/dom#662](https://github.com/whatwg/dom/issues/662) — Custom element callback/promise for "connected and parsed"
-  - [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809), [#619](https://github.com/WICG/webcomponents/issues/619), [#550](https://github.com/WICG/webcomponents/issues/550), & [whatwg/html#2235](https://github.com/whatwg/html/issues/2235) — Callbacks/notifications when the HTML parser finishes parsing an element's children
-  - [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) & [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578) — Reflecting whether an element is open on the parser stack (`isParsingChildren` / `:parsing`)
-- **Streaming HTML insertion, parser text batching, & Shadow DOM observation**:
-  - [whatwg/html#12758](https://github.com/whatwg/html/pull/12758), [#12753](https://github.com/whatwg/html/pull/12753), [#12624](https://github.com/whatwg/html/pull/12624), & [#12756](https://github.com/whatwg/html/pull/12756) — Streaming HTML insertion (`streamHTML*`), positional HTML insertion, direct fragment root insertion, and sanitizing while parsing
-  - [whatwg/html#12744](https://github.com/whatwg/html/issues/12744) — Parser `Text` node data modification and `MutationObserver` batching
-  - [whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287) & [#1439](https://github.com/whatwg/dom/issues/1439) — Observing shadow root attachment (especially Declarative Shadow DOM, which bypasses `Element.prototype.attachShadow()`)
-
----
-
 ## Introduction
 
 `MutationObserver` was designed to observe low-level DOM tree operations (node insertions, node removals, character data modifications, and attribute changes). However, when the **HTML parser** constructs or updates a DOM tree—especially across streaming network chunks, declarative partial updates (`<template for>`), declarative Shadow DOM (`<template shadowrootmode>`), or streaming fragment APIs (`element.streamHTML()`)—critical parser state is invisible in the resulting `MutationRecord`s:
@@ -29,6 +9,26 @@
 3. **Fragment parsing context (`parserContextElement`)**: When markup is parsed as a fragment (`streamHTML*`, `setHTML*`, `innerHTML`, or `<template for>` with a context element), the parser's `fragment context element` is lost once mutations land on descendant nodes.
 
 This explainer proposes a single opt-in (`{ parser: true }` on `MutationObserverInit`) that surfaces these three pieces of parser state directly on `MutationRecord`, along with a companion `Element.parsing` property and `parseEndCallback()` custom element reaction.
+
+---
+
+## Prior Discussions
+
+- **Element parse completion & streaming state**:
+  - [whatwg/dom#662](https://github.com/whatwg/dom/issues/662) — Custom element callback/promise for "connected and parsed"
+  - [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809), [#619](https://github.com/WICG/webcomponents/issues/619), [#550](https://github.com/WICG/webcomponents/issues/550), & [whatwg/html#2235](https://github.com/whatwg/html/issues/2235) — Callbacks/notifications when the HTML parser finishes parsing an element's children
+  - [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) & [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578) — Reflecting whether an element is open on the parser stack (`isParsingChildren` / `:parsing`)
+- **Declarative partial updates & `<template for>` reflection**:
+  - [whatwg/html#13008](https://github.com/whatwg/html/issues/13008) — Reflection of `<template for>` in `MutationObserver`
+  - [WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110) — Expose `<template for>` lifecycle events and timing
+  - [WICG/declarative-partial-updates#104](https://github.com/WICG/declarative-partial-updates/issues/104) — Failure semantics when a response ends before a streamed `<template for>` patch is closed
+  - [WICG/declarative-partial-updates#103](https://github.com/WICG/declarative-partial-updates/issues/103) — Preserving user-modified form/focus state when a patch replaces a containing range
+  - [WICG/declarative-partial-updates#21](https://github.com/WICG/declarative-partial-updates/issues/21) & [#26](https://github.com/WICG/declarative-partial-updates/pull/26) — Reflection & timing of patch status
+  - [whatwg/html#11818](https://github.com/whatwg/html/pull/11818) & [#13075](https://github.com/whatwg/html/issues/13075) — `<template for>` HTML parser specification and interaction with `shadowrootmode`
+- **Streaming HTML insertion, parser text batching, & Shadow DOM observation**:
+  - [whatwg/html#12758](https://github.com/whatwg/html/pull/12758), [#12753](https://github.com/whatwg/html/pull/12753), [#12624](https://github.com/whatwg/html/pull/12624), & [#12756](https://github.com/whatwg/html/pull/12756) — Streaming HTML insertion (`streamHTML*`), positional HTML insertion, direct fragment root insertion, and sanitizing while parsing
+  - [whatwg/html#12744](https://github.com/whatwg/html/issues/12744) — Parser `Text` node data modification and `MutationObserver` batching
+  - [whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287) & [#1439](https://github.com/whatwg/dom/issues/1439) — Observing shadow root attachment (especially Declarative Shadow DOM, which bypasses `Element.prototype.attachShadow()`)
 
 ---
 
