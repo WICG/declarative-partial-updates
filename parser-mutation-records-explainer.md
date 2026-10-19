@@ -264,10 +264,72 @@ Dispatching synchronous or queued DOM events for every parsed element during HTM
 
 ---
 
-## Accessibility, Internationalization, Privacy, and Security Considerations
+## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
 
-- **Security & Privacy:**
-  - All information surfaced by `parser: true` (`parsedElements`, `<template>` attributes, `templateStatus`, and `parserContextElement`) originates from markup being parsed into a DOM subtree that the caller already has reference access to observe.
-  - **Closed Shadow Roots (`<template shadowrootmode="closed">`):** `addedNodes` on the host record only exposes the `ShadowRoot` when `shadowrootmode` is `"open"`. For `"closed"`, `addedNodes` remains empty so closed shadow roots are never leaked to observers of the outer tree.
-  - **Sanitize-while-parsing ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)) & CSP nonces ([WICG/declarative-partial-updates#111](https://github.com/WICG/declarative-partial-updates/issues/111)):** When safe HTML parsing (`setHTML()`, `streamHTML()`) strips disallowed attributes or blocks a `<template>`, `templateAttributes` only reflects attributes that survived the parser's sanitizer configuration, and any `nonce` attribute on `<template>` follows standard cryptographic nonce stripping so it is not exposed in `templateAttributes`.
-- **Accessibility & Internationalization:** No direct impact; enables frameworks and polyfills to reliably upgrade custom components and assistive patterns as soon as their light-DOM children finish streaming.
+1. **What information does this feature expose, and for what purposes?**
+   It does not expose new user or cross-origin information. All information surfaced by `parser: true` (`parsedElements`, `<template>` attributes on `templateAttributes`, `templateStatus`, and `parserContextElement`) originates from HTML markup being parsed into a DOM subtree that the caller already has a reference to observe.
+
+2. **Do features in your specification expose the minimum amount of information necessary to implement the intended functionality?**
+   Yes:
+   - **Closed Shadow Roots (`<template shadowrootmode="closed">`):** `addedNodes` on the shadow host record only exposes the `ShadowRoot` when `shadowrootmode` is `"open"`. For `"closed"`, `addedNodes` remains empty so closed shadow roots are never leaked to observers of the outer tree.
+   - **Sanitize-while-parsing ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)) & CSP nonces ([WICG/declarative-partial-updates#111](https://github.com/WICG/declarative-partial-updates/issues/111)):** When safe HTML parsing (`setHTML()`, `streamHTML()`) strips disallowed attributes or blocks a `<template>`, `templateAttributes` only reflects attributes that survived the parser's sanitizer configuration, and any `nonce` attribute on `<template>` follows standard cryptographic nonce stripping so it is not exposed in `templateAttributes`.
+
+3. **Do the features in your specification expose personal information, personally-identifiable information (PII), or information derived from either?**
+   No.
+
+4. **How do the features in your specification deal with sensitive information?**
+   N/A.
+
+5. **Does data exposed by your specification carry related but distinct information that may not be obvious to users?**
+   No.
+
+6. **Do the features in your specification introduce state that persists across browsing sessions?**
+   No.
+
+7. **Do the features in your specification expose information about the underlying platform to origins?**
+   No.
+
+8. **Does this specification allow an origin to send data to the underlying platform?**
+   No.
+
+9. **Do features in this specification enable access to device sensors?**
+   No.
+
+10. **Do features in this specification enable new script execution/loading mechanisms?**
+    No. `MutationObserver` callbacks continue to run at the standard microtask checkpoint, and custom element `parseEndCallback()` reactions run via the standard custom element reaction queue.
+
+11. **Do features in this specification allow an origin to access other devices?**
+    No.
+
+12. **Do features in this specification allow an origin some measure of control over a user agent's native UI?**
+    No.
+
+13. **What temporary identifiers do the features in this specification create or expose to the web?**
+    N/A.
+
+14. **How does this specification distinguish between behavior in first-party and third-party contexts?**
+    N/A (same-origin DOM observation only).
+
+15. **How do the features in this specification work in the context of a browser’s Private Browsing or Incognito mode?**
+    Identically to normal browsing mode; no state is persisted.
+
+16. **Does this specification have both "Security Considerations" and "Privacy Considerations" sections?**
+    It is intended to be integrated into the WHATWG DOM and HTML Standards.
+
+17. **Do features in your specification enable origins to downgrade default security protections?**
+    No.
+
+18. **What happens when a document that uses your feature is kept alive in BFCache (instead of getting destroyed) after navigation, and potentially gets reused on future navigations back to the document?**
+    Nothing special beyond existing `MutationObserver` behavior.
+
+19. **What happens when a document that uses your feature gets disconnected?**
+    If an observed element is disconnected from the tree while still open on the parser stack, popping it from the stack of open elements does not emit it in `parsedElements` for observers of the outer tree.
+
+20. **Does your spec define when and how new kinds of errors should be raised?**
+    Parser-aborted `<template>` operations (such as EOF before `</template>`, missing target markers, or failed declarative shadow root attachment) are surfaced via `templateStatus: "abort"` on the `MutationRecord` rather than throwing exceptions.
+
+21. **Does your feature allow sites to learn about the user's use of assistive technology?**
+    No.
+
+22. **What should this questionnaire have asked?**
+    Nothing.
