@@ -148,6 +148,42 @@ To prevent Flash of Unstyled Content (FOUC) or layout shifts caused by subresour
 3. **Atomic Commit:** The DocumentFragment is committed to the DOM in a single atomic update only after all registered preloads/modulepreloads have finished loading (or failed). Since critical stylesheets are already loaded in the memory cache, the subsequently parsed `<link rel="stylesheet">` applies immediately without layout jank.
 4. **Non-Parser Blocking:** The main document parser continues to parse and render content *after* the `</template>` element concurrently. Only the insertion of the template's own buffer is suspended.
 
+### Avoiding Layout Shifts
+
+Because `<template src>` is non-parser-blocking, the main document parser continues past an include and renders subsequent content (`<main>`, `<footer>`). When an above-the-fold fragment arrives later and inserts content into `<body>`, it can push already-rendered elements down and cause Cumulative Layout Shift (CLS). Furthermore, once the HTML parser has entered `<body>`, it is too late for elements inside `<body>` to initiate document-level render-blocking.
+
+To prevent layout shifts from critical above-the-fold includes without making `<template src>` parser-blocking, authors can combine `<link rel="expect">` in `<head>` with buffered templates and CSS space reservation:
+
+#### 1. Render-blocking on fragment elements via `<link rel="expect">`
+HTML's existing `<link rel="expect" href="#id" blocking="render">` in `<head>` blocks initial rendering until the element with the matching `id` is connected and fully parsed.
+
+To work seamlessly with asynchronous `<template src>` includes, `rel="expect"` is extended so that if the target `#id` has not yet been found when the main document parser reaches EOF, the render block remains active while any `<template src>` includes are still pending—unblocking as soon as `#id` is inserted and finishes parsing (or when all pending includes complete, or the user agent's render-blocking timeout expires):
+
+```html
+<!doctype html>
+<html>
+  <head>
+    <!-- Hold first paint until #site-header (inside header.html) is parsed -->
+    <link rel="expect" href="#site-header" blocking="render">
+  </head>
+  <body>
+    <template src="header.html" for></template>
+    <main>Main content (parsed concurrently, painted together with #site-header)</main>
+  </body>
+</html>
+```
+
+#### 2. Variations for `<head>`-level coordination
+- **Expecting / preloading a specific fragment URL in `<head>` (`<link rel="expect" href="header.html" blocking="render">` or `<link rel="preload" href="header.html" as="document" blocking="render">`):**
+  Wait on a specific fragment resource rather than an internal `#id`. Declaring the fragment URL in `<head>` allows the browser to both start fetching `header.html` immediately (before the parser reaches `<template src="header.html">` in `<body>`) and scope the render block strictly to that fragment—avoiding the pitfall where a missing `#id` (e.g., due to a 404 or conditional markup) causes `<link rel="expect" href="#id">` to wait on unrelated, slow below-the-fold `<template src>` includes.
+- **Placing targeted `<template for="slot" src="..." blocking="render">` in `<head>`:**
+  While in-place includes (`<template for src="...">`) must sit inside `<body>`, a *targeted* include (`<template for="header-slot" src="header.html">`) is valid in `<head>`. Placing it in `<head>` allows it to initiate the fetch early and participate in `<head>` render-blocking before `<body>` is seen, streaming or buffering its result into `<?start name="header-slot">...<?end>` once the parser reaches `<body>`.
+
+#### 3. CSS space reservation and `<template buffer>` (non-render-blocking)
+For non-critical or below-the-fold fragments that should not hold back first paint, authors can avoid layout shifts by:
+- Reserving layout dimensions on the target container (via `min-height`, `aspect-ratio`, or `contain-intrinsic-size`) or placing skeleton placeholder markup inside `<?start name="...">...<?end>`.
+- Combining size reservation with `<template buffer>` (and inline `<link rel="preload">` for fragment stylesheets) so the placeholder is swapped for the fully styled fragment in a single atomic frame.
+
 ### Security & Sanitization
 
 Security safety is configured via the `sanitize` attribute, which accepts either an empty value (`sanitize` or `sanitize=""`) or `sanitize="unsafe"`.
