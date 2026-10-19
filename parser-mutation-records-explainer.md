@@ -8,7 +8,7 @@
 2. **Parser-consumed `<template>` elements (`templateAttributes` & `templateStatus`)**: `<template for>` and `<template shadowrootmode>` are pushed onto the parser's stack of open elements and redirect their parsed contents into a target container without the `<template>` itself ever entering the DOM tree.
 3. **Fragment parsing context (`parserContextElement`)**: When markup is parsed as a fragment (`streamHTML*`, `setHTML*`, `innerHTML`, or `<template for>` with a context element), the parser's `fragment context element` is lost once mutations land on descendant nodes.
 
-This explainer proposes a single opt-in (`{ parser: true }` on `MutationObserverInit`) that surfaces these three pieces of parser state directly on `MutationRecord`, along with a companion `Element.parsing` property and `parseEndCallback()` custom element reaction.
+This explainer proposes a single opt-in (`{ parser: true }` on `MutationObserverInit`) that surfaces these three pieces of parser state directly on `MutationRecord`, along with a companion `Element.isParsing` property and custom element reactions (`parseEndCallback()` and `shadowRootAttachedCallback()`).
 
 ---
 
@@ -56,7 +56,7 @@ mo.observe(document, { childList: true, subtree: true });
 
 Developers today resort to fragile heuristics—checking whether `node.nextSibling` exists ([WebReflection/html-parsed-element](https://github.com/WebReflection/html-parsed-element)) or polling `requestAnimationFrame`—which fail for the last child of a container, for slow network streams ([whatwg/html#13008](https://github.com/whatwg/html/issues/13008)), and for streaming fragment APIs (`streamHTML`), while adding hundreds of milliseconds of CPU overhead on medium-sized documents ([patricknelson/svelte-retag#20](https://github.com/patricknelson/svelte-retag/issues/20#issuecomment-1848262955)).
 
-While [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) (`Element.parsing` / `isParsingChildren`) and [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578) (`:parsing`) let code synchronously query or style an element *while* it is on the parser's stack of open elements, authors also need an asynchronous notification **when** that state transitions from `true` to `false` ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809)).
+While [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) (`Element.isParsing` / `isParsingChildren`) and [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578) (`:parsing`) let code synchronously query or style an element *while* it is on the parser's stack of open elements, authors also need an asynchronous notification **when** that state transitions from `true` to `false` ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809)).
 
 ### Problem 2: `<template for>` and `<template shadowrootmode>` are invisible to observers
 
@@ -160,6 +160,14 @@ partial interface MutationRecord {
   readonly attribute NamedNodeMap? templateAttributes;
   readonly attribute Element? parserContextElement;
 };
+
+partial interface Element {
+  readonly attribute boolean isParsing;
+};
+
+partial interface ShadowRoot {
+  readonly attribute boolean isParsing;
+};
 ```
 
 ### 1. Element completion and coalescing (`parsedElements`)
@@ -167,7 +175,7 @@ partial interface MutationRecord {
 Every parser-inserted `Element` appears in `parsedElements` once the parser finishes parsing it (when popped from the stack of open elements via an explicit end tag, an implied end tag, or parser termination, or immediately after insertion for void and self-closing foreign elements):
 
 - **Same-chunk coalescing (zero extra records):** When an element opens *and* closes before the observer's record queue is flushed (the common case when `<p>Hello <span>world</span></p>` arrives in a single network chunk, and always the case for void/self-closing elements like `<img>`, `<br>`, `<svg/>`), the element is appended to `parsedElements` on the pending `childList` record that already holds it in `addedNodes`. Because every completed element appears in `parsedElements`, consumers that want to process parsed elements only need to iterate `r.parsedElements` without special-casing void elements.
-- **Cross-chunk coalescing:** `record.target` is always the parent of the elements in `parsedElements` (just as for `addedNodes`). When an element `<article>` opens in chunk 1 (`addedNodes: [article], parsedElements: []`, with `article.parsing === true`) and closes in chunk 2, it is appended to `parsedElements` on the pending `childList` record for `article.parentNode` in chunk 2 (or a `childList` record on `article.parentNode` with `addedNodes: [], removedNodes: [], parsedElements: [article]`), coalescing with any sibling elements under the same parent that also finished parsing in that chunk.
+- **Cross-chunk coalescing:** `record.target` is always the parent of the elements in `parsedElements` (just as for `addedNodes`). When an element `<article>` opens in chunk 1 (`addedNodes: [article], parsedElements: []`, with `article.isParsing === true`) and closes in chunk 2, it is appended to `parsedElements` on the pending `childList` record for `article.parentNode` in chunk 2 (or a `childList` record on `article.parentNode` with `addedNodes: [], removedNodes: [], parsedElements: [article]`), coalescing with any sibling elements under the same parent that also finished parsing in that chunk.
 - **Non-mixing guarantee across `<template>` boundaries ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** `parsedElements` only coalesces into a pending record that shares the exact same `(target, parserContextElement, templateAttributes, templateStatus)`. Records initiated by a `<template>` never merge with records outside that `<template>` or from a different `<template>`.
 - **Elements disconnected mid-parse ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662)) or discarded by sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)):** If a script removes an open element from the observed tree before its closing tag is parsed, or if the parser's sanitizer configuration discards an element so it never enters the target tree, popping it from the stack of open elements does not emit it in `parsedElements` for observers of that tree.
 
@@ -212,24 +220,32 @@ When `<template for="r" data-turn="3"><p>Hi</p></template>` targets a single `<s
 
 *(Observers that did not specify `parser: true` never receive record #1 or any other record whose `addedNodes` and `removedNodes` are both empty.)*
 
-### 3. Fragment parsing context (`parserContextElement`)
+### 3. Fragment parsing context (`parserContextElement`) and `Element.isParsing`
 
 When the HTML parser runs with a `fragment context element`—such as `el.streamHTML()`, `el.streamAppendHTML()`, `child.streamAfterHTML()`, `el.setHTML()`, `el.innerHTML`, or a `<template for>` with a context element—every record produced by that parser has `parserContextElement` set to that `Element`. For top-level document parsing with no fragment context element, `parserContextElement` is `null`.
 
-### 4. Companion for Custom Elements ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662))
+`Element.isParsing` (and `ShadowRoot.isParsing`) reflects whether an HTML parser is actively parsing into the node: it is `true` both while an element is on a parser's stack of open elements *and* while a streaming fragment parser (`streamHTML*`) with that element as its `fragment context element` is alive (until the stream closes or aborts).
 
-Because custom elements already use lifecycle callbacks rather than `MutationObserver`, the same parser hook powers `Element.parsing` (and `ShadowRoot.parsing`) plus a `parseEndCallback()` custom element reaction:
+### 4. Companion for Custom Elements ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287))
+
+Because custom elements already use lifecycle callbacks rather than `MutationObserver`, the same parser hooks power `Element.isParsing` (and `ShadowRoot.isParsing`) plus two custom element reactions—`parseEndCallback()` and `shadowRootAttachedCallback(shadowRoot)`:
+
+- `parseEndCallback()` is enqueued when the custom element finishes parsing (either when its end tag is popped from the parser's stack of open elements, or when a streaming fragment parser targeting the custom element as its `fragment context element` finishes).
+- `shadowRootAttachedCallback(shadowRoot)` is enqueued when a `ShadowRoot` is attached to the custom element—whether declaratively via `<template shadowrootmode>` (before the shadow root's children are parsed, while `shadowRoot.isParsing` is `true`) or imperatively via `attachShadow()`.
 
 ```js
 class MyWidget extends HTMLElement {
   connectedCallback() {
-    if (!this.parsing) this.#initialize();
+    if (!this.isParsing) this.#initialize();
+  }
+  shadowRootAttachedCallback(shadowRoot) {
+    // Invoked for both <template shadowrootmode> and attachShadow()
   }
   parseEndCallback() {
     this.#initialize();
   }
   #initialize() {
-    // Safe to inspect this.children and this.textContent
+    // Safe to inspect this.children, this.shadowRoot, and this.textContent
   }
 }
 ```
@@ -332,7 +348,7 @@ Today, `observe(target, options)` throws a `TypeError` unless at least one of `c
    No.
 
 10. **Do features in this specification enable new script execution/loading mechanisms?**
-    No. `MutationObserver` callbacks continue to run at the standard microtask checkpoint, and custom element `parseEndCallback()` reactions run via the standard custom element reaction queue.
+    No. `MutationObserver` callbacks continue to run at the standard microtask checkpoint, and custom element `parseEndCallback()` and `shadowRootAttachedCallback()` reactions run via the standard custom element reaction queue.
 
 11. **Do features in this specification allow an origin to access other devices?**
     No.
