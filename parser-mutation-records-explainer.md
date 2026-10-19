@@ -1,0 +1,274 @@
+# Explainer: Parser-Aware `MutationObserver` Records
+
+## Participate
+
+- **Declarative partial updates & `<template for>` reflection**:
+  - [whatwg/html#13008](https://github.com/whatwg/html/issues/13008) — Reflection of `<template for>` in `MutationObserver`
+  - [WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110) — Expose `<template for>` lifecycle events and timing
+  - [WICG/declarative-partial-updates#104](https://github.com/WICG/declarative-partial-updates/issues/104) — Failure semantics when a response ends before a streamed `<template for>` patch is closed
+  - [WICG/declarative-partial-updates#103](https://github.com/WICG/declarative-partial-updates/issues/103) — Preserving user-modified form/focus state when a patch replaces a containing range
+  - [WICG/declarative-partial-updates#21](https://github.com/WICG/declarative-partial-updates/issues/21) & [#26](https://github.com/WICG/declarative-partial-updates/pull/26) — Reflection & timing of patch status
+  - [whatwg/html#11818](https://github.com/whatwg/html/pull/11818) & [#13075](https://github.com/whatwg/html/issues/13075) — `<template for>` HTML parser specification and interaction with `shadowrootmode`
+- **Element parse completion & streaming state**:
+  - [whatwg/dom#662](https://github.com/whatwg/dom/issues/662) — Custom element callback/promise for "connected and parsed"
+  - [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809), [#619](https://github.com/WICG/webcomponents/issues/619), [#550](https://github.com/WICG/webcomponents/issues/550), & [whatwg/html#2235](https://github.com/whatwg/html/issues/2235) — Callbacks/notifications when the HTML parser finishes parsing an element's children
+  - [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) & [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578) — Reflecting whether an element is open on the parser stack (`isParsingChildren` / `:parsing`)
+- **Streaming HTML insertion, parser text batching, & Shadow DOM observation**:
+  - [whatwg/html#12758](https://github.com/whatwg/html/pull/12758), [#12753](https://github.com/whatwg/html/pull/12753), [#12624](https://github.com/whatwg/html/pull/12624), & [#12756](https://github.com/whatwg/html/pull/12756) — Streaming HTML insertion (`streamHTML*`), positional HTML insertion, direct fragment root insertion, and sanitizing while parsing
+  - [whatwg/html#12744](https://github.com/whatwg/html/issues/12744) — Parser `Text` node data modification and `MutationObserver` batching
+  - [whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287) & [#1439](https://github.com/whatwg/dom/issues/1439) — Observing shadow root attachment (especially Declarative Shadow DOM, which bypasses `Element.prototype.attachShadow()`)
+
+---
+
+## Introduction
+
+`MutationObserver` was designed to observe low-level DOM tree operations (node insertions, node removals, character data modifications, and attribute changes). However, when the **HTML parser** constructs or updates a DOM tree—especially across streaming network chunks, declarative partial updates (`<template for>`), declarative Shadow DOM (`<template shadowrootmode>`), or streaming fragment APIs (`element.streamHTML()`)—critical parser state is invisible in the resulting `MutationRecord`s:
+
+1. **Element completion (`parsedElements`)**: `addedNodes` reports a non-void element as soon as its *start tag* is parsed, when its subtree is still empty or half-streamed. No record is queued when its *end tag* is parsed.
+2. **Parser-consumed `<template>` elements (`templateAttributes` & `templateStatus`)**: `<template for>` and `<template shadowrootmode>` are pushed onto the parser's stack of open elements and redirect their parsed contents into a target container without the `<template>` itself ever entering the DOM tree.
+3. **Fragment parsing context (`parserContextElement`)**: When markup is parsed as a fragment (`streamHTML*`, `setHTML*`, `innerHTML`, or `<template for>` with a context element), the parser's `fragment context element` is lost once mutations land on descendant nodes.
+
+This explainer proposes a single opt-in (`{ parser: true }` on `MutationObserverInit`) that surfaces these three pieces of parser state directly on `MutationRecord`, along with a companion `Element.parsing` property and `parseEndCallback()` custom element reaction.
+
+---
+
+## User-Facing Problem
+
+### Problem 1: `addedNodes` fires on the start tag, before children are parsed
+
+When the HTML parser parses `<article><h1>Title</h1><p>Body</p></article>`, it inserts `<article>` into its parent as soon as the `<article>` start tag token is processed. If a network chunk boundary or microtask checkpoint occurs before `</article>` arrives, a `MutationObserver` receives `<article>` in `addedNodes` while its children are incomplete or missing:
+
+```js
+// Today: broken when HTML streams across chunks
+const mo = new MutationObserver(records => {
+  for (const r of records) {
+    for (const node of r.addedNodes) {
+      if (node instanceof HTMLElement && node.matches("article")) {
+        // BUG: <article> was just opened by the parser!
+        // Its <h1> and <p> children may not have arrived from the network yet.
+        enhanceArticle(node);
+      }
+    }
+  }
+});
+mo.observe(document, { childList: true, subtree: true });
+```
+
+Developers today resort to fragile heuristics—checking whether `node.nextSibling` exists ([WebReflection/html-parsed-element](https://github.com/WebReflection/html-parsed-element)) or polling `requestAnimationFrame`—which fail for the last child of a container, for slow network streams ([whatwg/html#13008](https://github.com/whatwg/html/issues/13008)), and for streaming fragment APIs (`streamHTML`), while adding hundreds of milliseconds of CPU overhead on medium-sized documents ([patricknelson/svelte-retag#20](https://github.com/patricknelson/svelte-retag/issues/20#issuecomment-1848262955)).
+
+While [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) (`Element.parsing` / `isParsingChildren`) and [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578) (`:parsing`) let code synchronously query or style an element *while* it is on the parser's stack of open elements, authors also need an asynchronous notification **when** that state transitions from `true` to `false` ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809)).
+
+### Problem 2: `<template for>` and `<template shadowrootmode>` are invisible to observers
+
+Both declarative partial updates (`<template for="results">`, [whatwg/html#11818](https://github.com/whatwg/html/pull/11818)) and declarative Shadow DOM (`<template shadowrootmode="open">`, [whatwg/dom#831](https://github.com/whatwg/dom/issues/831)) use `<template>` tags as **parser instructions**: the parser creates the `<template>` element on its stack of open elements, redirects its parsed contents into a target (`<section>` or a new `ShadowRoot`), and discards the `<template>` when `</template>` is reached.
+
+Because the `<template>` element is never inserted into the DOM:
+- **For `<template for="results" data-turn="3">` ([whatwg/html#13008](https://github.com/whatwg/html/issues/13008), [WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110))**:
+  - An observer watching `<section>` sees fallback nodes removed and new nodes inserted, but has no way to know that these mutations came from `<template for="results">`, cannot read `data-turn="3"` from the `<template>`, and cannot correlate mutations belonging to the same patch across chunks.
+  - When a patch targets a single-point `<?marker name="r">` or is empty (`<template for="r"></template>`), the start of the patch removes zero nodes, producing no `MutationRecord` at all.
+  - When a streamed response ends at clean EOF before `</template>` arrives ([WICG/declarative-partial-updates#104](https://github.com/WICG/declarative-partial-updates/issues/104)), the parser removes the markers and reaches `document.readyState === "complete"`, making a truncated patch indistinguishable from a complete patch. Conversely, when a `<template for="missing">` fails to find its target marker, the parser falls back to inserting the inert `<template>` element with no error signal ([whatwg/html#11818](https://github.com/whatwg/html/pull/11818#issuecomment-3518721026)).
+  - Frameworks that need to preserve dirty form-control values or focus when a `<template for>` replaces a range ([WICG/declarative-partial-updates#103](https://github.com/WICG/declarative-partial-updates/issues/103)) cannot distinguish a parser patch replacement (`removedNodes` on `"start"`) from ordinary imperative DOM removals.
+- **For `<template shadowrootmode="open">` ([whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287))**:
+  - Attaching a declarative `ShadowRoot` does not call `Element.prototype.attachShadow()` and does not queue any `MutationRecord` on the host element. Polyfills, component auto-loaders, and DevTools/hydration observers watching `document` with `subtree: true` have no way to discover declarative shadow roots as they are attached and parsed.
+
+### Problem 3: Fragment parsing context is lost on descendant mutations
+
+When an application streams or inserts HTML into a container via `sidebar.streamAppendHTML(response.body)`, `row.streamAfterHTML(...)`, or `el.setHTML(...)` ([whatwg/html#12758](https://github.com/whatwg/html/pull/12758), [whatwg/html#12753](https://github.com/whatwg/html/pull/12753), [whatwg/html#12624](https://github.com/whatwg/html/pull/12624)), the HTML parser runs with a `fragment context element` (`sidebar` or `row.parentNode`). However, mutations inside nested elements of that stream have `record.target` set to the immediate parent (`<p>`, `<ul>`, etc.), leaving a document-level observer with no way to attribute those mutations to the `fragment context element` being streamed.
+
+### Goals
+
+- Allow `MutationObserver` consumers to know when parser-inserted elements have finished parsing (`</tag>`), without doubling `MutationRecord` count when elements open and close in the same chunk, and without incurring parser-to-DOM traffic when no `parser: true` observer is active ([w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578#issuecomment-3209456796)).
+- Expose the attributes (`for`, `shadowrootmode`, `data-*`, etc.), correlation identity, and lifecycle (`"start"`, `"update"`, `"end"`, `"abort"`) of parser-consumed `<template>` elements on the same `MutationRecord`s that carry their DOM mutations (both `childList` and parser-batched `characterData` records, [whatwg/html#12744](https://github.com/whatwg/html/issues/12744)).
+- Guarantee that records initiated by a `<template>` never coalesce with unrelated mutations or mutations from a different `<template>` ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)).
+- Allow document/subtree observers to discover newly attached declarative `ShadowRoot`s ([whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287)) and know when they finish parsing.
+- Expose the parser's `fragment context element` on records produced by fragment/streaming parsers.
+- Keep `MutationRecord` flat and preserve `MutationRecord.type` (`"attributes" | "characterData" | "childList"`).
+
+### Non-Goals
+
+- **Buffering `<template for>` or `<template shadowrootmode>` mutations until `</template>`**: Streaming into the target as bytes arrive is fundamental to both features; observers must see incremental progress across chunks.
+- **Tracking completion of non-element nodes (`Text`, `Comment`, `ProcessingInstruction`) or void elements (`<img>`, `<br>`)**: Atomic tokens are already complete when inserted in `addedNodes`.
+- **Replacing `PerformanceEntry` for sub-microtask RUM timing**: Observers can call `performance.mark()` in their callback to measure patch latency at microtask granularity ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)); if sub-microtask parser timestamps are needed in the future, a dedicated `PerformanceEntry` can be layered separately.
+
+---
+
+## Proposed Approach
+
+A single boolean option, `parser: true` in `MutationObserverInit`, opts an observer into four new readonly properties on `MutationRecord`:
+
+- `record.parsedElements`: A `NodeList` of non-void `Element`s that finished parsing (popped from the stack of open elements).
+- `record.templateAttributes`: A `NamedNodeMap?` containing the attributes of the active parser-consumed `<template>` (`<template for>` or `<template shadowrootmode>`), or `null`.
+- `record.templateStatus`: `"start" | "update" | "end" | "abort"`, or `null`.
+- `record.parserContextElement`: The parser's `fragment context element` (`Element?`), or `null`.
+
+### Example Usage
+
+```js
+const mo = new MutationObserver(records => {
+  for (const r of records) {
+    // 1. Act on elements only after their end tag has been parsed:
+    for (const el of r.parsedElements) {
+      if (el.matches("article")) enhanceArticle(el);
+    }
+
+    const attrs = r.templateAttributes;
+    if (!attrs) continue;
+
+    // 2. Discover and observe declarative Shadow DOM (<template shadowrootmode>):
+    const mode = attrs.getNamedItem("shadowrootmode")?.value;
+    if (mode && r.templateStatus === "start") {
+      const shadowRoot = r.addedNodes[0];
+      if (shadowRoot) {
+        mo.observe(shadowRoot, { childList: true, subtree: true, parser: true });
+      }
+    }
+
+    // 3. Track <template for> lifecycle and read custom attributes from the <template>:
+    const forTarget = attrs.getNamedItem("for")?.value;
+    if (forTarget) {
+      const turn = attrs.getNamedItem("data-turn")?.value;
+      switch (r.templateStatus) {
+        case "start":  onPatchStart(r.target, forTarget, turn); break;
+        case "update": if (r.type === "childList") onPatchNodes(r.addedNodes, turn); break;
+        case "end":    onPatchEnd(r.target, forTarget, turn); break;
+        case "abort":  onPatchAbort(r.target, forTarget, turn); break;
+      }
+    }
+  }
+});
+
+mo.observe(document, {
+  subtree: true,
+  childList: true,
+  characterData: true,
+  parser: true,
+});
+```
+
+### Web IDL
+
+```webidl
+partial dictionary MutationObserverInit {
+  boolean parser = false;
+};
+
+enum TemplateStatus { "start", "update", "end", "abort" };
+
+partial interface MutationRecord {
+  [SameObject] readonly attribute NodeList parsedElements;
+  readonly attribute TemplateStatus? templateStatus;
+  readonly attribute NamedNodeMap? templateAttributes;
+  readonly attribute Element? parserContextElement;
+};
+```
+
+### 1. Element completion and coalescing (`parsedElements`)
+
+Only non-void `Element`s pushed onto the parser's stack of open elements appear in `parsedElements` when popped (via an explicit end tag, an implied end tag, or parser termination):
+
+- **Same-chunk coalescing (zero extra records):** When an element opens *and* closes before the observer's record queue is flushed (the common case when `<p>Hello <span>world</span></p>` arrives in a single network chunk), the element is appended to `parsedElements` on the pending `childList` record that already holds it in `addedNodes`.
+- **Cross-chunk coalescing:** When an element `<article>` opens in chunk 1 (`addedNodes: [article], parsedElements: []`, with `article.parsing === true`) and closes in chunk 2 (`</div></section></article>`), all elements that finished parsing in chunk 2 are coalesced into `parsedElements` (`[div, section, article]`) on the pending `childList` record for that chunk (or a single `childList` record with `addedNodes: [], removedNodes: [], parsedElements: [div, section, article]`).
+- **Non-mixing guarantee across `<template>` boundaries ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** `parsedElements` only coalesces into a pending record that shares the exact same `(target, parserContextElement, templateAttributes, templateStatus)`. Records initiated by a `<template>` never merge with records outside that `<template>` or from a different `<template>`.
+- **Void and self-closing elements (`<img>`, `<br>`, `<svg/>`):** Never pushed onto the stack of open elements; `el.parsing` is already `false` when they appear in `addedNodes`, so they do not appear in `parsedElements`.
+- **Elements disconnected mid-parse ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662)) or discarded by sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)):** If a script removes an open element from the observed tree before its closing tag is parsed, or if the parser's sanitizer configuration discards an element so it never enters the target tree, popping it from the stack of open elements does not emit it in `parsedElements` for observers of that tree.
+
+### 2. Parser-consumed `<template>` elements (`templateAttributes` & `templateStatus`)
+
+Whenever the HTML parser processes a `<template for>` or `<template shadowrootmode>` element:
+
+| Phase | `<template for="r">` | `<template shadowrootmode="open">` |
+|---|---|---|
+| **`"start"`** | Record on the patch target removing `<?start>` and fallback nodes (or empty `addedNodes`/`removedNodes` if targeting `<?marker>`, with `nextSibling: <?marker>`). | Record on the shadow host with `addedNodes: [shadowRoot]`. |
+| **`"update"`** | All `childList` and parser-flushed `characterData` records ([whatwg/html#12744](https://github.com/whatwg/html/issues/12744)) performed inside the patch. | All `childList` and `characterData` records performed inside `shadowRoot` (for observers observing `shadowRoot`). |
+| **`"end"`** | Record on the patch target removing `<?end>` or `<?marker>` when `</template>` is reached (plus any `parsedElements` that closed at `</template>`). | Record on the shadow host when `</template>` is reached. |
+| **`"abort"`** | Record on the patch target if EOF or `writer.abort()` occurs before `</template>` ([WICG/declarative-partial-updates#104](https://github.com/WICG/declarative-partial-updates/issues/104)) or if a script displaces the target marker mid-stream ([whatwg/html#11818](https://github.com/whatwg/html/pull/11818)); or on the fallback `<template>` insertion record if the target marker was not found at `<template>` start. | Record on the shadow host if EOF or `writer.abort()` occurs before `</template>`, or on the fallback `<template>` insertion record if attaching the shadow root failed ([whatwg/html#13075](https://github.com/whatwg/html/issues/13075)). |
+
+- **Per-attempt correlation identity ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** All `"start"`, `"update"`, and `"end"`/`"abort"` records generated by a single `<template>` invocation return the **same `NamedNodeMap` instance** (`r1.templateAttributes === r2.templateAttributes`). Observers can correlate all records of a patch attempt by object identity (`===` / `WeakMap`) even when the author did not include a unique `id` or `data-*` attribute on the `<template>`.
+- **Empty patches (`<template for="r"></template>`):** Still emit both `"start"` (when `<template for="r">` is opened) and `"end"` (when `</template>` removes `<?end>` or `<?marker>`), satisfying the terminal-record requirement in [WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110) even when zero replacement nodes are inserted.
+
+#### Walkthrough A: `<template for>` across two network chunks
+
+Given `<section><?start name="r">Loading…<?end></section>`, when `main.streamAppendHTML(...)` receives chunk 1 (`<template for="r" data-turn="3"><p>H`) followed by chunk 2 (`i<span>!</span></p></template>`):
+
+| # | Chunk | `type` | `target` | `removedNodes` | `addedNodes` | `parsedElements` | `templateAttributes` | `templateStatus` | `parserContextElement` |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 1 | `childList` | `<section>` | `[<?start>, "Loading…"]` | `[]` | `[]` | `[for="r", data-turn="3"]` | `"start"` | `<main>` |
+| 2 | 1 | `childList` | `<section>` | `[]` | `[<p>]` | `[]` | `[for="r", data-turn="3"]` | `"update"` | `<main>` |
+| 3 | 1 | `childList` | `<p>` | `[]` | `["H"]` | `[]` | `[for="r", data-turn="3"]` | `"update"` | `<main>` |
+| 4 | 2 | `characterData` | `"Hi"` | `[]` | `[]` | `[]` | `[for="r", data-turn="3"]` | `"update"` | `<main>` |
+| 5 | 2 | `childList` | `<p>` | `[]` | `[<span>]` | `[<span>]` | `[for="r", data-turn="3"]` | `"update"` | `<main>` |
+| 6 | 2 | `childList` | `<span>` | `[]` | `["!"]` | `[]` | `[for="r", data-turn="3"]` | `"update"` | `<main>` |
+| 7 | 2 | `childList` | `<section>` | `[<?end>]` | `[]` | `[<p>]` | `[for="r", data-turn="3"]` | `"end"` | `<main>` |
+
+#### Walkthrough B: Records when `addedNodes` and `removedNodes` are empty (e.g. `<?marker>`)
+
+When `<template for="r" data-turn="3"><p>Hi</p></template>` targets a single `<section><?marker name="r"></section>`, no nodes are removed at `<template>` start because `<?marker>` remains in place as the insertion point until `</template>` removes it:
+
+| # | `type` | `target` | `removedNodes` | `addedNodes` | `parsedElements` | `nextSibling` | `templateAttributes` | `templateStatus` |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `childList` | `<section>` | `[]` | `[]` | `[]` | `<?marker>` | `[for="r", data-turn="3"]` | `"start"` |
+| 2 | `childList` | `<section>` | `[]` | `[<p>]` | `[<p>]` | `<?marker>` | `[for="r", data-turn="3"]` | `"update"` |
+| 3 | `childList` | `<p>` | `[]` | `["Hi"]` | `[]` | `null` | `[for="r", data-turn="3"]` | `"update"` |
+| 4 | `childList` | `<section>` | `[<?marker>]` | `[]` | `[]` | `null` | `[for="r", data-turn="3"]` | `"end"` |
+
+*(Observers that did not specify `parser: true` never receive record #1 or any other record whose `addedNodes` and `removedNodes` are both empty.)*
+
+### 3. Fragment parsing context (`parserContextElement`)
+
+When the HTML parser runs with a `fragment context element`—such as `el.streamHTML()`, `el.streamAppendHTML()`, `child.streamAfterHTML()`, `el.setHTML()`, `el.innerHTML`, or a `<template for>` with a context element—every record produced by that parser has `parserContextElement` set to that `Element`. For top-level document parsing with no fragment context element, `parserContextElement` is `null`.
+
+### 4. Companion for Custom Elements ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662))
+
+Because custom elements already use lifecycle callbacks rather than `MutationObserver`, the same parser hook powers `Element.parsing` (and `ShadowRoot.parsing`) plus a `parseEndCallback()` custom element reaction:
+
+```js
+class MyWidget extends HTMLElement {
+  connectedCallback() {
+    if (!this.parsing) this.#initialize();
+  }
+  parseEndCallback() {
+    this.#initialize();
+  }
+  #initialize() {
+    // Safe to inspect this.children and this.textContent
+  }
+}
+```
+
+---
+
+## Alternatives Considered
+
+### 1. New `MutationRecord.type` values (`"parseEnd"`, `"templateStart"`, `"templateEnd"`, `"templateAbort"`)
+
+An earlier iteration expressed template boundaries and element completion as distinct `MutationRecord.type` values. This had two major drawbacks:
+- **Severed connection between nodes and `<template>` metadata:** Putting `templateAttributes` on a zero-node `"templateStart"` record meant the subsequent `childList` records carrying `addedNodes` had no direct reference to the `<template>`'s attributes, forcing every observer callback to maintain a stateful `Map` across records.
+- **Record bloat for `parseEnd`:** Emitting a separate `{ type: "parseEnd", target: el }` record for every closing tag doubled the number of `MutationRecord`s when parsing a document chunk. Expressing completion via `parsedElements` on `childList` records allows same-chunk opens and closes to coalesce onto existing records with zero extra allocations.
+
+### 2. Exposing the detached `HTMLTemplateElement` on `MutationRecord`
+
+Instead of `templateAttributes` (`NamedNodeMap`), `MutationRecord` could expose `record.template` pointing to the detached `HTMLTemplateElement` created by the parser. We rejected this because retaining a live `HTMLTemplateElement` node per template operation exposes a parser-internal element whose `.content` `DocumentFragment` was bypassed, and invites developers to mutate or insert it into the DOM. Exposing a read-only `NamedNodeMap` of its attributes provides everything the author wrote (`for`, `shadowrootmode`, `data-*`, etc.) without leaking the detached element.
+
+### 3. Separate `MutationObserverInit` flags (`parsedElements`, `template`, `templateAttributeFilter`) and `templateFor`
+
+We considered separate opt-in booleans for element completion vs. template metadata, plus an `attributeFilter`-style `templateAttributeFilter` list and a dedicated `record.templateFor` string. However:
+- Unlike `type: "attributes"` (where `attributeFilter` prevents waking up an observer for high-frequency `style`/`class` mutations), a `<template>` start tag is parsed once and typically carries only 1–3 attributes (`for`, `shadowrootmode`, `data-*`) that are shared across all records of that `<template>`.
+- Since `for` and `shadowrootmode` are themselves attributes on `<template>`, exposing all `<template>` attributes on `templateAttributes` under a single `parser: true` option eliminates three extra dictionary/interface members while unifying `<template for>` and `<template shadowrootmode>`.
+
+### 4. Including `Text`, `Comment`, `ProcessingInstruction`, and void elements in `parsedNodes`
+
+Comments, processing instructions, doctypes, and void/self-closing elements (`<img>`, `<br>`, `<svg/>`) are atomic tokens in the HTML parser: they are already 100% complete when inserted in `addedNodes`. Including them (and `Text` nodes) in `parsedNodes` added noise without providing new lifecycle information, so `parsedElements` is scoped strictly to non-void `Element`s popped from the stack of open elements.
+
+### 5. Firing DOM Events (`parseend`, `templatestart`, `templateend`)
+
+Dispatching synchronous or queued DOM events for every parsed element during HTML tree construction has the same performance hazards that led the platform to deprecate `MutationEvent` in favor of `MutationObserver`. Batching parser metadata into `MutationObserver`'s existing microtask record queue avoids per-element event dispatch overhead.
+
+---
+
+## Accessibility, Internationalization, Privacy, and Security Considerations
+
+- **Security & Privacy:**
+  - All information surfaced by `parser: true` (`parsedElements`, `<template>` attributes, `templateStatus`, and `parserContextElement`) originates from markup being parsed into a DOM subtree that the caller already has reference access to observe.
+  - **Closed Shadow Roots (`<template shadowrootmode="closed">`):** `addedNodes` on the host record only exposes the `ShadowRoot` when `shadowrootmode` is `"open"`. For `"closed"`, `addedNodes` remains empty so closed shadow roots are never leaked to observers of the outer tree.
+  - **Sanitize-while-parsing ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)) & CSP nonces ([WICG/declarative-partial-updates#111](https://github.com/WICG/declarative-partial-updates/issues/111)):** When safe HTML parsing (`setHTML()`, `streamHTML()`) strips disallowed attributes or blocks a `<template>`, `templateAttributes` only reflects attributes that survived the parser's sanitizer configuration, and any `nonce` attribute on `<template>` follows standard cryptographic nonce stripping so it is not exposed in `templateAttributes`.
+- **Accessibility & Internationalization:** No direct impact; enables frameworks and polyfills to reliably upgrade custom components and assistive patterns as soon as their light-DOM children finish streaming.
