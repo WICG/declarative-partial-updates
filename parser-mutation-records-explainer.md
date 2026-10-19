@@ -167,7 +167,7 @@ partial interface MutationRecord {
 Every parser-inserted `Element` appears in `parsedElements` once the parser finishes parsing it (when popped from the stack of open elements via an explicit end tag, an implied end tag, or parser termination, or immediately after insertion for void and self-closing foreign elements):
 
 - **Same-chunk coalescing (zero extra records):** When an element opens *and* closes before the observer's record queue is flushed (the common case when `<p>Hello <span>world</span></p>` arrives in a single network chunk, and always the case for void/self-closing elements like `<img>`, `<br>`, `<svg/>`), the element is appended to `parsedElements` on the pending `childList` record that already holds it in `addedNodes`. Because every completed element appears in `parsedElements`, consumers that want to process parsed elements only need to iterate `r.parsedElements` without special-casing void elements.
-- **Cross-chunk coalescing:** When an element `<article>` opens in chunk 1 (`addedNodes: [article], parsedElements: []`, with `article.parsing === true`) and closes in chunk 2 (`</div></section></article>`), all elements that finished parsing in chunk 2 are coalesced into `parsedElements` (`[div, section, article]`) on the pending `childList` record for that chunk (or a single `childList` record with `addedNodes: [], removedNodes: [], parsedElements: [div, section, article]`).
+- **Cross-chunk coalescing:** `record.target` is always the parent of the elements in `parsedElements` (just as for `addedNodes`). When an element `<article>` opens in chunk 1 (`addedNodes: [article], parsedElements: []`, with `article.parsing === true`) and closes in chunk 2, it is appended to `parsedElements` on the pending `childList` record for `article.parentNode` in chunk 2 (or a `childList` record on `article.parentNode` with `addedNodes: [], removedNodes: [], parsedElements: [article]`), coalescing with any sibling elements under the same parent that also finished parsing in that chunk.
 - **Non-mixing guarantee across `<template>` boundaries ([WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** `parsedElements` only coalesces into a pending record that shares the exact same `(target, parserContextElement, templateAttributes, templateStatus)`. Records initiated by a `<template>` never merge with records outside that `<template>` or from a different `<template>`.
 - **Elements disconnected mid-parse ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662)) or discarded by sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)):** If a script removes an open element from the observed tree before its closing tag is parsed, or if the parser's sanitizer configuration discards an element so it never enters the target tree, popping it from the stack of open elements does not emit it in `parsedElements` for observers of that tree.
 
@@ -261,6 +261,42 @@ Comments, processing instructions, and doctypes are atomic non-element tokens in
 ### 5. Firing DOM Events (`parseend`, `templatestart`, `templateend`)
 
 Dispatching synchronous or queued DOM events for every parsed element during HTML tree construction has the same performance hazards that led the platform to deprecate `MutationEvent` in favor of `MutationObserver`. Batching parser metadata into `MutationObserver`'s existing microtask record queue avoids per-element event dispatch overhead.
+
+---
+
+## Frequently Asked Questions (Q&A)
+
+### Q1: Does popping elements from the parser stack add overhead to the HTML parser?
+In browser engines ([w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578#issuecomment-3209456796), [whatwg/dom#662](https://github.com/whatwg/dom/issues/662)), popping an element from the HTML parser's stack of open elements is a fast pointer pop unless the element or tree requires end-tag notification. Two design choices keep this fast:
+1. **Zero cost when `parser: true` is unused:** A per-tree flag ("has `parser: true` observer") gates the check entirely, so documents without a `parser: true` observer pay zero overhead on end-tag pops.
+2. **Same-chunk coalescing avoids extra record allocations:** When an element opens and closes in the same chunk (including all void elements), `parsedElements` appends onto the already-queued `childList` record for that parent rather than allocating a second `MutationRecord`.
+
+### Q2: Why use `NodeList` (`parsedElements`) and `NamedNodeMap` (`templateAttributes`) instead of `FrozenArray`?
+While the [Web Platform Design Principles (§9.4)](https://www.w3.org/TR/design-principles/#collections) generally prefer `FrozenArray` for new APIs:
+- `MutationRecord.addedNodes` and `removedNodes` are already `NodeList`s on the same interface, so `NodeList` for `parsedElements` is locally consistent with `MutationRecord`.
+- `NamedNodeMap` provides ergonomic lookup by attribute name (`r.templateAttributes.getNamedItem("for")?.value`) without allocating a new wrapper object per record. Each `Attr` in `templateAttributes` has `ownerElement === null` (so the parser's internal `<template>` node is never leaked), and calling mutating methods (`setNamedItem`, `removeNamedItem`) on a `MutationRecord`'s `templateAttributes` throws `NoModificationAllowedError`.
+
+### Q3: Doesn't putting a `ShadowRoot` in `addedNodes` violate the invariant that `addedNodes` are children of `target`?
+In DOM today ([whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287), [whatwg/dom#1439](https://github.com/whatwg/dom/issues/1439)), `type: "childList"` records only report mutations to `target.childNodes`, whereas a `ShadowRoot` has `parentNode === null` and `host === target`. Because `addedNodes: [shadowRoot]` is *only* populated for observers that explicitly opt into `{ parser: true }` on a record with `templateAttributes` containing `shadowrootmode` and `templateStatus === "start"`, existing observers (`parser: false`) are never affected. (If preferred during specification review, `addedNodes` on the host's `"start"` record can remain empty `[]` and observers can read `r.target.shadowRoot` directly.)
+
+### Q4: What is `record.target` for `parsedElements`, and how does it interact with `subtree: false` vs. `subtree: true`?
+`record.target` is always the `parentNode` of the elements in `record.parsedElements`, matching `record.addedNodes`:
+- Every `el` in `r.parsedElements` satisfies `el.parentNode === r.target`.
+- If an observer observes `<main>` with `{ childList: true, subtree: false, parser: true }`, it only receives `parsedElements` for direct children of `<main>`, matching `addedNodes`.
+- If an observer observes `<main>` with `{ childList: true, subtree: true, parser: true }` and `</p></article></section>` closes across a chunk boundary, each parent whose children finished parsing queues/coalesces its own `childList` record (`target: <article>, parsedElements: [<p>]`, `target: <section>, parsedElements: [<article>]`, etc.).
+
+### Q5: What happens when the parser reparents or clones elements (foster parenting and the adoption agency algorithm)?
+- **Foster parenting (`<table><div>...</div></table>`):** The parser inserts `<div>` into `<table>`'s parent before `<table>`. When `</div>` is popped from the stack of open elements, the record's `target` is `div.parentNode` at the time it is popped (provided `div` is still connected).
+- **Adoption agency algorithm (`<b><i>Bold </b>italic</i>`):** When `</b>` is parsed, the original `<i>` and `<b>` are popped from the stack of open elements and appear in `parsedElements`; the newly cloned `<i>` is pushed onto the stack and appears in `parsedElements` when `</i>` is reached.
+
+### Q6: Do synchronous parsing APIs (`innerHTML`, `setHTML`) emit `parsedElements`?
+Yes, when `innerHTML` or `setHTML` parses directly into a target element ([whatwg/html#12624](https://github.com/whatwg/html/pull/12624)) that is being observed with `{ childList: true, parser: true }`. Because synchronous parsing finishes within a single task before the microtask checkpoint, every element opens and closes in the same batch and coalesces onto the existing `childList` records with zero additional `MutationRecord`s. Detached trees (`DOMParser`, `createContextualFragment`) have no active observers during parsing.
+
+### Q7: Why not use DOM Events (`patchstart`, `patchend`) or a dedicated `PatchObserver` for `<template for>`?
+Consumers of `<template for>`—such as hydration frameworks, DOM morphing / form-state preservation ([WICG/declarative-partial-updates#103](https://github.com/WICG/declarative-partial-updates/issues/103)), and progressive enhancers—need the **exact `removedNodes` and `addedNodes`** together with the `<template>` metadata. Separate DOM events or a separate observer would split the `"start"`/`"end"` lifecycle from the node mutations and require firing events across subtrees during HTML parsing.
+
+### Q8: How does `parser: true` interact with `MutationObserver.prototype.observe()` option validation?
+Today, `observe(target, options)` throws a `TypeError` unless at least one of `childList`, `attributes`, or `characterData` is `true`. Because `parser: true` augments `childList` (and `characterData`) records rather than introducing a standalone record `type`, `parser: true` requires `childList: true` (throwing a `TypeError` if `parser: true` is passed with `childList: false`).
 
 ---
 
