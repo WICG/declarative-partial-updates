@@ -43,13 +43,6 @@ When a user clicks a link or enters a URL to open a web page, loading the new do
    - **Cold starts are still slow**: When a user opens a link from the address bar (omnibox), a bookmark, a chat app, or another website (cross-origin), no SPA router is running yet—the user still waits for the full network round-trip before seeing anything.
    - **Full-document prerendering is too heavy to cover every link**: Prerendering an entire destination page requires fetching and rendering a full document in a hidden tab, which often cannot share cache across similar URLs (even with `No-Vary-Search`) and uses too much memory and bandwidth to run for every possible destination.
 
-### How Progressive Shells improve the user experience
-
-By placing a single `<meta name="shell">` tag in `<head>` and separating the shared page layout from the page-specific content with a `<?shellboundary>` processing instruction, a site defines a reusable **structural shell** for a URL pattern (such as `/item/:id`):
-
-- **Instant visual feedback—even on cold starts**: Once a user has visited *any* matching page on the site (or the site pre-warms its shell cache), navigating to `/item/bar456` from the omnibox, a bookmark, or a cross-origin link paints the cached header, navigation bar, and page skeleton **instantly**, while the item's content streams into placeholders (`<template for>`) as bytes arrive from the network.
-- **No frozen frame or lost state between pages**: When a user navigates between two pages that share a shell (`upgrade=always`), the browser keeps the current page **live and interactive** while fetching the next URL. Once the incoming `<head>` confirms the shell matches, the browser skips the redundant shell markup up to `<?shellboundary>`, updates the URL in place, and streams the new content directly into the existing page—preserving user input, focus, scroll position, and animations with **zero client-side routing JavaScript**.
-
 ## Goals & Non-goals
 
 **Goals**:
@@ -65,7 +58,10 @@ By placing a single `<meta name="shell">` tag in `<head>` and separating the sha
 
 ## Proposed Solution
 
-Documents split into a **structural shell** and a **content payload**, separated by `<?shellboundary>`. When a document with `<meta name="shell">` loads, the browser caches the shell up to `<?shellboundary>` for its URL pattern. On future navigations matching that pattern, incoming content after `<?shellboundary>` uses [out-of-order streaming (`<template for>`)](./patching-explainer.md) to slot into placeholders (`<?start>`, `<?marker>`) inside the shell.
+By placing a single `<meta name="shell">` tag in `<head>` and separating the shared page layout from the page-specific content with a `<?shellboundary>` processing instruction, a site defines a reusable **structural shell** for a URL pattern (such as `/item/:id`). Incoming content after `<?shellboundary>` uses [out-of-order streaming (`<template for>`)](./patching-explainer.md) to slot into placeholders (`<?start>`, `<?marker>`) inside the shell:
+
+- **Instant visual feedback—even on cold starts**: Once a user has visited *any* matching page on the site (or the site pre-warms its shell cache), navigating to `/item/bar456` from the omnibox, a bookmark, or a cross-origin link paints the cached header, navigation bar, and page skeleton **instantly**, while the item's content streams into placeholders (`<template for>`) as bytes arrive from the network.
+- **No frozen frame or lost state between pages**: When a user navigates between two pages that share a shell (`upgrade=always`), the browser keeps the current page **live and interactive** while fetching the next URL. Once the incoming `<head>` confirms the shell matches, the browser skips the redundant shell markup up to `<?shellboundary>`, updates the URL in place, and streams the new content directly into the existing page—preserving user input, focus, scroll position, and animations with **zero client-side routing JavaScript**.
 
 ### Code samples
 
