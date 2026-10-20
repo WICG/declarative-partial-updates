@@ -35,8 +35,8 @@
 
 When a user clicks a link or enters a URL to open a web page, loading the new document is rarely instant. Today, users pay for that network delay in one of two ways:
 
-1. **The "frozen frame" and state reset of multi-page navigations (MPAs)**:
-   When navigating between documents, the browser holds the last painted frame of the old page while waiting for the new page to arrive and render ("paint holding"). To the user, the page is stuck in an uncanny valley—visible on screen, but completely unresponsive to clicks, typing, or scrolling. When the new document finally swaps in, the entire page is torn down and recreated: any text the user was typing into a header search box, keyboard focus, sidebar scroll position, or playing media is wiped out.
+1. **The "frozen frame" (paint holding/suppression) and state reset of multi-page navigations (MPAs)**:
+   When navigating between documents, the browser holds the last painted frame of the old page while waiting for the new page to arrive and render (paint holding/suppression). To the user, the page is stuck in an uncanny valley—visible on screen, but completely unresponsive to clicks, typing, or scrolling. When the new document finally swaps in, the entire page is torn down and recreated: any text the user was typing into a header search box, keyboard focus, sidebar scroll position, or playing media is wiped out.
 2. **The heavy startup cost of Single-Page Applications (SPAs) and full-page prerendering**:
    To avoid freezing the UI and losing state between pages, sites often ship large client-side JavaScript routers (SPAs) that keep an application shell alive in memory. However:
    - **Users pay a steep JavaScript tax** on initial load (slower startup and delayed interactivity).
