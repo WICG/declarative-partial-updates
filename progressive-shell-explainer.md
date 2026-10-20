@@ -232,7 +232,11 @@ Instead of cutting the stream at `<?shellboundary>`, stream the full new documen
 
 ## Security and Privacy Considerations
 
-- **Same-origin & path-scoped**: Shells only match same-origin URLs, and in-document `<meta name="shell">` patterns are path-scoped (unless authorized by an HTTP header or `.well-known/shells.json`) so a user-controlled sub-path cannot poison shells for unrelated routes.
+- **Preventing unauthorized same-origin shell poisoning (Service Worker-style path scoping)**:
+  Because a cached shell is painted *immediately* when a user navigates to a matching URL—before the destination page's network response arrives—allowing any page on an origin to register a shell for arbitrary routes on that origin would be dangerous on multi-tenant or path-shared origins (e.g., `example.com/~alice` vs. `example.com/login`, or if an attacker finds an HTML injection vulnerability on a single sub-route). An untrusted sub-page could otherwise register a shell for `/login` or `/` and briefly display spoofed UI or run scripts under that URL until the destination response arrives and aborts the shell.
+  To prevent this, `<meta name="shell">` follows a scoping model analogous to [Service Worker registration](https://w3c.github.io/ServiceWorker/#path-restriction):
+  - **Default path-prefix confinement**: A `<meta name="shell">` element declared in a document at `/catalog/items/foo` can only register URL `pattern`s within its containing directory path (`/catalog/items/...`). Any pattern matching paths outside `/catalog/items/` (or containing `..` path traversal) is rejected by default.
+  - **Explicit elevation via HTTP response headers**: Widening a shell's scope beyond the document's path prefix (for example, `/items/foo` registering a shell for `/`) requires server-level privilege—either by declaring the shell in a `Shell` HTTP response header, providing an explicit scope-widening response header (analogous to `Service-Worker-Allowed`), or listing the shell in the origin's root `.well-known/shells.json` manifest.
 - **Partitioned cache**: The shell cache is partitioned by the browser's network/storage isolation key, obeys `Cache-Control: no-store`, and is cleared with site data.
 - **Security policy enforcement**: If an incoming response in an upgraded navigation changes security headers (`Content-Security-Policy`, `COOP`, `COEP`, `Permissions-Policy`), the browser aborts the in-place upgrade and performs a full cross-document navigation.
 
@@ -281,7 +285,8 @@ Instead of cutting the stream at `<?shellboundary>`, stream the full new documen
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.
 22. **What should this questionnaire have asked?**
-    Whether HTML injection on a sub-path could poison the shell cache for other routes on the origin—mitigated by path-scoping `<meta name="shell">` patterns and only caching markup before `<?shellboundary>`.
+    *Can an untrusted or compromised sub-path on an origin register a shell for other paths on the same origin?*
+    Because a cached shell renders before the destination response arrives, a page at `/users/alice` must not be able to register a `<meta name="shell">` for `/login` or `/settings`. As detailed above, `<meta name="shell">` patterns are confined by default to the declaring document's directory path (just like Service Worker registration scope), and can only match broader same-origin paths when explicitly authorized via an HTTP response header (like `Service-Worker-Allowed` / `Shell`) or `.well-known/shells.json`.
 
 ## References
 
