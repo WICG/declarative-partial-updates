@@ -182,7 +182,7 @@ Beyond discovering `<meta name="shell">` when a user visits a page, the shell ca
 
 ### Full-page Skeletons
 
-The destination page declares a separate temporary "skeleton" document that gets replaced wholesale when the real document loads ([Skeletons, Preloading, and Transitions](https://docs.google.com/document/d/1D55tdosrOS4qaw3ApRwN6lP-r17TG5GKk1Mfl5xAjo8/edit), [Skeleton Prototype](https://docs.google.com/document/d/1hov28dKBKDKtvC33B6WjZnQSlr1BPMiOkHQzNq14ZrY/edit)).
+The destination page declares a separate temporary "skeleton" document that gets replaced wholesale when the real document loads.
 - **Why not**: Replacing the temporary skeleton document with the real document wipes out any scrolling, focus, or text typed into inputs while the skeleton was visible—forcing skeleton inputs to be inert and creating a brittle "half-measure" UX.
 
 ### DOM Preserve / Merge (`preserve`)
@@ -289,7 +289,4 @@ Instead of cutting the stream at `<?shellboundary>`, stream the full new documen
 - [Interleaved HTML Streaming / Patching (`<template for>`)](./patching-explainer.md)
 - [DOM Preservation (`preserve`)](./preserve-explainer.md)
 - [Two-Phase View Transitions (`deferPageSwap`)](https://github.com/w3c/csswg-drafts/blob/main/css-view-transitions-2/two-phase-transition-explainer.md)
-- [Skeletons, Preloading, and Transitions](https://docs.google.com/document/d/1D55tdosrOS4qaw3ApRwN6lP-r17TG5GKk1Mfl5xAjo8/edit?resourcekey=0-qWhua8ULQKe9JVE_gb_mHw&tab=t.0#heading=h.lmrt71rc091)
-- [Skeleton Prototype](https://docs.google.com/document/d/1hov28dKBKDKtvC33B6WjZnQSlr1BPMiOkHQzNq14ZrY/edit?tab=t.0#heading=h.6kknmf22ixwc)
-- [Browser Skeleton Search Use Cases](https://docs.google.com/document/d/1jNDWcAlpWFeFgD2W9qoCACLbctUHyzPZbPaYmkuL2uo/edit?resourcekey=0-W4voziHiRcwXt7sh6bFIhQ&tab=t.0#heading=h.cc82slqzl4q0)
-- [Skeleton Screens Syntax Brainstorming](https://docs.google.com/document/u/0/d/1Ml8B-3eOmx37R9UMy6F5epi1ZgE9fPZ_Jnjdj6UyUDE/edit)
+- [URL Pattern Standard](https://urlpattern.spec.whatwg.org/)
