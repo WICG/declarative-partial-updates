@@ -59,6 +59,7 @@ By placing a single `<meta name="shell">` tag in `<head>` and separating the sha
 - **Be much lighter than full-page prerendering**: Cache a single small structural shell for an entire route pattern rather than pre-rendering full documents.
 
 **Non-goals**:
+- **Replacing web frameworks**: The goal is not to replace frameworks, but to provide declarative browser primitives—for declarative SPAs and instant MPAs—that frameworks and meta-frameworks can leverage to ship less client-side routing/shell code and get instant cold starts out of the box.
 - **Cross-origin shells**: Shells only match same-origin URL patterns.
 - **General-purpose uninterruptible exit animations**: Holding a navigation arbitrarily long for custom exit animations remains orthogonal.
 
