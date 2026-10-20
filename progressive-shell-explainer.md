@@ -7,7 +7,7 @@
 - [Rob Flack](https://github.com/flackr)
 - [Bramus Van Damme](https://github.com/bramus)
 - [Barry Pollard](https://github.com/tunetheweb)
-- [Nick Coury](https://github.com/ncoury)
+- [Nick Coury](https://github.com/nickcoury)
 - [Chris Harrelson](https://github.com/chrishtr)
 
 ## Participate
