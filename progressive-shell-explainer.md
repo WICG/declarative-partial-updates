@@ -1,8 +1,14 @@
 # Explainer for Progressive Shells and Navigation Upgrades
 
-## Proponents
+## Authors & Contributors
 
-- Noam Rosenthal (Google)
+- [Noam Rosenthal](https://github.com/noamr)
+- [Vladimir Levin](https://github.com/vmpstr)
+- [Rob Flack](https://github.com/flackr)
+- [Bramus Van Damme](https://github.com/bramus)
+- [Barry Pollard](https://github.com/tunetheweb)
+- [Nick Coury](https://github.com/ncoury)
+- [Chris Harrelson](https://github.com/chrishtr)
 
 ## Participate
 
