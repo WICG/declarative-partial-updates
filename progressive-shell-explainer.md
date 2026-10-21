@@ -185,6 +185,11 @@ Beyond discovering `<meta name="shell">` when a user visits a page, the shell ca
 The destination page declares a separate temporary "skeleton" document that gets replaced wholesale when the real document loads.
 - **Why not**: Replacing the temporary skeleton document with the real document wipes out any scrolling, focus, or text typed into inputs while the skeleton was visible—forcing skeleton inputs to be inert and creating a brittle "half-measure" UX.
 
+### Relying on HTTP Content Negotiation (Headers) Instead of In-Band `<?shellboundary>`
+
+Instead of embedding `<?shellboundary>` in a single HTML response that works as a full page, a shell, and a continuation, the browser and server could negotiate different representations via HTTP headers—requesting either a full document, a shell-only response, or a continuation-only response.
+- **Why not**: Making the feature depend on HTTP content negotiation is fragile in practice. As documented in the WHATWG's [Why not conneg](https://wiki.whatwg.org/wiki/Why_not_conneg), content negotiation has a long history of bugs across servers, proxies, and CDNs (such as missing or misconfigured `Vary` headers causing CDNs or browser caches to serve a partial continuation fragment to a user doing a normal full-page load). By putting `<meta name="shell">` and `<?shellboundary>` in the HTML itself, a static file or CDN-cached full HTML response works out of the box for all three modes (regular load, shell extraction, and continuation). We still send `Sec-Active-Shell` (much like `Sec-Purpose` for prefetching) so dynamic servers can optionally omit redundant shell bytes before `<?shellboundary>`, but the feature does not depend on content negotiation to function.
+
 ### DOM Preserve / Merge (`preserve`)
 
 Instead of cutting the stream at `<?shellboundary>`, stream the full new document on top of the existing one and preserve elements marked with `preserve` and a matching `id` (keeping their input, scroll, focus, video, or iframe state and only updating attributes; see [DOM preservation](./preserve-explainer.md)):
