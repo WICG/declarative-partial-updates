@@ -37,28 +37,39 @@ This explainer proposes reflecting that existing parser state for three reasons:
 
 ---
 
-## The Problem: Parser state is real, but invisible
+## Use Cases & Problem Statement
 
-### `addedNodes` fires on the start tag, while the element may still be open
+### 1. Acting on complete subtrees (`addedNodes` fires on the start tag)
 
-When the parser processes `<article><h1>Title</h1><p>Body</p></article>`, it inserts `<article>` as soon as it reads the start tag. If the parser yields between network chunks before `</article>`, a `MutationObserver` receives `<article>` in `addedNodes` while its children are still missing or incomplete:
+When the parser processes `<s-select><s-option>A</s-option><s-option>B</s-option></s-select>`, it inserts `<s-select>` as soon as it reads the start tag. If the parser yields between network chunks before `</s-select>`, a `MutationObserver` receives `<s-select>` in `addedNodes` while its children are still missing or incomplete:
 
-```js
-const mo = new MutationObserver(records => {
-  for (const r of records) {
-    for (const node of r.addedNodes) {
-      if (node instanceof HTMLElement && node.matches("article")) {
-        // <article> may still be open on the parser's stack:
-        // its <h1> and <p> may not have arrived yet.
-        enhanceArticle(node);
-      }
-    }
-  }
-});
-mo.observe(document, { childList: true, subtree: true });
-```
+- **Evaluate content once ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [whatwg/dom#1116](https://github.com/whatwg/dom/issues/1116)):** Elements that interpret text, configuration, or inline code (syntax highlighters, math/markdown blocks, or streamed `<script>` elements moved from a detached document) fail with syntax or parse errors when evaluated on a chunk boundary before the closing tag arrives.
+- **Batch child setup and validation ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809)):** Custom elements that validate, index, or slot light-DOM children (such as `<s-select>` validating `<s-option>` children or data tables indexing rows) emit false validation warnings or perform redundant $O(N^2)$ work if they run on the opening tag or on every chunk.
+- **Animate or reveal complete subtrees ([whatwg/dom#1116](https://github.com/whatwg/dom/issues/1116), [whatwg/html#12200](https://github.com/whatwg/html/issues/12200), [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578)):** Triggering View Transitions, WAAPI animations, or progressive DOM swaps on an element that is still open on the parser stack causes half-rendered layout shifts.
 
-When the DOM is built on the client (`el.append(a); el.append(b); el.append(c);`), `MutationObserver` naturally delivers records after all synchronous calls in the task have completed. When markup is streamed from a server, the parser can yield mid-element across network chunks, handing observers a half-built subtree with no indication that more children are still being parsed into it. `requestAnimationFrame` and `setTimeout` heuristics fail for the same reason: the parser can yield and spin the event loop in the middle of an element ([WICG/webcomponents#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1457018630), [(comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1455818744)).
+When the DOM is built on the client (`el.append(a); el.append(b);`), `MutationObserver` delivers records after all synchronous calls in the task have completed. When markup is streamed from a server, the parser can yield mid-element across network chunks, handing observers a half-built subtree with no indication that more children are still being parsed into it. `requestAnimationFrame` and `setTimeout` heuristics fail for the same reason: the parser can yield and spin the event loop in the middle of an element ([WICG/webcomponents#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1457018630), [(comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1455818744)).
+
+### 2. Patch attribution, flow control, and error recovery (`<template for>`)
+
+In streaming UIs that update multiple regions via `<template for>` ([whatwg/html#13008](https://github.com/whatwg/html/issues/13008), [WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110)), standard `MutationObserver` records show individual node insertions and removals, but lose the patch lifecycle:
+
+- **Attribution:** Separating parser-owned patch mutations from client-side UI or framework mutations happening nearby, and reading server metadata attributes off the `<template>` (e.g., `data-turn="3"` or request IDs) to correlate chunks.
+- **Flow control:** Knowing when a streamed patch starts clearing fallback content (`"start"`) and when it finishes (`"end"`) to trigger hydration, focus management, or scroll adjustments.
+- **Error recovery:** Detecting when a patch fails (`"abort"`) because the target marker was missing or the network stream was truncated at EOF before `</template>` ([#104](https://github.com/WICG/declarative-partial-updates/issues/104)), even when zero DOM nodes were mutated, so the application can surface retry or fallback UI.
+
+### 3. Observing Declarative Shadow DOM (`<template shadowrootmode>`)
+
+Document-wide observers need to discover shadow roots as they are attached ([whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287), [#1439](https://github.com/whatwg/dom/issues/1439)):
+
+- **Component autoloaders:** Lazy-loading custom element definitions (e.g., Web Awesome / Shoelace autoloaders) when custom element tags appear inside open shadow trees.
+- **Accessibility & DOM auditing:** Running live accessibility checks (e.g., Accented) across open shadow roots as markup streams in.
+- **SSR shadow-root hydration:** Knowing when a declarative `ShadowRoot` is attached (`"start"`) and when its streamed contents finish parsing (`"end"`), or detecting when declarative shadow root attachment fails ([whatwg/html#13075](https://github.com/whatwg/html/issues/13075)).
+
+Today, libraries monkey-patch `Element.prototype.attachShadow()` to discover shadow roots, which completely misses `<template shadowrootmode>` because the parser attaches the `ShadowRoot` without calling `attachShadow()` or queueing any `MutationRecord` on the host.
+
+### 4. Fragment parsing context (`streamHTML*`, `setHTML`, `innerHTML`)
+
+Descendant mutations inside a fragment parse report their immediate parent as `record.target`, losing which fragment context element is actively receiving streamed input.
 
 ### Existing workarounds
 
@@ -72,12 +83,6 @@ Because parser state isn't exposed, server-driven and streaming applications mus
 | **Sentinel child elements** (`<the-end>`) or `onload`/`onerror` probes | [WICG/webcomponents#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-534115603), [(comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1456790982) | End of children, signaled by a dummy last child that removes itself on connect | Extra DOM nodes and markup per instance; requires control over inner markup. |
 | **Trailing inline `<script>` after each element or streamed region** | [WICG/webcomponents#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-532525717), streaming SSR frameworks | Completion of the preceding markup | Extra wire bytes per region and requires CSP nonces/hashes or `unsafe-inline`. |
 | **Deferring `customElements.define()` to `DOMContentLoaded`**, or `setTimeout`/`requestAnimationFrame` | [WICG/webcomponents#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-737669670), [(comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1455481698), [(comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-534119444) | An approximation of "the parser is done" | Delays upgrades until the entire document finishes, or races the parser across chunks. |
-
-### The same gap prevents flow and error control for `<template>`s and fragment parsing
-
-- **`<template shadowrootmode>` (Declarative Shadow DOM)**: Attaching a declarative `ShadowRoot` bypasses `attachShadow()` and queues no `MutationRecord` on the host ([whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287)), leaving subtree observers unable to discover declarative shadow roots or detect failed attachment ([whatwg/html#13075](https://github.com/whatwg/html/issues/13075)).
-- **`<template for>` ([whatwg/html#13008](https://github.com/whatwg/html/issues/13008), [WICG/declarative-partial-updates#110](https://github.com/WICG/declarative-partial-updates/issues/110))**: Observers see nodes removed and inserted, but have no flow or error signals: they cannot tell that a `<template for>` caused the mutations, read its attributes (e.g., request/turn IDs), correlate chunks of an in-flight patch, or detect when a patch aborts due to a missing target or a stream truncated at EOF before `</template>` ([#104](https://github.com/WICG/declarative-partial-updates/issues/104)). Without parser reflection, apps must maintain a parallel client-side patch feed or guess from removed processing instructions.
-- **Fragment parsing (`streamHTML*`, `setHTML`, `innerHTML`)**: Descendant mutations report their immediate parent as `record.target`, losing which fragment context element is actively receiving streamed input.
 
 ### Goals
 
