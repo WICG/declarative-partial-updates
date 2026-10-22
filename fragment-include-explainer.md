@@ -206,6 +206,12 @@ To optimize security and compatibility, the default safety behavior is determine
 <!-- External: sanitized by default (scripts stripped) -->
 <template for src="user-profile.html"></template>
 
+<!-- External 3P SVG: inserted as a sanitized inline <svg> (stylable with CSS currentColor) without bloating the main stream -->
+<button class="icon-btn">
+  <template for src="https://icons.example/star.svg" crossorigin></template>
+  Star
+</button>
+
 <!-- External with unsafe token: unsanitized (allows script execution) -->
 <template for src="ad.html" sanitize="unsafe"></template>
 
