@@ -135,26 +135,25 @@ The delivery mode is configured using the boolean `buffer` attribute:
 <template for="comments-patch" src="comments.html" buffer></template>
 ```
 
-### Advanced Buffering: Resource Preloading
+### Speculative Resource Fetching in Buffered Templates
 
-To prevent Flash of Unstyled Content (FOUC) or layout shifts caused by subresources loaded *inside* a buffered template, authors can declare critical preloads directly within the template stream:
+Unlike an inert `<template>`, where subresources inside `template.content` are not fetched until cloned into the document, external resources inside a `<template buffer>` (such as `<link rel="stylesheet">`, `<img src>`, and `<link rel="preload">`) are **fetched speculatively** by the browser's preload scanner while the template is buffering:
 
 ```html
-<!-- Inside widget.html -->
-<link rel="preload" href="widget.css" as="style">
-<link rel="modulepreload" href="widget.js">
-
-<div class="widget-body">
+<template for buffer>
   <link rel="stylesheet" href="widget.css">
-  <p>Widget Content</p>
-</div>
+  <img src="avatar.jpg">
+  <div class="widget-body">
+    <p>Widget Content</p>
+  </div>
+</template>
 ```
 
 **Behavior & Spec Integration:**
-1. **Immediate Fetch (Non-inert):** As a spec exception, when the HTML parser is tokenizing content into a `<template buffer>`'s active `content` DocumentFragment, any parsed `<link rel="preload">` or `<link rel="modulepreload">` elements immediately initiate network fetches despite being inside an inert fragment.
-2. **Buffer Activation Gating:** The presence of these preloads acts as an implicit rendering block for the template. Once the main HTML stream for the template completes (EOF), the browser suspends the cloning and insertion of the DocumentFragment.
-3. **Atomic Commit:** The DocumentFragment is committed to the DOM in a single atomic update only after all registered preloads/modulepreloads have finished loading (or failed). Since critical stylesheets are already loaded in the memory cache, the subsequently parsed `<link rel="stylesheet">` applies immediately without layout jank.
-4. **Non-Parser Blocking:** The main document parser continues to parse and render content *after* the `</template>` element concurrently. Only the insertion of the template's own buffer is suspended.
+1. **Speculative Fetch:** While the HTML parser is tokenizing content into a `<template buffer>`'s `content` DocumentFragment (whether from `src` or inline on the main stream), the speculative preload scanner initiates fetches for external subresources (`<link rel="stylesheet">`, `<img>`, `<script src>`, `<link rel="preload">`, `<link rel="modulepreload">`).
+2. **Buffer Activation Gating:** If the buffered template contains `<link rel="preload">` or `<link rel="modulepreload">` elements, those preloads gate the buffer's commit until they finish loading (or fail).
+3. **Atomic Commit:** When the template reaches `</template>` (or EOF for `src`) and any gating preloads complete, the DocumentFragment is committed to the DOM in a single atomic batch.
+4. **Non-Parser Blocking:** The main document parser continues to parse and render content *after* the `</template>` element concurrently. Only the insertion of the template's own buffer is held.
 
 ### Avoiding Layout Shifts
 
