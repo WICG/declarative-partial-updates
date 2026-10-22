@@ -2,20 +2,28 @@
 
 ## Overview
 
-One of the longest-standing design gaps in the HTML standard is the lack of a native, declarative client-side include mechanism (see [WHATWG Issue #2791](https://github.com/whatwg/html/issues/2791)). Historically, developers have relied on Server-Side Includes (SSI), Edge-Side Includes (ESI), or custom JavaScript fetch-and-inject scripts to compose HTML modularly.
+One of the longest-standing requests on the web platform is a native, declarative client-side HTML include mechanism (see [WHATWG HTML Issue #2791](https://github.com/whatwg/html/issues/2791)). Historically, developers have had to choose between server-only composition (SSI, ESI, server templates) and JavaScript `fetch()`-and-inject libraries.
 
-While server-side composition is highly performant for many use cases, it is not always the optimal trade-off:
-1. **Tooling & Multiplexing Complexity:** Forcing the server to multiplex and assemble all page elements on every request increases runtime complexity, especially for auxiliary widgets (e.g., ads, sidebars, related feeds) that could be fetched asynchronously.
-2. **Client-Side Sanitization Gap:** Server-side templating engines do not have access to the browser's native client-side sanitization context. Performing safety filtering at the server level often relies on custom, downstream sanitizers that can easily fall out of sync with browser security updates.
-3. **Ergonomic Dev-Time Modularity:** In modern web development, standard ergonomics favor modular development enablers. Similar to how JS Modules (`import`) allow developers to author modular code while letting build/optimization tooling (like bundlers) handle merging if necessary, HTML needs an equivalent modular primitive.
+### Why Client-Side Includes Stalled
 
-## Relationship to HTML Patching
+Previous attempts at declarative client-side includes stalled on three fundamental problems:
 
-The proposed [Declarative Out-of-order streaming specification](https://github.com/WICG/declarative-partial-updates/blob/main/patching-explainer.md) addresses out-of-order streaming of markup. While patching offers a powerful streaming update model, it has several limitations when applied to client-side resource inclusion:
+1. **Parser-Blocking Waterfalls:** Synchronous includes halt the HTML parser while waiting on the network, serializing fetches and delaying the rest of the document.
+2. **FOUC & Layout Shifts:** Making includes asynchronous avoids blocking the parser, but fragments either paint before their subresource stylesheets finish loading (Flash of Unstyled Content) or arrive after subsequent content has already rendered, pushing elements down and causing layout shifts.
+3. **Cross-Site Scripting (XSS):** Without a built-in browser sanitizer, inserting externally fetched markup directly into the document meant trusting the remote payload not to inject scripts or inline event handlers.
 
-1. **Mandatory Streaming:** Patches always stream directly into the live DOM chunk-by-chunk. There is no declarative way to buffer the template content and render it atomically once parsing completes to avoid layout jank.
-2. **Mandatory Multiplexing:** Patches must be interleaved inside the main HTML response stream, requiring the server to run interleaving and multiplexing logic.
-3. **No Independent Sanitization:** Patches inherit the safety/sanitization permissions of their parent context. They cannot easily be configured to sanitize untrusted content separately.
+### What Changed
+
+We now have the platform building blocks to address all three problems directly in HTML:
+
+1. **Out-of-Order Streaming ([`<template for>`](https://github.com/WICG/declarative-partial-updates/blob/main/patching-explainer.md)):** Decouples where a fragment fetch is initiated from where its markup is inserted, allowing fragments to be fetched early in parallel while the main document continues parsing and rendering placeholders (`<?start name="...">...<?end>`).
+2. **Render-Blocking (`rel="expect"`) & Buffering (`buffer`):** Authors can manage layout shifts and FOUC per fragment—either holding initial page render for critical above-the-fold chrome via `<link rel="expect" blocking="render">` in `<head>`, or adding `buffer` so asynchronous fragments parse off-screen, wait for `<link rel="preload">` stylesheets, and swap in atomically on EOF.
+3. **Built-in Sanitization (`sanitize`) & CSP (`fragment-src`):** External `<template for src="...">` includes are sanitized by default via the browser's native Sanitizer API. Executing scripts requires an explicit `sanitize="unsafe"` opt-out and remains governed by Content Security Policy (`fragment-src` and `script-src`).
+
+While server-side composition remains ideal for many documents, client-side includes are a better trade-off when:
+- **Independent Caching & Static Hosting:** Shared chrome (headers, footers, navigation) can be cached independently by the browser across pages, or composed on static hosts without server-side multiplexing.
+- **Asynchronous Widgets & Feeds:** Auxiliary sections (comments, personalized sidebars, recommendations) can load independently without delaying the main document response.
+- **Client-Side Sanitization Context:** Sanitizing untrusted fragments in the browser uses the engine's actual parser and native Sanitizer API rather than downstream server regex/DOM approximations.
 
 
 ## Proposed solution
@@ -24,10 +32,10 @@ We propose extending the `<template>` element to support native, client-side HTM
 
 ### Activation Model and Modes
 
-An HTML `<template>` is active if it has a `for` attribute, a `src` attribute, or both. If both attributes are absent, it behaves as a classic inert template.
+An HTML `<template>` actively inserts into the DOM when it has a `for` attribute. If `for` is omitted, it behaves as an inert template (if `src` is present without `for`, the fetched markup is parsed into the inert `template.content` `DocumentFragment`).
 
 #### Targeting and Placement
-- **Omitted `for`**: classic inert template
+- **Omitted `for`**: inert template (populates `template.content`, does not insert into DOM)
 - **Targeted Include (`for="target-name"`)**:
   Applies the template content to a targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Content is inserted **before** the `<?end>` or `<?marker>` node.
 - **In-place Include (empty `for=""` / `for`)**:
@@ -105,7 +113,7 @@ The delivery mode is configured using the boolean `buffer` attribute:
 ```html
 <!-- 1. Streaming (Progressive Render) -->
 <!-- In-place: elements render as they arrive from network -->
-<template src="feed-stream.html"></template>
+<template for src="feed-stream.html"></template>
 
 <!-- Targeted: rows stream progressively into tbody without foster-parenting -->
 <table>
@@ -118,7 +126,7 @@ The delivery mode is configured using the boolean `buffer` attribute:
 
 <!-- 2. Buffered (Atomic Render once complete) -->
 <!-- In-place: parsed to template.content first, inserted in one single batch on EOF -->
-<template src="dialog-modal.html" buffer></template>
+<template for src="dialog-modal.html" buffer></template>
 
 <!-- Targeted: comments block is parsed fully to fragment and inserted atomically -->
 <section id="comments-section">
@@ -199,13 +207,13 @@ To optimize security and compatibility, the default safety behavior is determine
 
 ```html
 <!-- External: sanitized by default (scripts stripped) -->
-<template src="user-profile.html"></template>
+<template for src="user-profile.html"></template>
 
 <!-- External with unsafe token: unsanitized (allows script execution) -->
-<template src="ad.html" sanitize="unsafe"></template>
+<template for src="ad.html" sanitize="unsafe"></template>
 
 <!-- External buffered with unsafe token -->
-<template src="modal-widget.html" buffer sanitize="unsafe"></template>
+<template for src="modal-widget.html" buffer sanitize="unsafe"></template>
 
 <!-- Inline: unsafe by default (script runs) -->
 <template for="gallery">
