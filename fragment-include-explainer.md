@@ -32,10 +32,10 @@ We propose extending the `<template>` element to support native, client-side HTM
 
 ### Activation Model and Modes
 
-An HTML `<template>` actively inserts into the DOM when it has a `for` attribute. If `for` is omitted, it behaves as an inert template (if `src` is present without `for`, the fetched markup is parsed into the inert `template.content` `DocumentFragment`).
+An HTML `<template>` actively inserts into the DOM when it has a `for` attribute. If `for` is omitted, it behaves as an ordinary inert `<template>` (and does not fetch `src`). `for`/`src` and `shadowrootmode` are mutually exclusive on the same `<template>` element, and compose via nesting (`<template shadowrootmode="open"><template for src="widget.html"></template></template>`).
 
 #### Targeting and Placement
-- **Omitted `for`**: inert template (populates `template.content`, does not insert into DOM)
+- **Omitted `for`**: ordinary inert `<template>` (does not fetch or insert into DOM)
 - **Targeted Include (`for="target-name"`)**:
   Applies the template content to a targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Content is inserted **before** the `<?end>` or `<?marker>` node.
 - **In-place Include (empty `for=""` / `for`)**:
@@ -78,9 +78,10 @@ During active in-place template processing (streaming or buffered), the browser 
 
 ### Resource Fetching and Attributes
 
-When the `src` attribute is present, the template asynchronously fetches its HTML payload over the network.
-- Reuses network configuration attributes like `nonce`, `crossorigin`, and `referrerpolicy`.
-- Unlike `<script>`, it does not support `async`, `defer`, or `blocking`. All fetches are non-blocking by default. Synchronous parser-blocking fetches are considered a performance footgun. Developers looking to avoid Flash of Unstyled Content (FOUC) should use CSS (e.g., hiding the container until populated, as seen in "islands architecture") rather than relying on parser-blocking DOM insertion.
+When the `src` attribute is present on a `<template for>`, the template asynchronously fetches its HTML payload over the network.
+- Reuses network configuration attributes like `nonce`, `crossorigin` (`anonymous` / `use-credentials`), and `referrerpolicy`.
+- Delays `DOMContentLoaded` until pending `<template for src>` includes complete (similar to `<script defer>`), without blocking the HTML parser.
+- Unlike `<script>`, it does not support `async`, `defer`, or `blocking`. All fetches are non-parser-blocking by default. Synchronous parser-blocking fetches are considered a performance footgun. Developers looking to avoid Flash of Unstyled Content (FOUC) should use `<link rel="expect" blocking="render">`, `buffer`, or CSS rather than relying on parser-blocking DOM insertion.
 
 ```html
 <!-- Asynchronous in-place include (sanitized by default) -->
@@ -151,8 +152,8 @@ Unlike an inert `<template>`, where subresources inside `template.content` are n
 
 **Behavior & Spec Integration:**
 1. **Speculative Fetch:** While the HTML parser is tokenizing content into a `<template buffer>`'s `content` DocumentFragment (whether from `src` or inline on the main stream), the speculative preload scanner initiates fetches for external subresources (`<link rel="stylesheet">`, `<img>`, `<script src>`, `<link rel="preload">`, `<link rel="modulepreload">`).
-2. **Buffer Activation Gating:** If the buffered template contains `<link rel="preload">` or `<link rel="modulepreload">` elements, those preloads gate the buffer's commit until they finish loading (or fail).
-3. **Atomic Commit:** When the template reaches `</template>` (or EOF for `src`) and any gating preloads complete, the DocumentFragment is committed to the DOM in a single atomic batch.
+2. **Buffer Activation Gating:** If the buffered template contains `<link rel="stylesheet">`, `<link rel="preload">`, or `<link rel="modulepreload">` elements, those resources gate the buffer's commit until they finish loading (or fail). *(Note: Which subresource types gate buffer activation is an open discussion point.)*
+3. **Atomic Commit:** When the template reaches `</template>` (or EOF for `src`) and any gating resources complete, the DocumentFragment is committed to the DOM in a single atomic batch.
 4. **Non-Parser Blocking:** The main document parser continues to parse and render content *after* the `</template>` element concurrently. Only the insertion of the template's own buffer is held.
 
 ### Avoiding Layout Shifts
@@ -196,8 +197,8 @@ Security safety is configured via the `sanitize` attribute, which accepts either
 #### Default Safety Resolution
 To optimize security and compatibility, the default safety behavior is determined by the presence of the `src` attribute:
 1. **External Includes (`src` is present)**: **Sanitized by default**.
-   - If `sanitize` is omitted, it defaults to safe sanitization.
-   - To execute scripts, the author must explicitly opt-out with `sanitize="unsafe"`.
+   - If `sanitize` is omitted, it defaults to safe sanitization, which strips scripts, inline event handlers, and nested `<template for>` elements (preventing untrusted fragments from hijacking host document slots or triggering recursive `<template for src>` fetches).
+   - To execute scripts or allow nested `<template for>`, the author must explicitly opt-out with `sanitize="unsafe"`.
 2. **Inline Templates (`src` is absent)**: **Unsafe by default**.
    - If `sanitize` is omitted, script execution is allowed (preserving compatibility with standard patching behavior).
    - To enable sanitization on inline content, the author must explicitly declare `sanitize`.
@@ -247,9 +248,7 @@ Like with JS modules, bundlers are very mature and authors can make the decision
 
 ## Relative paths in templates
 
-This proposal deliberately *does not* deal with resolving relative paths in the included content.
-For keeping this solution focused on the problem space of updating the DOM declaratively, the current semantics of inserting fragments to the document are maintained.
-This leaves it up to the author to make sure relative paths in an included fragment are modified to match the document, if desired.
+Relative URLs inside an included fragment are **document-relative** (resolved against the host document's `document.baseURI`, both during speculative preloading in `buffer` mode and after DOM insertion). This matches standard HTML fragment parsing (`innerHTML`, `setHTML`, `<template for>`) and avoids discrepancies between speculative preload URLs and DOM element URLs.
 
 ## Relationship with [HTML modules](https://github.com/WICG/webcomponents/issues/645)
 

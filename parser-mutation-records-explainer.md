@@ -10,7 +10,11 @@ The HTML parser tracks state that never appears in the DOM:
 
 Built-in elements like `<script>`, `<style>`, and `<object>` already rely on this state to act when the parser closes them. `MutationObserver`, however, only sees half of what the parser does: it reports an element in `addedNodes` on its start tag, without indicating whether the element is still open on the parser stack or when it closes.
 
-When markup is primarily driven from the server (SSR, streaming HTML, or declarative updates), this parser metadata—alongside the usual `childList`/`addedNodes` records—is what provides **structural boundaries, flow control, and error control**: knowing when a streamed element or patch starts, is still in flight, finishes cleanly, or aborts mid-stream (e.g., on network truncation or a missing target). **Not exposing it pushes that weight onto the client**: applications must either move DOM construction and update orchestration into client-side JavaScript, or ship client-side workarounds to reconstruct what the parser already knows.
+When markup is primarily driven from the server (SSR, streaming HTML, or declarative updates), client code needs **client-side reflection of server-driven UI** across two dimensions:
+- **Hydration & subtree readiness (`parseEnd` / `isParsing`):** Knowing when a server-streamed element or island has received its closing tag so components, morphers, and animations don't act on half-streamed subtrees.
+- **Flow control & error recovery (`template`):** Knowing when a server-streamed `<template for>` patch starts, updates, finishes cleanly, or aborts mid-stream (e.g., on network truncation or a missing target), along with its server metadata attributes.
+
+**Not exposing this state pushes that weight onto the client**: applications must either move DOM construction and update orchestration into client-side JavaScript, or ship client-side workarounds to reconstruct what the parser already knows.
 
 This explainer proposes reflecting that existing parser state for three reasons:
 
@@ -105,7 +109,7 @@ Two boolean options in `MutationObserverInit`—`parseEnd: true` and `template: 
 - `element.isParsing` / `shadowRoot.isParsing`: `true` while the node is open on the parser's stack of open elements (or actively receiving a streaming fragment parse), and `false` once popped.
 - **`parseEnd: true` (cross-chunk parse completion `childList` record):** When an element opens and closes in the same network chunk, its `isParsing` is already `false` when the observer sees it in `addedNodes` (zero extra records). If an element is still open when the observer flushes (`isParsing === true`), popping its end tag in a later chunk emits an empty `childList` record with `record.target` set to the closed element (`addedNodes: []`, `removedNodes: []`, `previousSibling: el.lastChild`) and `el.isParsing === false`.
 - **`template: true` (`record.templateAttributes` & `record.templateStatus`):**
-  - `record.templateAttributes`: `NamedNodeMap?` of attributes from the active parser-consumed `<template>` (`<template shadowrootmode>` or `<template for>`), or `null`.
+  - `record.templateAttributes`: `TemplateAttributeMap?` (a read-only `Map`-like map of attributes from the active parser-consumed `<template>` — `<template for>` or `<template shadowrootmode="open">`), or `null`.
   - `record.templateStatus`: `"start" | "update" | "end" | "abort"`, or `null`.
 - `record.parserContextElement`: The parser's fragment context element (`Element?`), or `null` (populated when `parseEnd: true` or `template: true` is set).
 
@@ -136,9 +140,9 @@ const mo = new MutationObserver(records => {
     const attrs = r.templateAttributes;
     if (!attrs) continue;
 
-    // 2. Discover and observe declarative Shadow DOM (<template shadowrootmode>):
-    const mode = attrs.getNamedItem("shadowrootmode")?.value;
-    if (mode && r.templateStatus === "start") {
+    // 2. Discover and observe open declarative Shadow DOM (<template shadowrootmode="open">):
+    const mode = attrs.get("shadowrootmode");
+    if (mode === "open" && r.templateStatus === "start") {
       const shadowRoot = r.addedNodes[0];
       if (shadowRoot) {
         mo.observe(shadowRoot, {
@@ -151,9 +155,9 @@ const mo = new MutationObserver(records => {
     }
 
     // 3. Track <template for> lifecycle and read custom attributes from the <template>:
-    const forTarget = attrs.getNamedItem("for")?.value;
+    const forTarget = attrs.get("for");
     if (forTarget) {
-      const turn = attrs.getNamedItem("data-turn")?.value;
+      const turn = attrs.get("data-turn");
       switch (r.templateStatus) {
         case "start":  onPatchStart(r.target, forTarget, turn); break;
         case "update": if (r.type === "childList") onPatchNodes(r.addedNodes, turn); break;
@@ -183,9 +187,14 @@ partial dictionary MutationObserverInit {
 
 enum TemplateStatus { "start", "update", "end", "abort" };
 
+[Exposed=Window]
+interface TemplateAttributeMap {
+  readonly maplike<DOMString, DOMString>;
+};
+
 partial interface MutationRecord {
   readonly attribute TemplateStatus? templateStatus;
-  readonly attribute NamedNodeMap? templateAttributes;
+  readonly attribute TemplateAttributeMap? templateAttributes;
   readonly attribute Element? parserContextElement;
 };
 
@@ -203,8 +212,8 @@ partial interface ShadowRoot {
 When the parser pushes an `Element` onto the stack of open elements, `el.isParsing` is `true`; when the element is popped (or immediately on insertion for void and self-closing foreign elements), `el.isParsing` becomes `false`:
 
 - **Same-chunk completion (zero extra records):** Because `MutationObserver` callbacks run at the microtask checkpoint after the parser yields, any element that opens and closes within the same chunk already has `el.isParsing === false` when the observer inspects `r.addedNodes`. No extra record is queued.
-- **Cross-chunk completion (empty `childList` record on `target === closedElement`):** If a microtask checkpoint ran while `el.isParsing` was `true` (so observers saw `el` in `addedNodes` while still incomplete), then when the parser later pops `el` off the stack of open elements, it queues a `childList` record for `{ parseEnd: true }` observers with `target: el`, `addedNodes: []`, `removedNodes: []`, `previousSibling: el.lastChild`, and `el.isParsing === false`.
-- **Direct observation (`subtree: false`):** Because `record.target` is the closed element itself (`el`), an observer attached directly to a single element (`mo.observe(el, { childList: true, parseEnd: true })`) receives the parse-completion record without needing to observe `el.parentNode`.
+- **Cross-chunk completion (empty `childList` record on `target === closedElement`):** If a microtask checkpoint ran while `el.isParsing` was `true` (so observers saw `el` in `addedNodes` while still incomplete), or if a `{ parseEnd: true }` observer began observing `el` while `el.isParsing` was `true` (e.g., in `connectedCallback()`), then when the parser pops `el` off the stack of open elements, it queues a `childList` record for `{ parseEnd: true }` observers with `target: el`, `addedNodes: []`, `removedNodes: []`, `previousSibling: el.lastChild`, and `el.isParsing === false`.
+- **Direct observation (`subtree: false`):** Because `record.target` is the closed element itself (`el`), an observer attached directly to a single element (e.g., a custom element calling `mo.observe(this, { childList: true, parseEnd: true })` in its `constructor()`) receives the parse-completion record without needing to observe `el.parentNode`.
 - **Disconnected or sanitized elements ([whatwg/dom#662](https://github.com/whatwg/dom/issues/662), [whatwg/html#12756](https://github.com/whatwg/html/pull/12756)):** Elements removed from the observed tree before closing or discarded by the sanitizer do not emit a parse-completion record.
 
 ### 2. Parser-consumed `<template>` elements (`template: true` — `templateAttributes` & `templateStatus`)
@@ -216,7 +225,8 @@ When the parser pushes an `Element` onto the stack of open elements, `el.isParsi
 | **`"end"`** | Record on the shadow host when `</template>` is reached. | Record on the patch target removing `<?end>` or `<?marker>` at `</template>`. |
 | **`"abort"`** | Record on the shadow host if EOF/`abort()` occurs before `</template>`, or on the fallback `<template>` insertion record if attachment failed ([whatwg/html#13075](https://github.com/whatwg/html/issues/13075)). | Record on the patch target if EOF/`abort()` occurs before `</template>` ([#104](https://github.com/WICG/declarative-partial-updates/issues/104)) or the marker moves mid-stream ([whatwg/html#11818](https://github.com/whatwg/html/pull/11818)); or on the fallback `<template>` insertion record if the target wasn't found. |
 
-- **Correlation identity ([#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** All records from a single `<template>` invocation share the **same `NamedNodeMap` instance** (`r1.templateAttributes === r2.templateAttributes`).
+- **Correlation identity ([#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** All records from a single `<template>` invocation share the **same `TemplateAttributeMap` instance** (`r1.templateAttributes === r2.templateAttributes`).
+- **Closed shadow roots excluded:** `<template shadowrootmode="closed">` never emits `"start"` / `"end"` records to outer observers.
 - **Empty patches (`<template for="r"></template>`):** Still emit both `"start"` and `"end"` records.
 
 #### Walkthrough A: `<template for>` across two network chunks
@@ -266,7 +276,10 @@ The `MutationObserver` surface above is the core of this proposal. Whether custo
 
 Built-in elements like `<select>` work regardless of how their `<option>`s arrive or change ("If you cannot handle dynamic insertion and mutation of those insertions, how can you claim to be a proper element?", [#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1460917211), [(comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1463846026)). We agree with this principle: elements and observers must support dynamic updates.
 
-**Why the `MutationObserver` surface supports this principle.** An author using `MutationObserver({ childList: true, parseEnd: true, template: true })` is already observing ongoing `childList` mutations. When markup is driven from the server, `el.isParsing`, cross-chunk `childList` completion records, `templateAttributes`, and `templateStatus` provide the missing structural boundaries, flow state, and error signals (`"abort"`) alongside `addedNodes`, so the same observer can handle both streamed server markup and later client-side mutations without pushing DOM construction and orchestration onto the client.
+**Why the `MutationObserver` surface supports this principle (including imperative `createElement` + `appendChild`).**
+- In `connectedCallback()`, if script runs `const select = document.createElement("s-select"); document.body.append(select); select.append(opt1, opt2);`, `connectedCallback()` fires synchronously on `document.body.append(select)` *before* `opt1` and `opt2` are appended (and with `select.isParsing === false`).
+- By contrast, when a custom element starts `mo.observe(this, { childList: true, parseEnd: true })` in its **`constructor()`** (or when a document-level `MutationObserver` observes the tree), both synchronous `append()` calls finish *before* the microtask checkpoint. When the `MutationObserver` callback runs, `select` already has `opt1` and `opt2` attached *and* `!select.isParsing`.
+- When markup is driven from the server across network chunks, `el.isParsing`, cross-chunk `childList` completion records, `templateAttributes`, and `templateStatus` provide the missing structural boundaries, flow state, and error signals (`"abort"`) alongside `addedNodes`, so the same observer handles both streamed server markup and imperative/dynamic client mutations.
 
 **Why `parsedCallback()` might be acceptable as well.** As shown in [Existing workarounds](#existing-workarounds), withholding a callback hasn't stopped custom element authors from waiting for parse completion—libraries like [`html-parsed-element`](https://github.com/WebReflection/html-parsed-element) already polyfill a method literally named `parsedCallback()` by attaching a `subtree: true` `MutationObserver` per element instance. Defining a native callback can avoid that overhead while reducing the dynamic-update footgun:
 
@@ -293,7 +306,7 @@ We welcome feedback on whether these semantics address the #809 concerns, or whe
 2. **A single combined `parser: true` option instead of `parseEnd` and `template`:** Separating `parseEnd: true` and `template: true` allows callers that only care about `<template for>` / `<template shadowrootmode>` lifecycle records (or only about cross-chunk element completion) to opt into only the records they need without receiving empty `childList` records from the other mechanism.
 3. **Status quo (reconstruct parser state on the client):** Requires per-element observers, ancestor walks (measured at 100ms+ on complex pages), chunk regexes, or sentinel nodes/scripts, and still cannot recover detached `<template>` attributes, patch aborts, or fragment context elements.
 4. **New `MutationRecord.type` values (`"parseEnd"`, `"templateStart"`, `"templateEnd"`, `"templateAbort"`):** Separated `<template>` metadata from the `childList` records carrying `addedNodes` (forcing stateful tracking in every callback) and doubled `MutationRecord` count for same-chunk element opens and closes.
-5. **Exposing the detached `HTMLTemplateElement` (`record.template`):** Retains a live parser-internal element whose `.content` was bypassed; a read-only `NamedNodeMap` (`templateAttributes`) exposes its attributes without leaking the node.
+5. **Exposing the detached `HTMLTemplateElement` (`record.template`):** Retains a live parser-internal element whose `.content` was bypassed; a read-only `TemplateAttributeMap` (`templateAttributes`) exposes its attributes without leaking the node.
 6. **DOM Events (`parseend`, `templatestart`, `templateend`):** Per-element event dispatch during parsing repeats the performance issues of legacy `MutationEvent`.
 
 ---
@@ -308,11 +321,11 @@ No when unused, and minimal when active ([w3c/csswg-drafts#12578](https://github
 ### Q2: Doesn't this encourage authors to ignore dynamic updates?
 See [section 4](#4-custom-elements-is-parsedcallback-ok-too). On `MutationObserver`, `isParsing` and cross-chunk `childList` records are delivered to code that is *already* observing dynamic `childList` changes. When markup comes from the server, they supply the boundary metadata needed to complement `addedNodes`; when nodes are created by script, `el.isParsing` is `false` immediately in `addedNodes`.
 
-### Q3: Why use `NamedNodeMap` for `templateAttributes` instead of `FrozenArray`?
-`NamedNodeMap` provides lookup by name (`r.templateAttributes.getNamedItem("for")?.value`). Each `Attr` has `ownerElement === null`, and mutating methods throw `NoModificationAllowedError`.
+### Q3: Why use a read-only map (`TemplateAttributeMap`) for `templateAttributes`?
+`TemplateAttributeMap` (`readonly maplike<DOMString, DOMString>`) provides ergonomic lookup by name (`r.templateAttributes.get("for")`) and preserves object identity across all records emitted by the same `<template>` invocation (`r1.templateAttributes === r2.templateAttributes`) without relying on legacy `NamedNodeMap` / `Attr` objects.
 
 ### Q4: Doesn't putting a `ShadowRoot` in `addedNodes` violate the `target.childNodes` invariant?
-It is only populated for `{ template: true }` observers on `"start"` records with `shadowrootmode`. If preferred during spec review, `addedNodes` can remain `[]` and observers can read `r.target.shadowRoot`.
+Observing `<template shadowrootmode="open">` is an optional extension (and never operates on `shadowrootmode="closed"`). If preferred during spec review, `addedNodes` can remain `[]` and observers can read `r.target.shadowRoot`.
 
 ### Q5: Why is `record.target` on a cross-chunk parse-end record the closed element itself (`el`) rather than `el.parentNode`?
 1. A `childList` record on `el` naturally means *"the child list of `el` has finished parsing"* (`r.target === el`, `!r.target.isParsing`, `r.previousSibling === el.lastChild`).

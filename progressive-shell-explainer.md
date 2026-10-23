@@ -26,6 +26,8 @@
 - [Considered alternatives](#considered-alternatives)
   - [Two-phase View Transitions (`deferPageSwap`)](#two-phase-view-transitions-deferpageswap)
   - [Full-page Skeletons](#full-page-skeletons)
+  - [Service Worker Stream Stitching](#service-worker-stream-stitching)
+  - [Relying on HTTP Content Negotiation (Headers) Instead of In-Band `<?shellboundary>`](#relying-on-http-content-negotiation-headers-instead-of-in-band-shellboundary)
   - [DOM Preserve / Merge (`preserve`)](#dom-preserve--merge-preserve)
 - [Security and Privacy Considerations](#security-and-privacy-considerations)
   - [Self-Review Questionnaire: Security and Privacy](#self-review-questionnaire-security-and-privacy)
@@ -53,7 +55,7 @@ When a user clicks a link or enters a URL to open a web page, loading the new do
 
 **Non-goals**:
 - **Replacing web frameworks**: The goal is not to replace frameworks, but to provide declarative browser primitives—for declarative SPAs and instant MPAs—that frameworks and meta-frameworks can leverage to ship less client-side routing/shell code and get instant cold starts out of the box.
-- **Cross-origin shells**: Shells only match same-origin URL patterns.
+- **Cross-origin shells**: Shells only match same-origin URL patterns (though an already-cached shell *does* activate on inbound cross-origin navigations to a matching URL on that origin).
 - **General-purpose uninterruptible exit animations**: Holding a navigation arbitrarily long for custom exit animations remains orthogonal.
 
 ## Proposed Solution
@@ -73,13 +75,15 @@ By placing a single `<meta name="shell">` tag in `<head>` and separating the sha
   <!-- Cache contract: maps to /item/:id routes.
        upgrade=always enables MPA -> SPA navigation upgrades. -->
   <meta name="shell" content="
-    name=app-shell,
-    revision=my-shell-v1,
-    pattern=/item/:id,
+    app-shell;
+    revision=my-shell-v1;
+    pattern=/item/:id;
     upgrade=always
   ">
   <?start name="metadata">
   <title>Some item</title>
+  <?end>
+  <?start name="page-specific-styles">
   <?end>
   <!-- async scripts and resources with fetchpriority < high wait to load
        until the shell is on screen -->
@@ -117,9 +121,9 @@ By placing a single `<meta name="shell">` tag in `<head>` and separating the sha
   <!-- The server repeats the meta contract. If there's a revision mismatch
        or a non-OK status, the browser aborts the upgrade and does a clean MPA reload. -->
   <meta name="shell" content="
-    name=app-shell,
-    revision=my-shell-v1,
-    pattern=/item/:id,
+    app-shell;
+    revision=my-shell-v1;
+    pattern=/item/:id;
     upgrade=always">
 </head>
 <body>
@@ -129,7 +133,6 @@ By placing a single `<meta name="shell">` tag in `<head>` and separating the sha
 
   <!-- Page-specific styles replace the previous ones -->
   <template for="page-specific-styles">
-    <?start name="page-specific-style">
     <link rel="stylesheet" href="/item-details.css">
   </template>
   <template for="metadata">
@@ -149,8 +152,8 @@ By placing a single `<meta name="shell">` tag in `<head>` and separating the sha
   - `pattern`: Same-origin [URL Pattern](https://urlpattern.spec.whatwg.org/) of routes that share this shell.
   - `revision`: Version key. A mismatch triggers a full cross-document reload.
   - `upgrade` (`once` | `always`): Whether this shell is only used for one-shot cold-start shell-to-content continuation (`once`), or also upgrades navigations between matching pages into same-document updates (`always`).
-- **The Parser Cut (`<?shellboundary>`)**: The structural shell starts at the beginning of the document and ends at `<?shellboundary>`.
-- **Instant Shell Paints & Continuation**: The browser caches the shell keyed by `pattern`. When any navigation matching `pattern` starts (including cold starts from the omnibox or cross-origin), the cached shell is painted immediately. When the network response arrives and its contract matches, the bytes before `<?shellboundary>` are discarded and the `<template for>` blocks after the boundary stream into the live shell.
+- **The Parser Cut (`<?shellboundary>`)**: The structural shell starts at the beginning of the document and ends at `<?shellboundary>`, which must be a direct child of `<head>` or `<body>`.
+- **Instant Shell Paints & Continuation**: The browser caches the shell keyed by `pattern`. When any navigation matching `pattern` starts (including cold starts from the omnibox or cross-origin), the cached shell is painted immediately under the cached shell's security policy (`CSP`). When the network response arrives and its contract matches (`200 OK`, matching `revision` and `CSP`), the bytes before `<?shellboundary>` are discarded and the `<template for>` blocks after the boundary stream into the live shell. If the contract mismatches (e.g., `302` redirect, `404`/`500`, or a new `revision`/`CSP`), the browser falls back to a full cross-document MPA navigation. To verify the contract even earlier before the response body arrives, servers can send `103 Early Hints` or the browser can perform a lightweight `HEAD` check.
 - **Request Header Negotiation (`Sec-Active-Shell`)**: When fetching a page while a shell is active, the browser sends `Sec-Active-Shell: name="app-shell"; rev="my-shell-v1"`. Servers that understand this header can omit the redundant shell markup before `<?shellboundary>` to save bandwidth; static servers can simply return the full HTML file.
 - **The Staged Commit**: When navigating from a page with `upgrade=always`, the browser holds the navigation commit (keeping the current page interactive) and speculatively parses the incoming `<head>`:
   - **Match**: Discards incoming bytes up to `<?shellboundary>`, updates the URL and history entry in place, and streams the `<template for>` blocks into the existing document.
@@ -184,6 +187,15 @@ Beyond discovering `<meta name="shell">` when a user visits a page, the shell ca
 
 The destination page declares a separate temporary "skeleton" document that gets replaced wholesale when the real document loads.
 - **Why not**: Replacing the temporary skeleton document with the real document wipes out any scrolling, focus, or text typed into inputs while the skeleton was visible—forcing skeleton inputs to be inert and creating a brittle "half-measure" UX.
+
+### Service Worker Stream Stitching
+
+Building on the [Service Worker streaming shell pattern](https://jakearchibald.com/2016/streams-ftw/) coupled with out-of-order streaming (`<template for>`), a Service Worker can intercept navigation requests, immediately return a `ReadableStream` that flushes a cached shell at 0ms, and then pipe the network response (`<template for>`) into the same stream.
+- **Why not**:
+  1. **Cannot upgrade warm navigations in place (`upgrade=always`)**: Service Workers sit below the navigation commit boundary and can only return a byte stream for a *new* cross-document `Document`. Navigating from `/item/1` to `/item/2` still tears down the old `Document` and resets focus, input text, scroll, and media state—unless the site *also* ships a separate client-side `navigateEvent.intercept()` SPA router.
+  2. **Premature `200 OK` and security-header commit**: To paint the shell at 0ms, `event.respondWith(new Response(stream, { status: 200, headers }))` must commit a `200 OK` status and response headers (`CSP`, `COOP`, etc.) *before* the network request completes. If the server returns a `302` redirect, a `404`/`500` error, a new shell revision, or stricter security headers, it is too late—the browser has already committed a `200 OK` document.
+  3. **Service Worker cold-start boot latency**: On cold starts, waking up a sleeping Service Worker thread to construct a `ReadableStream` adds 50–150ms+ on mobile. Service Worker Static Routing (`addRoutes()`) avoids the boot tax, but can only route to `"cache"` *or* `"network"`—it cannot stitch a cached prefix with a live network stream.
+  4. **Split endpoints vs. one self-contained HTML file**: SW stream stitching requires either separate fragment endpoints on the server or JS stream slicing in the worker, whereas `<meta name="shell">` + `<?shellboundary>` lets a single static or CDN-cached HTML file act as a full page, a cached shell, and a patch stream.
 
 ### Relying on HTTP Content Negotiation (Headers) Instead of In-Band `<?shellboundary>`
 
