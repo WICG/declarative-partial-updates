@@ -43,7 +43,7 @@ This explainer proposes reflecting that existing parser state for three reasons:
 
 ## Use Cases & Problem Statement
 
-### 1. Acting on complete subtrees (`addedNodes` fires on the start tag)
+### 1. Hydration & subtree readiness (`addedNodes` fires on the start tag)
 
 When the parser processes `<s-select><s-option>A</s-option><s-option>B</s-option></s-select>`, it inserts `<s-select>` as soon as it reads the start tag. If the parser yields between network chunks before `</s-select>`, a `MutationObserver` receives `<s-select>` in `addedNodes` while its children are still missing or incomplete:
 
@@ -303,7 +303,7 @@ We welcome feedback on whether these semantics address the #809 concerns, or whe
 ## Alternatives Considered
 
 1. **A `record.parsedElements` `NodeList` on `MutationRecord`:** An earlier revision of this proposal exposed `readonly attribute NodeList parsedElements` on `MutationRecord` (with `record.target` set to `el.parentNode`), coalescing same-chunk closed elements onto the parent's `childList` record. While convenient (`for (const el of r.parsedElements)`), it requires a new `NodeList` allocation per `MutationRecord`, requires observing `el.parentNode` rather than `el` directly, and duplicates information already available via `!node.isParsing` on `addedNodes` in the 99% same-chunk case. Emitting an empty `childList` record with `target === closedElement` only when an element spans a chunk boundary avoids adding `parsedElements` to `MutationRecord` while allocating zero extra objects in the same-chunk case.
-2. **A single combined `parser: true` option instead of `parseEnd` and `template`:** Separating `parseEnd: true` and `template: true` allows callers that only care about `<template for>` / `<template shadowrootmode>` lifecycle records (or only about cross-chunk element completion) to opt into only the records they need without receiving empty `childList` records from the other mechanism.
+2. **A single combined `parser: true` option instead of `parseEnd` and `template`:** Separating `parseEnd: true` (component/island hydration) and `template: true` (patch flow & error control) allows callers that only care about one concern—such as a UI component library that only needs `parseEnd`, or a streaming router that only needs `<template for>` lifecycle—to opt into only the records they need without receiving empty `childList` records from the other mechanism.
 3. **Status quo (reconstruct parser state on the client):** Requires per-element observers, ancestor walks (measured at 100ms+ on complex pages), chunk regexes, or sentinel nodes/scripts, and still cannot recover detached `<template>` attributes, patch aborts, or fragment context elements.
 4. **New `MutationRecord.type` values (`"parseEnd"`, `"templateStart"`, `"templateEnd"`, `"templateAbort"`):** Separated `<template>` metadata from the `childList` records carrying `addedNodes` (forcing stateful tracking in every callback) and doubled `MutationRecord` count for same-chunk element opens and closes.
 5. **Exposing the detached `HTMLTemplateElement` (`record.template`):** Retains a live parser-internal element whose `.content` was bypassed; a read-only `TemplateAttributeMap` (`templateAttributes`) exposes its attributes without leaking the node.
