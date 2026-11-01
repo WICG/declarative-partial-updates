@@ -216,10 +216,11 @@ For this, both the patch and the target element can have a `contentrevision` att
 
 ### Patch contents from URL
 
-In addition to patching from a stream or interleaved in HTML, there are use-cases for patching by fetching a URL.
-This can be done with a `patchsrc` attribute.
+In addition to patching from a stream or interleaved in HTML, `<template for="...">` supports fetching an external fragment via a `src` attribute (along with a `sanitizer` attribute that sanitizes fetched fragments by default). See [Fragment Include (`<template for src>`)](./fragment-include-explainer.md) for full details.
 
-Enabling remote fetching of patch content would act as a script in terms of CSP, with a CORS-only request, and would be sanitized with the same HTML/trusted-types restrictions as patching using script.
+### Avoiding layout shifts and FOUC
+
+Because out-of-order `<template for>` patches stream into containers after surrounding markup may have already painted, authors can combine placeholders inside `<?start name="...">...<?end>`, document-level `<link rel="expect" href="#..." blocking="render">` in `<head>`, and element-scoped [Partial Render Blocking (`hidden="while-loading"`)](./partial-render-blocking-explainer.md) to avoid layout shifts, half-parsed subtrees, and flashes of unstyled content.
 
 ## Alternatives considered
 
@@ -341,7 +342,7 @@ N/A
 20.  How does this specification distinguish between behavior in first-party and
      third-party contexts?
 
-This would be relevant for `patchsrc`, but is out of scope for the current questionnaire.
+This would be relevant for `<template for src>` (covered in [fragment-include-explainer.md](./fragment-include-explainer.md)), and is out of scope for the inline `<template for>` questionnaire.
 
 21.  How do the features in this specification work in the context of a browser’s
      Private Browsing or Incognito mode?
