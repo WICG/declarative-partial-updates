@@ -1,0 +1,59 @@
+<div class="sidebar-widget-list">
+  <div class="widget-card">
+    <div class="widget-header">
+      <span class="icon-slot">
+        <!-- In-place include (empty 'for') for flame icon; src is sanitized by default -->
+        <template for src="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/icons/flame.svg" crossorigin buffered></template>
+      </span>
+      <h3>Trending Specs</h3>
+    </div>
+    <ul class="widget-links">
+      <li>
+        <a href="https://github.com/WICG/declarative-partial-updates/blob/main/fragment-include-explainer.md" target="_blank" rel="noopener">
+          <strong>Fragment Include</strong>
+          <span>&lt;template for src buffer&gt;</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/WICG/declarative-partial-updates/blob/main/patching-explainer.md" target="_blank" rel="noopener">
+          <strong>HTML Patching</strong>
+          <span>Out-of-order streaming</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/WICG/declarative-partial-updates/blob/main/route-matching-explainer.md" target="_blank" rel="noopener">
+          <strong>Route Matching</strong>
+          <span>Styling navigation states</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <div class="widget-card stats-card">
+    <div class="widget-header">
+      <span class="icon-slot">
+        <!-- In-place include (empty 'for') for rss icon; src is sanitized by default -->
+        <template for src="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/icons/rss.svg" crossorigin buffered></template>
+      </span>
+      <h3>Include Attributes</h3>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-value"><code>for</code></div>
+        <div class="stat-label">Target / In-place</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value"><code>src</code></div>
+        <div class="stat-label">Resource URL</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value"><code>buffer</code></div>
+        <div class="stat-label">Atomic EOF</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value"><code>sanitize</code></div>
+        <div class="stat-label">Default on src</div>
+      </div>
+    </div>
+  </div>
+</div>

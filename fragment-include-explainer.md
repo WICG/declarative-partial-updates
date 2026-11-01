@@ -32,44 +32,27 @@ We now have the platform building blocks to address all three problems directly 
 
 ## Proposed Solution
 
-Building on [declarative patching (`<template for="target-name">`)](./patching-explainer.md), client-side includes require only a minimal extension to `<template>`:
+Building on [declarative patching (`<template for="target-name">`)](./patching-explainer.md), this proposal adds `src` and `sanitizer` to `<template>`:
 
-- **`src`** (plus standard resource-fetching attributes: `crossorigin`, `referrerpolicy`, `integrity`, `fetchpriority`, and global `nonce`): asynchronously fetches an HTML fragment (using CORS by default, like `<script type="module">`) and streams it into the target range (`<?start name="...">...<?end>`) or marker (`<?marker name="...">`) named by `for`.
-- **`sanitizer`** (applicable **only** with `src`): controls sanitization of the fetched fragment. By default, it behaves as [`removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe)—either on the enclosing parser's existing sanitizer configuration (if one is active) or on the default `Sanitizer` configuration. Specifying `sanitizer="unsafe"` skips `removeUnsafe()` and inherits the ambient parser's sanitizer context as-is (so `sanitizer` can only *restrict* an existing sanitizer configuration, never relax it).
+- **`src`** (along with standard resource-fetching attributes: `crossorigin`, `referrerpolicy`, `integrity`, `fetchpriority`, and global `nonce`): asynchronously fetches an HTML fragment (using CORS by default, like `<script type="module">`) and streams it into the target range (`<?start name="...">...<?end>`) or marker (`<?marker name="...">`) named by `for`. Even when `sanitizer` is omitted, fetching via `src` sanitizes the fragment with the behavior of **existing sanitizer + [`removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe)** (using the default `Sanitizer` configuration if no existing sanitizer is active).
+- **`sanitizer`** (applicable **only** with `src`): controls sanitization of the fetched fragment. Specifying `sanitizer="unsafe"` undoes that automatic `removeUnsafe()` step and uses the enclosing parser's existing sanitizer context as-is (so `sanitizer` can only *restrict* an existing sanitizer configuration, never relax it).
 
 ### At a Glance
 
 ```html
-<!doctype html>
-<html>
-  <head>
-    <!-- Hold first paint until the #header-content include is applied -->
-    <link rel="expect" href="#header-content" blocking="render">
-  </head>
-  <body>
-    <header><?start name="header"><?end></header>
+<header><?marker name="header"></header>
 
-    <main>
-      <section id="feed"><?start name="feed"><p>Loading feed...</p><?end></section>
-      <aside id="promo" hidden="while-loading"><?marker name="promo"></aside>
-      <section id="chart"><?start name="chart"><p>Loading chart...</p><?end></section>
-    </main>
+<main>
+  <section><?start name="feed"><p>Loading feed...</p><?end></section>
+  <section><?start name="chart"><p>Loading chart...</p><?end></section>
+</main>
 
-    <!-- 1. Critical include (paired with rel="expect" in <head> + high fetchpriority) -->
-    <template id="header-content" for="header" src="/partials/header.html" fetchpriority="high"></template>
+<!-- Sanitized by default -->
+<template for="header" src="/partials/header.html"></template>
+<template for="feed" src="/partials/feed.html"></template>
 
-    <!-- 2. Standard include: fetches early in parallel; streams sanitized HTML into "feed" -->
-    <template for="feed" src="/partials/feed.html"></template>
-
-    <!-- 3. Cross-origin CDN include (CORS by default like type="module") with SRI,
-            low priority, and partial render blocking on #promo -->
-    <template for="promo" src="https://cdn.example/promo.html" integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC" fetchpriority="low" referrerpolicy="no-referrer"></template>
-
-    <!-- 4. Trusted include (`sanitizer="unsafe"`): inherits the ambient sanitizer context
-            so scripts and nested <template for> are allowed (still governed by CSP) -->
-    <template for="chart" src="/widgets/interactive-chart.html" sanitizer="unsafe" nonce="r4nd0m"></template>
-  </body>
-</html>
+<!-- Inherits ambient parser context (allows scripts and nested <template for>, subject to CSP) -->
+<template for="chart" src="/widgets/chart.html" sanitizer="unsafe"></template>
 ```
 
 ### Activation and Targeting
@@ -84,7 +67,7 @@ Building on [declarative patching (`<template for="target-name">`)](./patching-e
 
 When both `for` and `src` are present on `<template>`, the browser asynchronously fetches the HTML payload over the network:
 
-- **Always `text/html`:** Included fragments are always fetched and parsed as `text/html` (using the HTML fragment parsing algorithm in the context of the target parent element), even when the fragment contains `<svg>` or `<math>` markup. The HTML parser natively transitions into the SVG or MathML namespace for `<svg>` and `<math>` roots without requiring XML media types (`image/svg+xml` or `application/mathml+xml`) or strict XML well-formedness.
+- **Always `text/fragment`:** Included responses must be served with the `text/fragment` MIME type (strict MIME checking with no sniffing; `text/html` and other media types are rejected and abort the include). Requiring `text/fragment` rather than `text/html` ensures endpoints explicitly opt in to serving includable fragments—preventing accidental inclusion of full HTML pages (such as fallback routes or error pages) and preventing fragment endpoints from rendering as standalone documents on direct top-level navigation. Once verified as `text/fragment`, the payload is parsed using the HTML fragment parsing algorithm in the context of the target parent element, natively supporting HTML, `<svg>`, and `<math>` markup without requiring XML media types (`image/svg+xml` or `application/mathml+xml`) or strict XML well-formedness.
 - **CORS by default (`crossorigin`, matching `<script type="module">`):** Fetches always use Fetch mode `"cors"` (an opaque `no-cors` response can never be parsed into the host DOM). Just like `<script type="module">`, `crossorigin` controls credentials mode: omitting `crossorigin` (or setting `crossorigin="anonymous"`) uses `"same-origin"` credentials (sending cookies on same-origin requests and omitting them cross-origin), while `crossorigin="use-credentials"` uses `"include"`.
 - **Subresource Integrity (`integrity`):** Verifies the cryptographic digest of the fetched payload via standard Fetch SRI. Because Fetch must verify the full body before releasing bytes to the consumer, specifying `integrity` buffers the network response prior to parsing rather than streaming chunk-by-chunk (making it well-suited for static, immutable partials and CDN assets). If integrity verification fails, no nodes are inserted and the template aborts (`templateStatus: "abort"`).
 - **Priority, referrer, and CSP (`fetchpriority`, `referrerpolicy`, `nonce`):** `fetchpriority` (`"high"`, `"low"`, `"auto"`) and `referrerpolicy` map directly to the underlying Fetch request, and the global `nonce` attribute is passed on the request for CSP `fragment-src` / `script-src` matching.
@@ -144,10 +127,10 @@ The `sanitizer` attribute applies **exclusively when `src` is present** (`<templ
 
 #### Default Safety (`removeUnsafe`) & Ambient Context Inheritance (`sanitizer="unsafe"`)
 
-- **Sanitized by default via `removeUnsafe()`:** When `src` is present and `sanitizer` is omitted (or empty / `"default"`), sanitization always behaves as [`Sanitizer.prototype.removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe):
+- **Fetching sanitizes by default (existing sanitizer + `removeUnsafe()`):** Even when `sanitizer` is omitted (or set to `""` / `"default"`), fetching via `src` always sanitizes the response by applying [`Sanitizer.prototype.removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe):
   - If the enclosing parser already has an active sanitizer configuration (for example, `element.streamHTMLUnsafe({ sanitizer: customConfig })`, `element.streamHTML(...)`, or an outer `<template for="..." src="...">`), `<template src>` takes a copy of that existing configuration and applies `removeUnsafe()` to it—preserving all existing allowlist/blocklist restrictions while stripping unsafe constructs (`<script>`, inline event handlers, and nested `<template for>` elements).
   - If the enclosing parser has no sanitizer configuration (for example, the main document parser or an unsanitized `element.streamHTMLUnsafe()` call), it applies `removeUnsafe()` on the default `Sanitizer` configuration (`new Sanitizer()`).
-- **`sanitizer="unsafe"` inherits the existing sanitizer context:** Specifying `sanitizer="unsafe"` skips `removeUnsafe()` and **takes the ambient sanitizer context as-is**:
+- **`sanitizer="unsafe"` undoes the added `removeUnsafe()` step:** Specifying `sanitizer="unsafe"` opts out of that automatic `removeUnsafe()` call and **uses the enclosing parser's existing sanitizer context as-is**:
   - In the top-level document parser—or inside an unsanitized `element.streamHTMLUnsafe()` / `element.setHTMLUnsafe()` call with no sanitizer—there is no ambient sanitizer, so `sanitizer="unsafe"` allows scripts and nested `<template for>` elements to run.
   - Inside a context with an active sanitizer—such as `element.streamHTML()`, `element.streamHTMLUnsafe({ sanitizer: customConfig })`, or an outer sanitized `<template for="..." src="...">`—`sanitizer="unsafe"` inherits that existing sanitizer configuration unchanged rather than bypassing it.
 - **Monotonic restriction only:** Because default sanitization applies `removeUnsafe()` onto any ambient config (rather than replacing a stricter custom config with a broader default) and `sanitizer="unsafe"` merely preserves the ambient config, the `sanitizer` attribute can **only restrict** an existing sanitizer configuration, **never relax or widen it**.
@@ -157,7 +140,7 @@ The `sanitizer` attribute applies **exclusively when `src` is present** (`<templ
 <div id="profile"><?start name="profile">Loading...<?end></div>
 <template for="profile" src="user-profile.html"></template>
 
-<!-- External SVG wrapped in text/html: inserted as a sanitized inline <svg>
+<!-- External SVG served as text/fragment: inserted as a sanitized inline <svg>
      (stylable with CSS currentColor) without bloating the main stream -->
 <button class="icon-btn">
   <?start name="star-icon"><?end>
@@ -277,7 +260,7 @@ Another alternative is decomposing includes into a global `sanitize` attribute o
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
 
 1. **What information does this feature expose, and for what purposes?**
-   It does not expose new user information. It provides a declarative mechanism to fetch and insert HTML fragments, which is already possible via standard fetch APIs and `element.innerHTML` or `element.setHTML()`. Network fetch statistics and latency are exposed via the Performance timeline, matching standard subresource guidelines.
+   It does not expose new user information. It provides a declarative mechanism to fetch `text/fragment` responses and insert HTML fragments into the DOM. Resource timing follows standard CORS / `Timing-Allow-Origin` subresource rules (see [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle)).
 
 2. **Do features in your specification expose the minimum amount of information necessary to implement the intended functionality?**
    Yes.
@@ -304,11 +287,11 @@ Another alternative is decomposing includes into a global `sanitize` attribute o
    No.
 
 10. **Do features in this specification enable new script execution/loading mechanisms?**
-    Yes. By importing external HTML subresources, the feature allows loading and parsing HTML which may contain scripts.
-    **Mitigation:** The proposal enforces security-by-default for external resource includes. When `src` is present, HTML sanitization behaves by default as `removeUnsafe()`—applied either to the enclosing parser's existing sanitizer configuration or, if none is present, to the default `Sanitizer` configuration—stripping all script tags, event handler attributes, and nested `<template for>` elements during parsing. Opting into the ambient parser context requires `sanitizer="unsafe"`, which skips `removeUnsafe()` and can only inherit (never relax) the enclosing parser's sanitizer configuration.
-    Furthermore, fetching external templates is governed by Content Security Policy (CSP):
-    * The new **`fragment-src`** directive (falling back to **`script-src`**, and then `default-src`) controls which origins are allowed to serve HTML payloads for `<template for src>`. Because external templates are sanitized by default, sites can configure a broader `fragment-src` policy for CDN or CMS fragments while maintaining a strict `script-src`.
-    * When `sanitizer="unsafe"` is used in an unsanitized context, any `<script>` tags loaded from the template must strictly comply with the document's **`script-src`** directives (e.g., matching nonce/hash).
+    Yes, when `sanitizer="unsafe"` is used in an unsanitized parser context. This is mitigated across multiple layers:
+    * **Sanitized by default (`existing sanitizer + removeUnsafe()`):** Even when `sanitizer` is omitted, fetching via `src` strips `<script>`, inline event handlers, and nested `<template for>`; `sanitizer="unsafe"` only preserves (never relaxes) the enclosing sanitizer context. See [Default Safety (`removeUnsafe`) & Ambient Context Inheritance](#default-safety-removeunsafe--ambient-context-inheritance-sanitizerunsafe).
+    * **Strict `text/fragment` MIME check:** Responses must use `Content-Type: text/fragment` (no sniffing; `text/html` is rejected), preventing accidental full-page inclusion and direct-navigation XSS. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
+    * **CSP (`fragment-src` / `script-src`) & `nonce`:** Fragment URLs are governed by `fragment-src` (falling back to `script-src`, then `default-src`), and any scripts inside `sanitizer="unsafe"` fragments must satisfy `script-src`. See [Content Security Policy (CSP) Integration](#content-security-policy-csp-integration).
+    * **Subresource Integrity (`integrity`):** Verifies the full response digest prior to parsing when specified. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
 
 11. **Do features in this specification allow an origin to access other devices?**
     No.
@@ -320,7 +303,8 @@ Another alternative is decomposing includes into a global `sanitize` attribute o
     N/A.
 
 14. **How does this specification distinguish between behavior in first-party and third-party contexts?**
-    Subresources fetched via `<template for="..." src="...">` always use Fetch mode `"cors"` with `"same-origin"` credentials by default (matching `<script type="module">`). Cross-origin templates require CORS headers to be read, and only include cross-origin credentials when `crossorigin="use-credentials"` is explicitly specified.
+    * **CORS by default (`crossorigin`):** Always uses Fetch mode `"cors"` with `"same-origin"` credentials by default (matching `<script type="module">`), requiring CORS headers cross-origin and `crossorigin="use-credentials"` to send cross-origin credentials. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
+    * **Referrer & partitioning:** Respects `referrerpolicy` and standard third-party cache/storage partitioning.
 
 15. **How do the features in this specification work in the context of a browser’s Private Browsing or Incognito mode?**
     Standard subresource caching and partitioning rules apply.
@@ -329,16 +313,17 @@ Another alternative is decomposing includes into a global `sanitize` attribute o
     Yes, these will be integrated into the HTML Standard.
 
 17. **Do features in your specification enable origins to downgrade default security protections?**
-    No. External includes default to a safe sanitizer configuration, and `sanitizer` is strictly monotonic: it can restrict an ambient sanitizer configuration, never downgrade or bypass one.
+    No:
+    * `sanitizer="unsafe"` only skips the added `removeUnsafe()` step and preserves the enclosing parser's sanitizer configuration—it can never relax an existing sanitizer, bypass CSP, or disable CORS / `text/fragment` MIME enforcement. See [Security & Sanitization (`sanitizer`)](#security--sanitization-sanitizer).
 
 18. **What happens when a document that uses your feature is kept alive in BFCache (instead of getting destroyed) after navigation, and potentially gets reused on future navigations back to the document?**
-    No specific impact; active templates are parsed and detached at parsing time, leaving no active network fetches running in BFCache.
+    No specific impact; standard BFCache handling for in-flight subresource fetches applies.
 
 19. **What happens when a document that uses your feature gets disconnected?**
-    If the target document or container is disconnected while a network fetch is in progress, the fetch is aborted.
+    In-flight `src` fetches abort immediately if the target document or container is disconnected. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
-    Aborted or failed `<template for src>` operations surface via `templateStatus: "abort"` in [Parser-Aware `MutationObserver` Records](./parser-mutation-records-explainer.md).
+    Network failures, `text/fragment` MIME mismatches, CORS/CSP blocks, `integrity` failures, and disconnection aborts halt the include and surface via `templateStatus: "abort"`. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle) and [Observing Template Lifecycles and Attribution](#observing-template-lifecycles-and-attribution).
 
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Declarative Fragment Includes Demo</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Polyfill for declarative fragment includes (<template for src buffer/buffered>) -->
+  <script src="polyfill.js"></script>
+</head>
+<body>
+  <!-- Demo Control Bar (In-place template for refresh icon without skeleton) -->
+  <aside class="demo-toolbar" aria-label="Demo controls">
+    <div class="toolbar-title">
+      <span>Declarative Fragment Includes</span>
+      <span class="spec-pill">&lt;template for src&gt;</span>
+    </div>
+
+    <div class="toolbar-controls">
+      <div class="control-group">
+        <label for="speedControl">Streaming Delay:</label>
+        <input type="range" id="speedControl" min="0" max="1500" step="100" value="800" />
+        <span id="speedValue">800ms</span>
+      </div>
+
+      <button id="rerunBtn" class="btn btn-primary" type="button">
+        <span class="icon-slot">
+          <!-- In-place include (empty 'for') where there is no skeleton; src is sanitized by default -->
+          <template for src="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/icons/refresh-cw.svg" crossorigin buffered></template>
+        </span>
+        Re-run Includes
+      </button>
+    </div>
+  </aside>
+
+  <div class="page-container">
+    <!-- 1. Header Section: Small part of page (Out-of-order Targeted Include replacing Skeleton) -->
+    <header class="section-wrapper" id="site-header">
+      <div class="spec-badge-header">
+        <span class="spec-tag tag-buffered">&lt;template for="header" src="fragments/header.html" buffered&gt;</span>
+        <span class="badge-desc">Targeted • Out-of-Order Skeleton Replacement</span>
+      </div>
+
+      <?start name="header">
+      <div class="skeleton-loading" aria-label="Loading navigation skeleton">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="skeleton-icon"></div>
+            <div class="skeleton-line title" style="width: 180px; margin: 0;"></div>
+          </div>
+          <div class="skeleton-line" style="width: 260px; margin: 0;"></div>
+          <div class="skeleton-icon" style="border-radius: 50%;"></div>
+        </div>
+      </div>
+      <?end>
+    </header>
+
+    <!-- 2. 3rd-Party Verified Badge: Out-of-order Targeted Include replacing Skeleton with Sanitized 3P SVG -->
+    <section class="banner-row">
+      <div class="banner-info">
+        <div class="info-icon-slot">
+          🛡️
+        </div>
+        <div>
+          <h4>3rd-Party SVG Integration via CDN (Lucide Icons)</h4>
+          <p>Loaded directly from <code>cdn.jsdelivr.net</code>. External resources (<code>src</code>) are sanitized by default, filtering vector markup and rendering inline SVG safely.</p>
+        </div>
+      </div>
+
+      <div class="partner-badge-slot">
+        <div class="section-wrapper" style="box-shadow: none; border-color: #86efac;">
+          <div class="spec-badge-header" style="background: #f0fdf4; border-bottom-color: #bbf7d0;">
+            <span class="spec-tag tag-sanitize">&lt;template for="partner-badge" src="https://cdn.jsdelivr.net/.../shield-check.svg" crossorigin buffered&gt;</span>
+          </div>
+          <div style="padding: 8px 16px; display: flex; align-items: center; gap: 8px;">
+            <?start name="partner-badge">
+            <div class="skeleton-badge"></div>
+            <?end>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Grid: Progressive Streaming Feed + Buffered Sidebar -->
+    <div class="main-grid">
+      <!-- 3. Main Feed Content: Out-of-order Non-buffered Progressive Streaming replacing Skeleton -->
+      <main class="section-wrapper" id="main-content-section">
+        <div class="spec-badge-header">
+          <span class="spec-tag tag-streaming">&lt;template for="feed" src="fragments/feed.html"&gt;</span>
+          <span class="badge-desc">Targeted • Live Progressive Chunk Streaming</span>
+        </div>
+
+        <?start name="feed">
+        <div class="skeleton-loading" aria-label="Loading live streaming feed skeleton">
+          <div class="skeleton-card">
+            <div class="skeleton-line title" style="width: 40%;"></div>
+            <div class="skeleton-line subtitle" style="width: 70%;"></div>
+            <div class="skeleton-line" style="width: 100%;"></div>
+            <div class="skeleton-line" style="width: 90%;"></div>
+          </div>
+          <div class="skeleton-card">
+            <div class="skeleton-line title" style="width: 50%;"></div>
+            <div class="skeleton-line subtitle" style="width: 60%;"></div>
+            <div class="skeleton-line" style="width: 95%;"></div>
+          </div>
+        </div>
+        <?end>
+      </main>
+
+      <!-- 4. Sidebar: Out-of-order Targeted Include replacing Skeleton -->
+      <aside class="section-wrapper" id="sidebar-section">
+        <div class="spec-badge-header">
+          <span class="spec-tag tag-buffered">&lt;template for="sidebar-widgets" src="fragments/sidebar.html" buffered&gt;</span>
+          <span class="badge-desc">Targeted • Buffered Atomic</span>
+        </div>
+
+        <?start name="sidebar-widgets">
+        <div class="skeleton-loading" aria-label="Loading sidebar skeleton">
+          <div class="skeleton-line title" style="width: 60%;"></div>
+          <div class="skeleton-line" style="width: 85%;"></div>
+          <div class="skeleton-line" style="width: 75%;"></div>
+          <div class="skeleton-line" style="width: 90%; margin-top: 14px;"></div>
+        </div>
+        <?end>
+      </aside>
+    </div>
+
+    <!-- 5. Comments Section: Out-of-order Targeted Include replacing Skeleton -->
+    <section class="section-wrapper" id="comments-section">
+      <div class="spec-badge-header">
+        <span class="spec-tag tag-buffered">&lt;template for="comments" src="fragments/comments.html" buffered&gt;</span>
+        <span class="badge-desc">Targeted • Buffered Discussion</span>
+      </div>
+
+      <?start name="comments">
+      <div class="skeleton-loading" aria-label="Loading comments skeleton">
+        <div class="skeleton-line title" style="width: 35%;"></div>
+        <div class="skeleton-line" style="width: 90%;"></div>
+        <div class="skeleton-line" style="width: 80%;"></div>
+      </div>
+      <?end>
+    </section>
+
+    <!-- 6. Footer Section: In-place Include using empty 'for' attribute (No Skeleton) -->
+    <footer class="section-wrapper" id="site-footer">
+      <div class="spec-badge-header">
+        <span class="spec-tag tag-inplace">&lt;template for src="fragments/footer.html" buffered&gt;</span>
+        <span class="badge-desc">In-place (empty for) • No Skeleton Needed</span>
+      </div>
+
+      <!-- In-place include directly at location without skeleton -->
+      <template for src="fragments/footer.html" buffered></template>
+    </footer>
+
+    <!-- Targeted Out-of-Order Template Includes (Replacing Skeletons) -->
+    <template for="header" src="fragments/header.html" buffered></template>
+    <template for="partner-badge" src="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/icons/shield-check.svg" crossorigin buffered></template>
+    <template for="feed" src="fragments/feed.html"></template>
+    <template for="sidebar-widgets" src="fragments/sidebar.html" buffered></template>
+    <template for="comments" src="fragments/comments.html" buffered></template>
+  </div>
+
+  <script>
+    // Speed control slider
+    const speedSlider = document.getElementById('speedControl');
+    const speedValue = document.getElementById('speedValue');
+    speedSlider.addEventListener('input', () => {
+      speedValue.textContent = speedSlider.value + 'ms';
+      if (window.FragmentIncludePolyfill) {
+        window.FragmentIncludePolyfill.setDelay(parseInt(speedSlider.value, 10));
+      }
+    });
+
+    // Re-run demo button
+    document.getElementById('rerunBtn').addEventListener('click', () => {
+      location.reload();
+    });
+  </script>
+</body>
+</html>

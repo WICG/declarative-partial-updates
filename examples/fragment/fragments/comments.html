@@ -1,0 +1,54 @@
+<div class="comments-container">
+  <div class="comments-header">
+    <h3>
+      <span class="icon-slot">
+        <!-- In-place include (empty 'for') for comments icon; src is sanitized by default -->
+        <template for src="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/icons/message-square.svg" crossorigin buffered></template>
+      </span>
+      Community Discussion <span class="comment-count">3</span>
+    </h3>
+    <span class="buffered-pill">Buffered Include (Atomic)</span>
+  </div>
+
+  <div class="comment-list">
+    <div class="comment-item">
+      <div class="comment-avatar">👨‍💻</div>
+      <div class="comment-body">
+        <div class="comment-author">
+          <strong>Dan (Framework Author)</strong>
+          <span class="comment-time">10 minutes ago</span>
+        </div>
+        <p>
+          Having <code>&lt;template for src buffer&gt;</code> natively in the browser is huge. We no longer need custom JavaScript injection
+          logic for auxiliary widgets and modals, and the atomic commit guarantees no layout shifts!
+        </p>
+      </div>
+    </div>
+
+    <div class="comment-item">
+      <div class="comment-avatar">🛡️</div>
+      <div class="comment-body">
+        <div class="comment-author">
+          <strong>Sarah (Security Engineer)</strong>
+          <span class="comment-time">25 minutes ago</span>
+        </div>
+        <p>
+          External includes via <code>src</code> being sanitized by default makes embedding third-party SVGs and includes as inline vector graphics completely safe without boilerplate!
+        </p>
+      </div>
+    </div>
+
+    <div class="comment-item">
+      <div class="comment-avatar">⚡</div>
+      <div class="comment-body">
+        <div class="comment-author">
+          <strong>Carlos (Web Performance)</strong>
+          <span class="comment-time">1 hour ago</span>
+        </div>
+        <p>
+          Streaming the main feed with non-buffered <code>&lt;template for src&gt;</code> while buffering the sidebar widgets and comments gives the ideal performance profile!
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

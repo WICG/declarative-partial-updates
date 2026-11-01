@@ -1,0 +1,83 @@
+<!-- stream-chunk -->
+<div class="feed-stream-header">
+  <div class="stream-live-pill">
+    <span class="pulse-dot"></span>
+    <strong>Live HTML Stream:</strong>
+    <span>Rendering incoming feed chunks progressively</span>
+  </div>
+  <span class="stream-tag">Non-buffered Include</span>
+</div>
+
+<!-- stream-chunk -->
+<article class="feed-card">
+  <div class="card-header">
+    <div class="card-author">
+      <div class="author-avatar">👩‍🔬</div>
+      <div>
+        <strong>WICG Working Draft Update</strong>
+        <span class="card-time">Chunk #1 • Streamed immediately</span>
+      </div>
+    </div>
+    <span class="card-badge">Spec Draft</span>
+  </div>
+  <h2 class="card-title">Declarative Fragment Includes: Bringing Client-Side Modularity to the Web</h2>
+  <p class="card-desc">
+    HTML now introduces native, client-side resource inclusion with <code>&lt;template for src&gt;</code>.
+    Developers can compose pages modularly without server multiplexing complexity or client-side JavaScript injection scripts.
+  </p>
+  <div class="card-features">
+    <div class="feature-chip">
+      <span class="chip-label">Zero DOM Footprint</span>
+    </div>
+    <div class="feature-chip">
+      <span class="chip-label">CORS &amp; CSP Ready</span>
+    </div>
+    <div class="feature-chip">
+      <span class="chip-label">Native Parser Placement</span>
+    </div>
+  </div>
+</article>
+
+<!-- stream-chunk -->
+<article class="feed-card">
+  <div class="card-header">
+    <div class="card-author">
+      <div class="author-avatar">🛡️</div>
+      <div>
+        <strong>Security &amp; Sanitization Architecture</strong>
+        <span class="card-time">Chunk #2 • Streamed +800ms</span>
+      </div>
+    </div>
+    <span class="card-badge badge-security">Security</span>
+  </div>
+  <h2 class="card-title">Safe Third-Party SVG Icons as True Inline SVGs</h2>
+  <p class="card-desc">
+    Unlike <code>&lt;img src="icon.svg"&gt;</code> which prevents CSS styling, or raw <code>innerHTML</code> which is vulnerable to XSS,
+    <code>&lt;template for="icon" src="https://cdn.jsdelivr.net/..." sanitize&gt;</code> parses external vector files in a sanitized context.
+    Embedded <code>&lt;script&gt;</code> tags and inline event handlers are stripped while preserving vector geometry and CSS stylability.
+  </p>
+</article>
+
+<!-- stream-chunk -->
+<article class="feed-card">
+  <div class="card-header">
+    <div class="card-author">
+      <div class="author-avatar">⚡</div>
+      <div>
+        <strong>Performance &amp; Delivery Engine</strong>
+        <span class="card-time">Chunk #3 • Streamed +1600ms</span>
+      </div>
+    </div>
+    <span class="card-badge badge-perf">Performance</span>
+  </div>
+  <h2 class="card-title">Buffered Atomic Commits vs. Progressive Stream Delivery</h2>
+  <p class="card-desc">
+    Smaller UI widgets (navigation, sidebars, comments) use the <code>buffered</code> attribute to parse into memory first and commit atomically on EOF, preventing layout shifts.
+    Meanwhile, the main content feed streams chunk-by-chunk for instant perceived responsiveness.
+  </p>
+  <div class="feed-actions">
+    <span class="action-stat">💬 18 Responses</span>
+    <span class="action-stat">🔄 42 Reposts</span>
+    <span class="action-stat">❤️ 137 Likes</span>
+  </div>
+</article>

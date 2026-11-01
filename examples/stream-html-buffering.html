@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stream HTML with buffering</title>
+    <script defer src="highlight.js"></script>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        line-height: 1.5;
+        padding: 20px;
+        max-width: 800px;
+      }
+
+      h1 {
+        margin-top: 0;
+      }
+
+      .description {
+        margin-bottom: 20px;
+        color: #444;
+      }
+
+      .controls {
+        margin-bottom: 20px;
+      }
+
+      button {
+        padding: 8px 16px;
+        font-size: 14px;
+        cursor: pointer;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 4px;
+      }
+
+      button:hover {
+        background: #0052a3;
+      }
+
+      button:disabled {
+        background: #999;
+        cursor: not-allowed;
+      }
+
+      .demo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      .demo-panel {
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 12px;
+        background: #fafafa;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .demo-panel h3 {
+        margin-top: 0;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      .badge {
+        display: inline-block;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-bottom: 8px;
+        width: fit-content;
+      }
+
+      .badge-success {
+        background: #e6f4ea;
+        color: #137333;
+        font-weight: bold;
+      }
+
+      .badge-warning {
+        background: #fef7e0;
+        color: #b06000;
+        font-weight: bold;
+      }
+
+      .badge-info {
+        background: #e8f0fe;
+        color: #1a73e8;
+        font-weight: bold;
+      }
+
+      .stream-target {
+        min-height: 140px;
+        border: 1px dashed #bbb;
+        border-radius: 4px;
+        padding: 8px;
+        background: white;
+        margin-bottom: 10px;
+        transition: opacity 0.2s ease-out;
+      }
+
+      .item-card {
+        background: #f0f4f8;
+        border-left: 3px solid #0066cc;
+        padding: 6px 10px;
+        margin-bottom: 6px;
+        border-radius: 2px;
+        font-size: 13px;
+      }
+
+      .dom-inspector {
+        background: #282c34;
+        color: #abb2bf;
+        padding: 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 11px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 160px;
+        overflow-y: auto;
+        flex-grow: 1;
+      }
+
+      .footprint-summary {
+        font-size: 12px;
+        margin-top: 6px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Stream HTML with buffering</h1>
+    <p class="description">
+      When streaming slow content, developers can buffer visual rendering to avoid flashes of partial content or layout shifts.
+      The processing instructions are present from the start with a scoped style setting <code>opacity: 0</code>.
+      When streaming completes, <code>&lt;template for="buffer"&gt;&lt;/template&gt;</code> clears the initial range and removes the <code>&lt;style&gt;</code> tag entirely, leaving <strong>zero footprint on the DOM</strong>.
+    </p>
+
+    <div class="controls">
+      <button id="start-btn" onclick="startStreamingDemo()">Replay Stream</button>
+      <span id="status-text" style="margin-left: 10px; font-weight: bold;"></span>
+    </div>
+
+    <div class="demo-grid">
+      <!-- Option 1: Template for buffering (processing instructions present from start) -->
+      <div class="demo-panel">
+        <h3>1. &lt;template for&gt; Buffering</h3>
+        <span class="badge badge-success">Zero DOM Footprint</span>
+        <div id="target-template-for" class="stream-target"><?start name="buffer" ?><style>@scope { & { opacity: 0; } }</style><?end?></div>
+        <div class="footprint-summary" id="footprint-tf">Styles in DOM: 1</div>
+        <pre class="dom-inspector" id="inspector-tf"></pre>
+      </div>
+
+      <!-- Option 2: Style override buffering (processing instructions present from start) -->
+      <div class="demo-panel">
+        <h3>2. CSS Override Buffering</h3>
+        <span class="badge badge-warning">Leaves &lt;style&gt; in DOM</span>
+        <div id="target-style-override" class="stream-target"><?start name="buffer2" ?><style>@scope { & { opacity: 0; } }</style><?end?></div>
+        <div class="footprint-summary" id="footprint-so">Styles in DOM: 1</div>
+        <pre class="dom-inspector" id="inspector-so"></pre>
+      </div>
+
+      <!-- Option 3: Unbuffered progressive streaming -->
+      <div class="demo-panel">
+        <h3>3. Unbuffered Streaming</h3>
+        <span class="badge badge-info">Immediate progressive rendering</span>
+        <div id="target-unbuffered" class="stream-target"></div>
+        <div class="footprint-summary" id="footprint-un">Styles in DOM: 0</div>
+        <pre class="dom-inspector" id="inspector-un"></pre>
+      </div>
+    </div>
+
+    <script>
+      const targetTf = document.getElementById("target-template-for");
+      const targetSo = document.getElementById("target-style-override");
+      const targetUn = document.getElementById("target-unbuffered");
+
+      const inspectorTf = document.getElementById("inspector-tf");
+      const inspectorSo = document.getElementById("inspector-so");
+      const inspectorUn = document.getElementById("inspector-un");
+
+      const footprintTf = document.getElementById("footprint-tf");
+      const footprintSo = document.getElementById("footprint-so");
+      const footprintUn = document.getElementById("footprint-un");
+
+      const startBtn = document.getElementById("start-btn");
+      const statusText = document.getElementById("status-text");
+
+      const INITIAL_TF_HTML = '<?start name="buffer" ?><style>@scope { & { opacity: 0; } }</style><?end?>';
+      const INITIAL_SO_HTML = '<style>@scope { & { opacity: 0; } }</style>';
+
+      function updateInspectors() {
+        function inspect(target, inspectorEl, footprintEl) {
+          const styleCount = target.querySelectorAll("style").length;
+          footprintEl.textContent = `Styles in DOM: ${styleCount}`;
+          if (styleCount === 0) {
+            footprintEl.style.color = "#137333";
+          } else {
+            footprintEl.style.color = "#b06000";
+          }
+          inspectorEl.textContent = target.innerHTML.trim() || "(empty)";
+        }
+        inspect(targetTf, inspectorTf, footprintTf);
+        inspect(targetSo, inspectorSo, footprintSo);
+        inspect(targetUn, inspectorUn, footprintUn);
+      }
+
+      async function startStreamingDemo() {
+        startBtn.disabled = true;
+        statusText.textContent = "Resetting containers to initial state...";
+
+        // Reset containers to initial HTML with processing instructions and hiding styles in place
+        targetTf.innerHTML = INITIAL_TF_HTML;
+        targetSo.innerHTML = INITIAL_SO_HTML;
+        targetUn.innerHTML = "";
+        updateInspectors();
+
+        await new Promise((r) => setTimeout(r, 600));
+
+        statusText.textContent = "Starting streams...";
+
+        const writerTf = targetTf.streamAppendHTMLUnsafe().getWriter();
+        const writerSo = targetSo.streamAppendHTMLUnsafe().getWriter();
+        const writerUn = targetUn.streamAppendHTMLUnsafe().getWriter();
+
+        // Stream content slowly chunk by chunk into the containers
+        const totalChunks = 3;
+        for (let i = 1; i <= totalChunks; i++) {
+          statusText.textContent = `Streaming item ${i} of ${totalChunks}...`;
+          await new Promise((r) => setTimeout(r, 800));
+
+          const chunkHtml = `<div class="item-card"><strong>Item ${i}</strong>: Slow payload content</div>`;
+          await writerTf.write(chunkHtml);
+          await writerSo.write(chunkHtml);
+          await writerUn.write(chunkHtml);
+
+          updateInspectors();
+        }
+
+        statusText.textContent = "Finalizing streams and revealing buffered content...";
+        await new Promise((r) => setTimeout(r, 800));
+
+        // At the end of the stream:
+        // Panel 1: <template for> clears the initial buffer range, removing the <style> tag completely
+        await writerTf.write('<template for="buffer"></template>');
+        await writerTf.close();
+
+        // Panel 2: overrides the initial style by appending a second <style> tag
+        await writerSo.write('<style>@scope { & { opacity: 1; } }</style>');
+        await writerSo.close();
+
+        // Panel 3: closes unbuffered stream
+        await writerUn.close();
+
+        statusText.textContent = "Streaming complete!";
+        updateInspectors();
+        startBtn.disabled = false;
+      }
+
+      // Initialize inspector display and auto-start demo if supported
+      updateInspectors();
+      if ("streamAppendHTMLUnsafe" in document.body) {
+        window.addEventListener("DOMContentLoaded", () => {
+          setTimeout(startStreamingDemo, 600);
+        });
+      }
+    </script>
+  </body>
+</html>
