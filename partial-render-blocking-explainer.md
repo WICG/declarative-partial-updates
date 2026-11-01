@@ -127,7 +127,7 @@ When an element has a `loading` attribute, `:loading` matches while **any** of t
 - **Parser openness:**
   - The element is on the HTML parser's [stack of open elements](https://html.spec.whatwg.org/multipage/parsing.html#stack-of-open-elements) (its start tag has been inserted, and its end tag has not yet been popped), **or**
   - It is the active fragment/streaming parser context element (e.g., an active `element.streamHTML*()` target, or the target parent receiving an active `<template for="...">` / `<template for="..." src="...">` patch).
-  *(This uses the same parser openness condition as [`parseEnd: true` `MutationObserver` batching](./parse-end-mutation-observer-explainer.md); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578).)*
+  *(This uses the same parser openness condition as [`delivery: "parse-end"` `MutationObserver` buffering](./parse-end-mutation-observer-explainer.md); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578).)*
 - **Own external resource (`<img>`, `<video>`, `<iframe>`, `<link rel="stylesheet">` with `[loading]`):**
   - **`<img>` (and `<input type="image">`):** Matches while an active image request is pending (before its `load` or `error` task runs; for `loading="lazy"`, once its fetch starts—or while deferred if `hidden` is also specified).
   - **`<video>`:** Matches while fetching media resources required for its initial visual state (`poster` image if specified, or metadata/first frame up to `loadeddata` / `error` when `preload` is not `"none"`).
@@ -255,7 +255,7 @@ We previously explored buffering fragments off-screen in an inert `DocumentFragm
 | **`<link rel="expect" href="#id" blocking="render">`** | Document first paint (`<head>` only) | Holds initial page render for critical above-the-fold elements. `loading="hidden"` handles localized, shell-to-content, post-first-paint, and below-the-fold boundaries without blocking the whole page. |
 | **`content-visibility: hidden`** | CSS containment & rendering | Skips layout and painting entirely (requiring `contain-intrinsic-size`), whereas `loading="hidden"` uses `visibility: hidden` so real layout boxes and subresource loads proceed normally. |
 | **`<template for>`, `<template for src>`, `streamHTML()`** | Declarative & streaming updates | Stream HTML into shell outlets after first paint; `loading="hidden"` on the outlet container prevents half-streamed flashes and FOUC without off-screen `<template buffer>` buffering. |
-| **`MutationObserver` `parseEnd: true`** | JS observation | Imperative counterpart ([explainer](./parse-end-mutation-observer-explainer.md)) that batches `MutationRecord`s while an observed target is parsing. |
+| **`MutationObserver` `delivery: "parse-end"`** | JS observation | Imperative counterpart ([explainer](./parse-end-mutation-observer-explainer.md)) that buffers `MutationRecord` delivery while an observed target is parsing. |
 
 ---
 

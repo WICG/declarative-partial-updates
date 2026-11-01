@@ -43,7 +43,7 @@ Without native reflection on `MutationRecord`, authors must embed sentinel DOM e
 ### Non-Goals
 
 - **Leaking live parser-internal `HTMLTemplateElement` nodes:** Attributes are exposed via a read-only map rather than retaining a detached `<template>` element.
-- **Batching element children until end tags:** Handled separately by [`parseEnd: true`](./parse-end-mutation-observer-explainer.md).
+- **Batching element children until end tags:** Handled separately by [`delivery: "parse-end"`](./parse-end-mutation-observer-explainer.md).
 
 ---
 
@@ -174,7 +174,7 @@ For nested mutations inside `element.streamHTML*()`, `setHTML()`, or `innerHTML`
 1. **New `MutationRecord.type` values (`"templateStart"`, `"templateEnd"`, `"templateAbort"`):** Separated `<template>` metadata from the `childList` records carrying `addedNodes` and `removedNodes`, forcing stateful tracking across records in every callback.
 2. **Exposing the detached `HTMLTemplateElement` (`record.template`):** Retains a live parser-internal element whose `.content` was bypassed; a read-only `TemplateAttributeMap` (`templateAttributes`) exposes its attributes without leaking the node.
 3. **DOM Events (`templatestart`, `templateend`, `templateabort`) or a separate `PatchObserver`:** Hydration, form-state preservation ([#103](https://github.com/WICG/declarative-partial-updates/issues/103)), and progressive enhancement need the exact `removedNodes` and `addedNodes` together with `<template>` metadata in the same microtask queue, without repeating legacy `MutationEvent` dispatch overhead.
-4. **Combining `template` and `parseEnd` into a single `parser: true` option:** `<template for>` observers want incremental per-chunk `"start"` / `"update"` / `"end"` records, whereas [`parseEnd: true`](./parse-end-mutation-observer-explainer.md) batches records across chunks while an observed target is parsing. Keeping them separate avoids coupling distinct mechanisms.
+4. **Combining `template` and `delivery: "parse-end"` into a single `parser: true` option:** `<template for>` observers want incremental per-chunk `"start"` / `"update"` / `"end"` records, whereas [`delivery: "parse-end"`](./parse-end-mutation-observer-explainer.md) buffers records across chunks while an observed target is parsing. Keeping them separate avoids coupling distinct mechanisms.
 
 ---
 
@@ -183,8 +183,8 @@ For nested mutations inside `element.streamHTML*()`, `setHTML()`, or `innerHTML`
 ### Q1: Why use a read-only map (`TemplateAttributeMap`) for `templateAttributes`?
 `TemplateAttributeMap` (`readonly maplike<DOMString, DOMString>`) provides ergonomic lookup by attribute name (`r.templateAttributes.get("for")`) and preserves object identity across all records emitted by the same `<template>` invocation (`r1.templateAttributes === r2.templateAttributes`) without relying on legacy `NamedNodeMap` / `Attr` objects or retaining a detached `HTMLTemplateElement`.
 
-### Q2: How do `template: true` and `parseEnd: true` interact if an observer sets both?
-They compose cleanly: `template: true` populates `templateStatus` and `templateAttributes` on the queued records, while `parseEnd: true` holds delivery of those records for that observer until its observed target finishes parsing. Most streaming patch routers only set `template: true` so they receive `"start"` and `"update"` records incrementally per chunk.
+### Q2: How do `template: true` and `delivery: "parse-end"` interact if an observer sets both?
+They compose cleanly: `template: true` populates `templateStatus` and `templateAttributes` on the queued records, while `delivery: "parse-end"` holds delivery of those records for that observer until its observed target finishes parsing. Most streaming patch routers only set `template: true` so they receive `"start"` and `"update"` records incrementally per chunk.
 
 ---
 
