@@ -135,9 +135,9 @@ partial dictionary MutationObserverInit {
 
 ### 1. Definition of "parsing"
 
-An observed `Element` `target` is **parsing** when **either**:
+An observed `Element` `target` is **parsing** *(shared definition with [Hide While Loading (`:loading`)](./partial-render-blocking-explainer.md#2-the-loading-css-pseudo-class--shared-parsing-definition))* when **either**:
 1. It was pushed onto the HTML parser's stack of open elements and its **end tag has never been seen** yet (void elements and self-closing foreign elements are popped immediately on insertion, so they are already parsed by the time any observer sees them), **or**
-2. It is **currently an active `streamHTML*` target** (the fragment context element of an open `streamHTML`, `streamHTMLUnsafe`, or `streamAppendHTML*` parser).
+2. It is **currently the context element of an active streaming fragment parser**—either an open `streamHTML`, `streamHTMLUnsafe`, or `streamAppendHTML*` parser on `target`, or an active `<template for="...">` / `<template for="..." src="...">` patch currently streaming into a marker whose parent is `target`.
 
 ### 2. Per-observer batching & firing order
 
