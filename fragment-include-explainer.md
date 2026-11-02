@@ -2,40 +2,23 @@
 
 ## Overview
 
-One of the longest-standing requests on the web platform is a native, declarative client-side HTML include mechanism (see [WHATWG HTML Issue #2791](https://github.com/whatwg/html/issues/2791)). Historically, developers have had to choose between server-only composition (SSI, ESI, server templates) and JavaScript `fetch()`-and-inject libraries.
+Browsers are tuned for **top-down** HTML delivery, whereas modern web applications are often structured around **shell-to-content** delivery: an outer application shell renders immediately while independent regions—shared chrome, personalized state, or slower data-backed sections—populate asynchronously. Without a native declarative client-side include mechanism (see [WHATWG HTML Issue #2791](https://github.com/whatwg/html/issues/2791)), sites either suffer a suboptimal loading experience (blocking initial delivery on the slowest backend, or flashing blank regions and layout shifts) or ship costly JavaScript libraries just to `fetch()` and inject HTML.
 
 ### Benefits
 
-While server-side composition remains ideal when a single origin can assemble the full response, client-side includes unlock four main benefits:
+While server-side composition remains ideal when a single origin can assemble the full response up front, declarative client-side includes unlock four main benefits:
 
-1. **Buildless DRY HTML:** Reuse shared partials (headers, footers, navigation, icons) on static hosts or local setups without a server runtime, build step, or JavaScript framework.
-2. **Split Caching:** Cache shared chrome across navigations while fetching only page-specific content—or serve a CDN-cached static shell that pulls in dynamic, personalized fragments (auth status, cart, regional pricing).
+1. **Buildless DRY HTML:** Reuse shared partials (headers, footers, navigation, icons) on static hosts or local setups without a server-side template runtime, build step, or JavaScript framework (requiring only a static `.fragment` → `text/fragment` MIME mapping).
+2. **Split Caching:** Cache shared chrome across navigations while fetching only page-specific content—or serve a CDN-cached static shell that pulls in dynamic, personalized fragments such as auth status, cart, or regional pricing (using `crossorigin="use-credentials"` with `Access-Control-Allow-Credentials: true` when personalized endpoints are cross-origin).
 3. **Async Subsections:** Load slower or secondary sections (comments, feeds, recommendations) independently without delaying the main document response.
-4. **Composition:** Combine HTML fragments across separate services or backends directly into the document's layout and styling tree, using native browser sanitization (`sanitizer`) instead of heavyweight `<iframe>` isolation.
-
-### Why Client-Side Includes Stalled
-
-Previous attempts at declarative client-side includes stalled on three fundamental problems:
-
-1. **Parser-Blocking Waterfalls:** Synchronous includes halt the HTML parser while waiting on the network, serializing fetches and delaying the rest of the document.
-2. **FOUC & Layout Shifts:** Making includes asynchronous avoids blocking the parser, but fragments either paint before their subresource stylesheets finish loading (Flash of Unstyled Content) or arrive after subsequent content has already rendered, pushing elements down and causing layout shifts.
-3. **Cross-Site Scripting (XSS):** Without a built-in browser sanitizer, inserting externally fetched markup directly into the document meant trusting the remote payload not to inject scripts or inline event handlers.
-
-### What Changed
-
-We now have the platform building blocks to address all three problems directly in HTML:
-
-1. **Out-of-Order Streaming ([`<template for>`](./patching-explainer.md)):** Decouples where a fragment fetch is initiated from where its markup is inserted, allowing fragments to be fetched early in parallel while the main document continues parsing and rendering placeholders (`<?start name="...">Loading...<?end>`).
-2. **Render-Blocking (`rel="expect"`) & Partial Render Blocking ([`loading="hidden"`](./partial-render-blocking-explainer.md)):** Authors can manage layout shifts and FOUC per region—holding initial page render until a critical `<template id="..." for="...">` include is applied via `<link rel="expect" href="#..." blocking="render">` in `<head>`, reserving layout space with placeholders, or hiding a target container while its markup and subresources load via `loading="hidden"`.
-3. **Built-in Sanitization (`sanitizer`) & CSP (`fragment-src`):** External `<template for="..." src="...">` includes are sanitized by default via the browser's native Sanitizer API. Inheriting an unsanitized parser context requires an explicit `sanitizer="unsafe"` opt-in (which can never relax an existing sanitizer context) and remains governed by Content Security Policy (`fragment-src`, falling back to `script-src`).
-
+4. **Composition:** Combine HTML fragments across separate services or backends directly into the document's layout and styling tree, using native browser sanitization (`sanitizer`) and scoped context boundaries instead of heavyweight `<iframe>` isolation.
 
 ## Proposed Solution
 
 Building on [declarative patching (`<template for="target-name">`)](./patching-explainer.md), this proposal adds `src` and `sanitizer` to `<template>`:
 
-- **`src`** (along with standard resource-fetching attributes: `crossorigin`, `referrerpolicy`, `integrity`, `fetchpriority`, and global `nonce`): asynchronously fetches an HTML fragment (using CORS by default, like `<script type="module">`) and streams it into the target range (`<?start name="...">...<?end>`) or marker (`<?marker name="...">`) named by `for`. Even when `sanitizer` is omitted, fetching via `src` sanitizes the fragment with the behavior of **existing sanitizer + [`removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe)** (using the default `Sanitizer` configuration if no existing sanitizer is active).
-- **`sanitizer`** (applicable **only** with `src`): controls sanitization of the fetched fragment. Specifying `sanitizer="unsafe"` undoes that automatic `removeUnsafe()` step and uses the enclosing parser's existing sanitizer context as-is (so `sanitizer` can only *restrict* an existing sanitizer configuration, never relax it).
+- **`src`** (along with standard resource-fetching attributes: `crossorigin`, `referrerpolicy`, `integrity`, `fetchpriority`, and global `nonce`): asynchronously fetches a `text/fragment` HTML payload (using CORS by default, like `<script type="module">`) and streams it into the target range (`<?start name="...">...<?end>`) or marker (`<?marker name="...">`) named by `for`. When `sanitizer` is omitted, `<template for="..." src="...">` creates a new `Sanitizer` configuration based on the enclosing parser context and calls [`removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe) on it.
+- **`sanitizer`** (applicable **only** with `src`): controls whether that `removeUnsafe()` step is applied. Specifying `sanitizer="unsafe"` does nothing to the ambient sanitizer state—inheriting the enclosing parser context as-is (so it is unsanitized when embedded in an unsafe context like the main document parser, and can never relax an already-sanitized context).
 
 ### At a Glance
 
@@ -47,220 +30,178 @@ Building on [declarative patching (`<template for="target-name">`)](./patching-e
   <section><?start name="chart"><p>Loading chart...</p><?end></section>
 </main>
 
-<!-- Sanitized by default -->
-<template for="header" src="/partials/header.html"></template>
-<template for="feed" src="/partials/feed.html"></template>
+<!-- Sanitized by default (creates context-derived Sanitizer + removeUnsafe()) -->
+<template for="header" src="/partials/header.fragment"></template>
+<template for="feed" src="/partials/feed.fragment"></template>
 
-<!-- Inherits ambient parser context (allows scripts and nested <template for>, subject to CSP) -->
-<template for="chart" src="/widgets/chart.html" sanitizer="unsafe"></template>
+<!-- Inherits ambient parser context as-is (allows scripts in main document, subject to CSP) -->
+<template for="chart" src="/widgets/chart.fragment" sanitizer="unsafe"></template>
 ```
+
+### Why Client-Side Includes Stalled — and What Changed
+
+Previous attempts at declarative client-side includes stalled on three fundamental problems that modern HTML primitives now address together:
+
+1. **Parser-Blocking Waterfalls → Out-of-Order Streaming ([`<template for>`](./patching-explainer.md)):** Synchronous includes halted the HTML parser while waiting on the network. `<template for="..." src="...">` decouples where a fetch is initiated from where its markup is inserted, fetching fragments asynchronously in parallel while the main document continues parsing and rendering placeholders (`<?start name="...">Loading...<?end>`).
+2. **FOUC & Layout Shifts → Render Blocking (`rel="expect"`) & Partial Render Blocking ([`loading="hidden"`](./partial-render-blocking-explainer.md)):** Asynchronous fragments previously risked painting before their stylesheets loaded or pushing down already-rendered content. Authors can now hold initial page render for critical includes via `<link rel="expect" href="#..." blocking="render">`, hide an individual container until its markup and subresources settle via `loading="hidden"`, or reserve space around placeholders.
+3. **Cross-Site Scripting (XSS) → Built-in Sanitization (`sanitizer`) & CSP (`fragment-src`):** Fetched fragments are sanitized with `removeUnsafe()` by default, stay bounded within their own target context, and are governed by Content Security Policy (`fragment-src`, falling back to `script-src`).
+
+---
+
+## Detailed Design
 
 ### Activation and Targeting
 
 `<template src="...">` reuses the exact targeting model of [inline `<template for="...">`](./patching-explainer.md):
 
 - **Omitted `for`:** Ordinary inert `<template>` (does not fetch `src` or insert into the DOM).
-- **Targeted Include (`for="target-name"`):** Fetches `src` and streams the parsed content into the targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Any placeholder content between `<?start>` and `<?end>` is cleared when the response stream begins applying, incoming chunks are inserted progressively **before** `<?end>` or `<?marker>`, and the marker(s) are removed on EOF—leaving **zero `<template>` footprint** in the DOM.
-- `for`/`src` and `shadowrootmode` are mutually exclusive on the same `<template>` element, and compose via nesting (`<template shadowrootmode="open"><?marker name="widget"><template for="widget" src="widget.html"></template></template>`).
+- **Targeted Include (`for="target-name"`):** Fetches `src` and streams the parsed content into the targeted range (`<?start name="target-name">...<?end>`) or insertion point (`<?marker name="target-name">`). Any placeholder content between `<?start>` and `<?end>` is cleared when a valid response begins streaming, incoming chunks are inserted progressively **before** `<?end>` or `<?marker>`, and the marker(s) are removed on completion—leaving **zero `<template>` footprint** in the DOM.
+- **Scoped context boundaries:** A fetched fragment is parsed in a fragment context bounded by its target range/container. Nested `<template for>` patches and nested `<template for="..." src="...">` includes work inside the fragment (even in default safe mode), but **cannot escape the fragment's direct context boundaries** to target or overwrite markers elsewhere in the host document. (UAs also enforce a nesting depth limit to prevent infinite self-inclusion cycles.)
+- `for`/`src` and `shadowrootmode` are mutually exclusive on the same `<template>` element, and compose via nesting (`<template shadowrootmode="open"><?marker name="widget"><template for="widget" src="widget.fragment"></template></template>`).
 
 ### Resource Fetching and Lifecycle
 
-When both `for` and `src` are present on `<template>`, the browser asynchronously fetches the HTML payload over the network:
+When both `for` and `src` are present on `<template>`, the browser asynchronously fetches the fragment over the network:
 
-- **Always `text/fragment`:** Included responses must be served with the `text/fragment` MIME type (strict MIME checking with no sniffing; `text/html` and other media types are rejected and abort the include). Requiring `text/fragment` rather than `text/html` ensures endpoints explicitly opt in to serving includable fragments—preventing accidental inclusion of full HTML pages (such as fallback routes or error pages) and preventing fragment endpoints from rendering as standalone documents on direct top-level navigation. Once verified as `text/fragment`, the payload is parsed using the HTML fragment parsing algorithm in the context of the target parent element, natively supporting HTML, `<svg>`, and `<math>` markup without requiring XML media types (`image/svg+xml` or `application/mathml+xml`) or strict XML well-formedness.
-- **CORS by default (`crossorigin`, matching `<script type="module">`):** Fetches always use Fetch mode `"cors"` (an opaque `no-cors` response can never be parsed into the host DOM). Just like `<script type="module">`, `crossorigin` controls credentials mode: omitting `crossorigin` (or setting `crossorigin="anonymous"`) uses `"same-origin"` credentials (sending cookies on same-origin requests and omitting them cross-origin), while `crossorigin="use-credentials"` uses `"include"`.
-- **Subresource Integrity (`integrity`):** Verifies the cryptographic digest of the fetched payload via standard Fetch SRI. Because Fetch must verify the full body before releasing bytes to the consumer, specifying `integrity` buffers the network response prior to parsing rather than streaming chunk-by-chunk (making it well-suited for static, immutable partials and CDN assets). If integrity verification fails, no nodes are inserted and the template aborts (`templateStatus: "abort"`).
-- **Priority, referrer, and CSP (`fetchpriority`, `referrerpolicy`, `nonce`):** `fetchpriority` (`"high"`, `"low"`, `"auto"`) and `referrerpolicy` map directly to the underlying Fetch request, and the global `nonce` attribute is passed on the request for CSP `fragment-src` / `script-src` matching.
-- **Non-parser-blocking:** Delays `DOMContentLoaded` until pending `<template for="..." src="...">` includes complete (similar to `<script defer>`), without blocking the HTML parser. Unlike `<script>`, `<template>` does not support `async`, `defer`, or `blocking`—synchronous parser-blocking fetches are intentionally omitted.
-- **Inline content with `src` (ignored):** When `src` is present, any inline child content inside `<template>` is ignored. Loading placeholders and fallbacks belong inside `<?start name="...">Loading...<?end>` in the target container, avoiding parser/network race conditions.
-- **Disconnection / abort:** If the target document or container is disconnected while `src` retrieval is in progress, the network fetch is aborted immediately; any DOM nodes already streamed remain, and streaming halts (surfacing `templateStatus: "abort"` to [`template: true` `MutationObserver`s](./template-mutation-observer-explainer.md)).
+- **Always `text/fragment` (`.fragment` on static hosts):** Responses must be served with `Content-Type: text/fragment` (UTF-8, strict MIME checking with no sniffing, to be registered with IANA; `text/html` and other media types are rejected and abort the include). Requiring `text/fragment` ensures endpoints explicitly opt in to serving includable fragments—preventing accidental inclusion of full HTML fallback/error pages and preventing fragment endpoints from rendering as active standalone documents on direct top-level navigation. Static hosts and CDNs will need to add a `.fragment` → `text/fragment` extension mapping (much like `.mjs` or `.wasm`), which is a simple static configuration compared to running a bespoke SSI/ESI runtime. Once verified as `text/fragment`, the payload is parsed with the HTML fragment parsing algorithm in the target parent element's context, natively supporting HTML, `<svg>`, and `<math>`.
+- **CORS by default (`crossorigin`, matching `<script type="module">`):** Fetches always use Fetch mode `"cors"`. Omitting `crossorigin` (or `crossorigin="anonymous"`) uses `"same-origin"` credentials (cookies sent same-origin, omitted cross-origin); `crossorigin="use-credentials"` uses `"include"` (requiring `Access-Control-Allow-Credentials: true` and an explicit `Access-Control-Allow-Origin` on cross-origin personalized endpoints).
+- **Subresource Integrity (`integrity`):** Verifies the cryptographic digest via standard Fetch SRI. Because Fetch verifies the full body before releasing bytes, `integrity` buffers the response prior to parsing rather than streaming chunk-by-chunk.
+- **Priority, referrer, and CSP (`fetchpriority`, `referrerpolicy`, `nonce`):** `fetchpriority` (`"high"`, `"low"`, `"auto"`) and `referrerpolicy` map directly to the underlying Fetch request, and `nonce` is passed on the request for CSP `fragment-src` / `script-src` matching.
+- **Non-parser-blocking:** Never blocks the HTML parser (`<template>` intentionally omits `async`, `defer`, and `blocking`). Whether pending includes delay `DOMContentLoaded` or only `window.onload` is discussed in [Open Questions](#open-questions).
+- **Inline content with `src` (ignored):** When `src` is present, inline child content inside `<template>` is ignored; fallback markup belongs inside `<?start name="...">...<?end>` in the target container.
+- **Error, truncation, and disconnection behavior:**
+  - *Pre-stream failure* (network error, HTTP error, non-`text/fragment` MIME type, CORS block, CSP block, or `integrity` mismatch): The include aborts before `"start"`. Any fallback content inside `<?start name="...">...<?end>` **remains intact and visible** in the DOM.
+  - *Mid-stream truncation or disconnection:* Once streaming has started, the initial placeholder has already been replaced by incoming chunks. If the network stream drops before completion or the target container/document disconnects, any in-flight fetch aborts, already-streamed DOM nodes remain in place, markers are cleaned up, and any [`loading="hidden"`](./partial-render-blocking-explainer.md) boundary settles so content is never stuck hidden.
+  - *Programmatic observation & retry UI:* Both pre-stream and mid-stream failures emit a `MutationRecord` with `templateStatus: "abort"` to observers opted into [`MutationObserver` (`template: true`)](./template-mutation-observer-explainer.md), enabling applications to render retry UI or restore fallback state.
 
 ### Avoiding Layout Shifts and FOUC
 
-Because `<template for="..." src="...">` is non-parser-blocking, the main document parser continues past an include and renders subsequent content (`<main>`, `<footer>`). If an asynchronous fragment inserts content into an already-painted region without space reservation—or streams in its own `<link rel="stylesheet">` and images—it can push rendered elements down (Cumulative Layout Shift) or flash unstyled/half-parsed markup (FOUC).
+Authors have three complementary tools to prevent Cumulative Layout Shift (CLS) and Flash of Unstyled Content (FOUC) for asynchronous includes:
 
-Authors have three complementary tools to prevent layout shifts and FOUC:
-
-#### 1. Document-level render blocking for critical includes (`<link rel="expect">`)
-
-HTML's `<link rel="expect" href="#id" blocking="render">` in `<head>` holds initial page rendering until the targeted element is connected and parsed. When `rel="expect"` targets the `id` of a `<template for="...">` element (inline or with `src`), **it blocks initial rendering until that `<template for>`'s content is fetched, parsed, and applied to the DOM**, while the HTML parser continues parsing the rest of the document and discovering subresources in parallel:
-
-```html
-<!doctype html>
-<html>
-  <head>
-    <link rel="expect" href="#header-content" blocking="render">
-  </head>
-  <body>
-    <header><?start name="header"><?end></header>
-    <main>Content</main>
-    <footer><?start name="footer"><?end></footer>
-
-    <template id="header-content" for="header" src="header.html"></template>
-    <template for="footer" src="footer.html"></template>
-  </body>
-</html>
-```
-
-Here, initial rendering waits for `header.html` to apply, while `<main>` and `footer.html` parse and fetch concurrently (and `footer.html` does not block first paint).
-
-#### 2. Element-level partial render blocking (`loading="hidden"`)
-
-Once first paint has occurred—or for non-critical sections that should not hold back the entire page—authors can hide an individual container while its markup is still streaming in and/or its subresources (`<link rel="stylesheet">`, `<img>`, `<video>`, `<iframe>`) are still loading using **[Partial Render Blocking (`loading="hidden"`)](./partial-render-blocking-explainer.md)**:
-
-```html
-<section class="comments" loading="hidden">
-  <?marker name="comments">
-</section>
-<template for="comments" src="/partials/comments.html"></template>
-```
-
-While `/partials/comments.html` streams into `<section>` and any stylesheets or images inside it load, `<section>` matches `:loading` (with UA default `visibility: hidden` and `opacity: 0` / `@starting-style`, plus implicit `aria-busy="true"`), keeping real layout boxes without painting incomplete or unstyled content, and revealing cleanly (with an optional CSS fade-in) once ready. See [partial-render-blocking-explainer.md](./partial-render-blocking-explainer.md) for full details.
-
-#### 3. Placeholders and CSS space reservation
-
-For asynchronous sections that should show immediate feedback while fetching, authors should place placeholder or skeleton markup inside `<?start name="...">...<?end>` and reserve layout dimensions on the container (`min-height`, `aspect-ratio`, or `contain-intrinsic-size`) so surrounding layout remains stable when the fragment arrives.
+1. **Document-level render blocking for critical includes (`<link rel="expect">`):** `<link rel="expect" href="#header-content" blocking="render">` in `<head>` blocks initial page rendering until `<template id="header-content" for="header" src="header.fragment">` is fetched, parsed, and applied, while the parser continues scanning the rest of the document in parallel.
+2. **Element-level partial render blocking ([`loading="hidden"`](./partial-render-blocking-explainer.md)):** Placing `loading="hidden"` on a target container (`<section class="comments" loading="hidden"><?marker name="comments"></section>`) keeps the container `visibility: hidden` (matching `:loading` with implicit `aria-busy="true"`) while its fragment streams in and its `<link rel="stylesheet">` / media subresources load, revealing cleanly once ready. *(Note: because `loading="hidden"` hides the container while loading, use `<?start>...<?end>` skeletons when you want immediate visible placeholder UI instead of `loading="hidden"`, or place loading indicators outside the hidden container.)*
+3. **Placeholders and CSS space reservation:** Put skeleton/loading markup inside `<?start name="...">...<?end>` and reserve container dimensions (`min-height`, `aspect-ratio`, or `contain-intrinsic-size`) so surrounding layout stays stable when the fragment arrives.
 
 ### Security & Sanitization (`sanitizer`)
 
-The `sanitizer` attribute applies **exclusively when `src` is present** (`<template for="..." src="...">`). Inline `<template for="...">` elements without `src` are already part of their enclosing HTML stream and use that stream's parser context directly; `sanitizer` has no effect without `src`.
+The `sanitizer` attribute applies **exclusively when `src` is present** (`<template for="..." src="...">`); inline `<template for="...">` elements without `src` are already part of their enclosing HTML stream.
 
-#### Default Safety (`removeUnsafe`) & Ambient Context Inheritance (`sanitizer="unsafe"`)
+#### Default Safety (`removeUnsafe`) vs. `sanitizer="unsafe"`
 
-- **Fetching sanitizes by default (existing sanitizer + `removeUnsafe()`):** Even when `sanitizer` is omitted (or set to `""` / `"default"`), fetching via `src` always sanitizes the response by applying [`Sanitizer.prototype.removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe):
-  - If the enclosing parser already has an active sanitizer configuration (for example, `element.streamHTMLUnsafe({ sanitizer: customConfig })`, `element.streamHTML(...)`, or an outer `<template for="..." src="...">`), `<template src>` takes a copy of that existing configuration and applies `removeUnsafe()` to it—preserving all existing allowlist/blocklist restrictions while stripping unsafe constructs (`<script>`, inline event handlers, and nested `<template for>` elements).
-  - If the enclosing parser has no sanitizer configuration (for example, the main document parser or an unsanitized `element.streamHTMLUnsafe()` call), it applies `removeUnsafe()` on the default `Sanitizer` configuration (`new Sanitizer()`).
-- **`sanitizer="unsafe"` undoes the added `removeUnsafe()` step:** Specifying `sanitizer="unsafe"` opts out of that automatic `removeUnsafe()` call and **uses the enclosing parser's existing sanitizer context as-is**:
-  - In the top-level document parser—or inside an unsanitized `element.streamHTMLUnsafe()` / `element.setHTMLUnsafe()` call with no sanitizer—there is no ambient sanitizer, so `sanitizer="unsafe"` allows scripts and nested `<template for>` elements to run.
-  - Inside a context with an active sanitizer—such as `element.streamHTML()`, `element.streamHTMLUnsafe({ sanitizer: customConfig })`, or an outer sanitized `<template for="..." src="...">`—`sanitizer="unsafe"` inherits that existing sanitizer configuration unchanged rather than bypassing it.
-- **Monotonic restriction only:** Because default sanitization applies `removeUnsafe()` onto any ambient config (rather than replacing a stricter custom config with a broader default) and `sanitizer="unsafe"` merely preserves the ambient config, the `sanitizer` attribute can **only restrict** an existing sanitizer configuration, **never relax or widen it**.
+Every HTML parsing context has an ambient sanitizer state: an **unsafe context** (such as the main document parser, or `setHTMLUnsafe()` / `streamHTMLUnsafe()` with no `sanitizer` option) has no active sanitizer restrictions, whereas a **safe/sanitized context** (`setHTML()`, `streamHTML()`, `streamHTMLUnsafe({ sanitizer })`, or an outer sanitized `<template for src>`) enforces an active `Sanitizer` configuration.
+
+- **Omitting `sanitizer` (default safe mode):** Creates a new `Sanitizer` configuration derived from the enclosing parser context (cloning the enclosing `Sanitizer` if one exists, or starting from an unrestricted `new Sanitizer({})` configuration if the enclosing context has none) and calls [`removeUnsafe()`](https://wicg.github.io/sanitizer-api/#dom-sanitizer-removeunsafe) on it:
+  - **Strips XSS-unsafe constructs:** Removes `<script>`, inline `on*` event handler attributes, `javascript:` URLs, and other script-executing markup.
+  - **Keeps styles:** `removeUnsafe()` preserves `<style>`, `<link rel="stylesheet">`, and `style` attributes. *(Note: CSS inside an included fragment participates in the target tree's cascade unless scoped via `@scope` or Shadow DOM.)*
+  - **Allows bounded nested composition:** Nested `<template for>` and `<template for src>` work in safe mode, scoped strictly within the fragment's own direct context boundaries (unable to target markers in the outer document).
+- **`sanitizer="unsafe"`:** **Does nothing** to the sanitizer configuration—the fetched fragment inherits the enclosing parser's ambient sanitizer state unchanged:
+  - Embedded in an **unsafe context** (such as the main document parser), the fetched fragment is likewise unsanitized, allowing `<script>` and inline event handlers (still subject to CSP).
+  - Embedded in an **already-sanitized context** (such as `streamHTML()` or inside an outer sanitized `<template for src>`), `sanitizer="unsafe"` inherits that enclosing sanitizer configuration unchanged—so `sanitizer` can **only restrict** an ambient sanitizer configuration, **never relax or escape it**.
 
 ```html
-<!-- Sanitized by default (scripts and nested <template for> stripped) -->
+<!-- Default: creates context-based Sanitizer + removeUnsafe() (scripts stripped; styles & bounded nested includes kept) -->
 <div id="profile"><?start name="profile">Loading...<?end></div>
-<template for="profile" src="user-profile.html"></template>
+<template for="profile" src="user-profile.fragment"></template>
 
-<!-- External SVG served as text/fragment: inserted as a sanitized inline <svg>
-     (stylable with CSS currentColor) without bloating the main stream -->
-<button class="icon-btn">
-  <?start name="star-icon"><?end>
-  Star
-</button>
-<template for="star-icon" src="https://icons.example/star.html"></template>
+<!-- External SVG served as text/fragment: inserted as a sanitized inline <svg> (stylable via currentColor) -->
+<button class="icon-btn"><?start name="star-icon"><?end> Star</button>
+<template for="star-icon" src="https://icons.example/star.fragment"></template>
 
-<!-- Inherits ambient parser context (unsanitized in main document; subject to CSP) -->
+<!-- sanitizer="unsafe": inherits main parser's unsafe context as-is (scripts allowed, subject to CSP) -->
 <div id="widget"><?start name="widget">Loading...<?end></div>
-<template for="widget" src="trusted-widget.html" sanitizer="unsafe"></template>
+<template for="widget" src="trusted-widget.fragment" sanitizer="unsafe"></template>
 ```
 
 #### Content Security Policy (CSP) Integration
 
 1. **`fragment-src` Directive (New, falls back to `script-src`):**
-   Governs which origins are allowed to serve HTML fragments fetched via `<template for="..." src="url">`. If `fragment-src` is not specified in the policy, it falls back to `script-src` (and then `default-src`).
-   Because external `<template for="..." src="...">` includes are sanitized by default (scripts stripped), pages can configure a broader `fragment-src` policy (e.g., allowing third-party CDNs or CMS domains) while keeping a strict `script-src`.
+   Governs which origins may serve HTML fragments via `<template for="..." src="url">`. When `fragment-src` is omitted from a CSP policy, it falls back to `script-src` (and then `default-src`). Falling back to `script-src` rather than `default-src` or `connect-src` is intentionally conservative: because `sanitizer="unsafe"` in an unsanitized document can execute scripts from the fetched fragment, falling back to `connect-src` or `default-src` could unexpectedly widen script/HTML inclusion on existing sites that lock down `script-src` while permitting broader `connect-src` endpoints. Sites that fetch sanitized fragments from CDNs or CMS origins can explicitly configure a broader `fragment-src` while keeping `script-src` strict.
 2. **`script-src` Enforcement for `sanitizer="unsafe"`:**
-   When `sanitizer="unsafe"` is used in an unsanitized parser context, any `<script>` tags inside the fetched fragment must still pass standard `script-src` policies (e.g., matching a nonce or hash) in order to execute.
+   When `sanitizer="unsafe"` is used in an unsanitized parser context, any `<script>` elements inside the fetched fragment must still satisfy `script-src` (including nonces or hashes) in order to execute.
+
+### Relative Paths, Performance, and Lifecycle Observation
+
+- **Relative paths (`document.baseURI`):** Relative URLs inside an included fragment resolve against the host document's `document.baseURI`—matching `innerHTML`, `setHTML()`, and inline `<template for>`, and keeping speculative preload URLs aligned with DOM URLs. Cross-origin fragments (e.g., served from a separate CDN domain) must therefore use absolute URLs for their own subresources.
+- **Performance tradeoffs:** Overusing client-side includes can create client-side network waterfalls compared to server multiplexing, whereas fetching personalized or secondary fragments asynchronously avoids delaying the initial shell or shipping client-side JS frameworks. Like ES modules, authors and build tools can choose per boundary whether to stream inline `<template for>` patches from the server or fetch external `<template for src>` fragments.
+- **Observing lifecycle & attribution:** See [template-mutation-observer-explainer.md](./template-mutation-observer-explainer.md) for observing `"start"`, `"update"`, `"end"`, and `"abort"` records and reading `templateAttributes` via `MutationObserver`.
 
 ### Try it out
 
-An experimental prototype has been implemented in Chrome behind `chrome://flags/#enable-experimental-web-platform-features`. It is subject to change as we iterate on the design, so we recommend testing in Chrome Canary where possible. Feedback can be raised as issues on this repo.
+An early experimental prototype of `<template>`-based patching and external fetching is in progress in Chromium behind `chrome://flags/#enable-experimental-web-platform-features`. Attribute names and newer parts of this explainer (such as `text/fragment` enforcement, `sanitizer`, and `loading="hidden"`) are actively evolving and may differ in current Canary builds; feedback is welcome as issues on this repo.
 
-## Performance
+---
 
-Overuse of client-side includes can become a network waterfall anti-pattern compared to multiplexing on the server. However, the right tradeoff is context-dependent: loading secondary or personalized markup asynchronously—rather than delaying the main server response or routing HTML through client-side JS bundles—can be a net performance win. Much like ES modules, authors and build tools can choose whether to inline/stream fragments from the server or fetch them client-side via `src` per route and cache boundary.
+## Open Questions
 
-## Relative Paths in Templates
+### Should `<template for src>` delay `DOMContentLoaded` or only `load`?
 
-Relative URLs inside an included fragment are **document-relative** (resolved against the host document's `document.baseURI`). This matches standard HTML fragment parsing (`innerHTML`, `setHTML`, `<template for>`) and avoids discrepancies between speculative preload URLs and DOM element URLs.
+Unlike `<img>` or `<iframe>` (which load leaf media or isolated subdocuments), `<template for="..." src="...">` populates part of the host document's **own DOM structure**:
+- **Case for delaying `DOMContentLoaded` (like `<script defer>`):** Authors and libraries routinely use `<script defer>`, module scripts, and `DOMContentLoaded` handlers to query and enhance the document's DOM (`querySelectorAll`, event listeners, form wiring). If `<template for src>` only delayed `window.onload`, `defer` scripts could run before shared `<header>` or `<main>` fragments are in the DOM.
+- **Case for delaying only `window.onload` (or differentiating eager vs. lazy includes):** When `<template for src>` is used for slower secondary subsections (such as `/partials/comments.fragment`), holding back `DOMContentLoaded` delays all `defer` scripts and `DOMContentLoaded` listeners on the slowest fragment fetch.
+- **Options to evaluate:** (1) Delay `DOMContentLoaded` by default, (2) delay only `window.onload`, or (3) have eager includes delay `DOMContentLoaded` while allowing deferred/below-the-fold includes (e.g., paired with `loading="lazy"`) to opt out.
 
-## Observing Template Lifecycles and Attribution
+### Potential Future Enhancement: In-place includes via empty `for` (`<template for src="...">`)
 
-See [template-mutation-observer-explainer.md](./template-mutation-observer-explainer.md) for the full Web IDL, lifecycle phases, and walkthroughs.
+Allowing an empty `for` attribute (`<template for src="/partials/header.fragment"></template>`) to insert a fetched fragment in place at the `<template>`'s own position is a natural future extension. It is omitted from the initial proposal because asynchronous includes generally benefit from explicit `<?start>...<?end>` placeholders (or `loading="hidden"` containers) and keeping `<template for src>` identical in targeting semantics to inline `<template for>` avoids needing a temporary live-DOM `<template>` anchor in v1.
 
-## Potential Future Enhancements
-
-### In-place includes via empty `for` (`<template for src="...">`)
-
-A natural extension to consider in the future is allowing an empty `for` attribute (`<template for src="/partials/header.html"></template>` or `for=""`) to insert the fetched fragment **in place** at the `<template>` element's own position in the DOM (temporarily attaching the `<template>` as a positional insertion anchor while streaming, then removing it on EOF).
-
-We have intentionally left empty `for` out of the base proposal for two reasons:
-1. **Placeholders are usually a best practice:** Because `<template src>` fetches asynchronously over the network, relying on a bare in-place include leaves nothing rendered at that spot until the fetch resolves. In practice, it is almost always better UX and layout hygiene to declare an explicit target range with placeholder content (`<?start name="feed">Loading…<?end>`)—or a sized container with [`loading="hidden"`](./partial-render-blocking-explainer.md)—while also allowing the `<template for="feed" src="...">` fetch to be initiated earlier or later in the stream independently of DOM order.
-2. **Simpler base model:** Requiring a named target keeps `<template for="..." src="...">` strictly identical in targeting semantics to inline `<template for="...">`, without needing a temporary live-DOM `<template>` anchor mode in v1.
-
-If developer feedback shows strong demand for markerless in-place includes (for instance, in buildless static sites or inline icon includes where no loading placeholder is needed), empty `for` can be introduced later as a backwards-compatible enhancement.
+---
 
 ## Prior Art & Considerations Not Tackled
+
+<details>
+<summary><strong>Server-Side / Edge Includes (SSI, ESI) & Client-Side Libraries (h-include, HTMX, Turbo Frames)</strong></summary>
 
 ### 1. Server-Side and Edge Includes
 
 - **SSI (Server-Side Includes):** E.g. `<!--#include virtual="/header.html" -->`. Standard synchronous markup inclusion compiled server-side.
 - **ESI (Edge-Side Includes):** E.g. `<esi:include src="http://example.com/header.html" />`. CDN-level edge assembly.
-  - *Considerations Not Tackled:* ESI features complex caching parameters (`max-age`), conditional routing via `<esi:choose>`, and edge-side variable interpolation. Our proposal delegates caching entirely to HTTP caching headers, and does not provide template conditional syntax.
+  - *Not tackled here:* Edge caching DSLs, `<esi:choose>` conditionals, and variable interpolation; caching is delegated to standard HTTP caching headers.
 
 ### 2. Client-Side Userland Libraries
 
-- **`h-include` (Gustaf Nilsson Kotte):** A popular custom element `<h-include src="...">` fetching external HTML and injecting it.
-  - *Considerations Not Tackled:* `h-include` supports extracting a specific DOM subtree from the response using a CSS selector (e.g. `src="page.html" select="#main-content"`). While powerful, this requires parsing the entire document and discarding most of it. Our proposal targets pure raw fragments to optimize network payload and parsing overhead.
-- **HTMX (`hx-get="..." hx-trigger="load"`):** Extends standard elements with declarative AJAX.
-  - *Considerations Not Tackled:* HTMX supports rich event-driven execution triggers (hover, click, scroll, form updates) and dynamic HTTP response header processing. Our proposal focuses solely on loading subresources as part of standard HTML parser initialization/layout updates.
-- **Turbo Frames (`<turbo-frame src="...">`):** Part of Hotwire, isolates page sub-regions for partial navigation.
-  - *Considerations Not Tackled:* Turbo Frames intercept form submissions and link clicks inside the frame to hijack browser navigation. Our proposal is a layout and include primitive, not a navigation routing engine.
+- **`h-include`:** Custom element `<h-include src="...">` fetching external HTML and injecting it. Unlike `h-include`'s CSS selector extraction (`select="#main"`), `<template for src>` streams raw `text/fragment` payloads directly without parsing and discarding full documents.
+- **HTMX (`hx-get`):** Supports event-driven triggers (click, hover, form submit) and custom response headers; `<template for src>` focuses on declarative HTML loading and composition.
+- **Turbo Frames (`<turbo-frame src="...">`):** Intercepts links and forms for scoped navigation; `<template for src>` is an HTML include primitive rather than a navigation router (see [route-matching-explainer.md](./route-matching-explainer.md) for routing).
+
+</details>
 
 ## Explored Alternatives
 
+<details>
+<summary><strong>Explored Alternatives (`<template buffer>`, `<script type="html">`, `<fragment>`, `fragment` / `sanitize` attributes)</strong></summary>
+
 ### 1. Off-screen buffering on `<template>` (`<template buffer>`)
 
-An earlier revision of this proposal included a boolean `buffer` attribute on `<template>` (`<template for="promo" src="promo.html" buffer>` as well as inline `<template for="comments" buffer>`). In `buffer` mode, the parser accumulated incoming markup off-screen inside `template.content` (`DocumentFragment`), speculatively preloaded subresources, waited for `<link rel="stylesheet">`, `<link rel="preload">`, and nested `<template for src>` includes to finish, and swapped the `DocumentFragment` into the target atomically on EOF.
+An earlier revision included a boolean `buffer` attribute on `<template>` that accumulated incoming markup inside an inert `DocumentFragment`, speculatively preloaded subresources, and swapped into the live DOM on EOF. We moved away from `<template buffer>` because:
+1. Inert `DocumentFragment`s do not normally load subresources or participate in layout, requiring bespoke parser/preload rules duplicating the live DOM.
+2. FOUC and half-parsed rendering affect ordinary streamed elements (`<article>`) and `element.streamHTML()` too, not just `<template>`.
+3. Off-screen fragments had no layout geometry, `aria-busy`, or CSS `@starting-style` transitions—all of which [Partial Render Blocking (`loading="hidden"`)](./partial-render-blocking-explainer.md) provides directly in the live DOM.
 
-**Why we moved away from it:**
+### 2. Extending `<script>` (`<script type="html" for="..." src="...">`)
 
-1. **Conflated DOM insertion with visual hiding:** Because inert `DocumentFragment`s do not normally fetch subresources or participate in rendering, `<template buffer>` required bespoke speculative-preloading and "buffer activation gating" rules in the HTML parser that duplicated what elements in the live DOM already do.
-2. **Only worked on `<template>`:** Avoiding FOUC and half-parsed rendering is equally needed for ordinary server-streamed elements (`<article>...</article>`) and script-streamed containers (`element.streamHTML()`). Tying buffering to `<template>` forced authors to wrap ordinary main-document markup inside `<template for="..." buffer>` just to hold rendering.
-3. **No layout geometry, `aria-busy`, or CSS transition hooks:** Because buffered content did not exist in the live DOM until swap time, it could not participate in layout, reflect loading state to assistive technologies, or animate entry via CSS (`@starting-style` / `:loading`). Moving render suppression to **[Partial Render Blocking (`loading="hidden"`)](./partial-render-blocking-explainer.md)** solves all of these uniformly in the live DOM while keeping `<template for src>` terse and single-purpose.
-
-### 2. Extending the `<script>` element (`type="html"`)
-
-An alternative approach is extending `<script>` (e.g., `<script type="html" for="..." src="...">`), either as a standalone element or nested inside `<template for>`.
-
-**Why it wasn't chosen:**
-
-1. **Inline HTML cannot live in `<script>`:** Declarative out-of-order streaming (`<template for="...">`) requires `<template>` because `<script>` tokenizes its contents as raw text (breaking on unescaped `</script>` tags and skipping HTML parsing).
-2. **Splitting inline and external patches across two elements:** Using `<template for>` for inline patches and `<script type="html" for src>` for external includes duplicates targeting (`for`) and lifecycle observation (`MutationRecord.templateAttributes` / `templateStatus`) across two unrelated elements, or requires `<script>` inside an otherwise-inert `<template>` to trigger fetches. Putting `src` and `sanitizer` directly on `<template>` keeps inline and external partial updates unified.
-3. **Parser-Blocking Footgun:** `<script>` is parser-blocking by default unless `async` or `defer` is specified, whereas HTML fragment includes should always be non-parser-blocking.
+Rejected because `<script>` tokenizes inline contents as raw text (so inline `<template for>` still requires `<template>`), splitting inline and external patches across two elements duplicates targeting and `MutationObserver` attribution, and `<script>` is parser-blocking by default.
 
 ### 3. Introducing a bespoke `<fragment>` element
 
-An alternative is introducing a new bespoke element specifically for external or targeted updates, e.g. `<fragment for="..." src="fragment.html">`.
+`<template>` already acts as a parser-consumed directive for Declarative Shadow DOM (`<template shadowrootmode>`) and inline patching (`<template for>`), and is already valid everywhere in HTML (including inside `<table>` and `<select>`) without foster-parenting.
 
-**Why it wasn't chosen:**
+### 4. Target-side `fragment` or `sanitize` attributes + nested `<script>` loader
 
-`<template>` already acts as a "self-destructing parser directive" for Declarative Shadow DOM (`<template shadowrootmode>`) and declarative partial updates (`<template for>`), where the parser consumes the `<template>` and routes its contents without leaving the `<template>` element in the DOM (and is already valid anywhere in the HTML grammar, such as inside `<table>` or `<select>`, without foster-parenting). Extending `<template>` is a natural continuation of this existing mechanism rather than introducing a second parser-consumed element.
+Configuring safety (`fragment="unsafe"` or `sanitize`) on the destination container creates action-at-a-distance hazards when multiple patches target the same container, looks deceptively like a permanent runtime guard against `el.innerHTML`, and requires verbose nested loader elements.
 
-### 4. Global `fragment` attribute composed with `<script>` and `<template>`
+</details>
 
-Another alternative is introducing a global attribute (e.g. `fragment="..."`) on the destination DOM container to configure sanitization, composed with `<script type="fragment" src="...">` for fetching and `<template for>` for out-of-order routing:
-- **In-place Include:** `<div fragment><script type="fragment" src="fragment.html"></script></div>`
-- **Targeted Include:** `<tbody><?marker name="rows"></tbody>` paired with `<template for="rows"><script type="fragment" src="rows.html"></script></template>`
-
-**Why it wasn't chosen:**
-
-1. **Verbosity & Dead Nodes:** Fetching requires writing both a container/template and a nested `<script type="fragment">` loader node that either lingers in the DOM or must self-destruct.
-2. **Action at a Distance for Safety Configuration:** Configuring `unsafe` on the *target container* (e.g., `<div fragment="unsafe">`) rather than on the `<template src>` stream means that if a container receives patches from multiple independent templates, enabling `unsafe` for one trusted patch opens the container to script execution from untrusted streams.
-
-### 5. Deconstructed Primitives (Global `sanitize` attribute + `<script>` loader + `:buffer` `display: none`)
-
-Another alternative is decomposing includes into a global `sanitize` attribute on containers (stripping scripts from descendants *only during parsing*), `<script type="html" src="...">` for fetching, and a `display: none` container pseudo-class while loading.
-
-**Why it wasn't chosen:**
-
-1. **False Security Contracts:** A permanent `sanitize` attribute on a `<div>` in the DOM looks like a live runtime security guarantee. Developers could easily assume it sanitizes subsequent JavaScript insertions (`div.innerHTML = ...`), whereas it only operated during parser tree construction.
-2. **`display: none` Layout Failures:** Hiding a loading container with `display: none` causes inline scripts (in `unsafe` mode) that measure layout (`offsetWidth`, `getBoundingClientRect()`) during parsing to read `0`, breaking layout-dependent widgets. (By contrast, [Partial Render Blocking](./partial-render-blocking-explainer.md) uses `visibility: hidden` so layout geometry remains valid while hidden.)
-
+---
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
 
+External fragment includes enforce `Content-Type: text/fragment` (no sniffing), CORS by default, default sanitization (`removeUnsafe()`) with monotonic ambient-context inheritance, strict fragment context boundaries, and CSP `fragment-src` (falling back to `script-src`).
+
+<details>
+<summary><strong>Full Security & Privacy Questionnaire Responses (1–22)</strong></summary>
+
 1. **What information does this feature expose, and for what purposes?**
-   It does not expose new user information. It provides a declarative mechanism to fetch `text/fragment` responses and insert HTML fragments into the DOM. Resource timing follows standard CORS / `Timing-Allow-Origin` subresource rules (see [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle)).
+   It does not expose new user information. It provides a declarative mechanism to fetch `text/fragment` responses and stream HTML fragments into the DOM. Resource timing follows standard CORS / `Timing-Allow-Origin` subresource rules.
 
 2. **Do features in your specification expose the minimum amount of information necessary to implement the intended functionality?**
    Yes.
@@ -288,10 +229,10 @@ Another alternative is decomposing includes into a global `sanitize` attribute o
 
 10. **Do features in this specification enable new script execution/loading mechanisms?**
     Yes, when `sanitizer="unsafe"` is used in an unsanitized parser context. This is mitigated across multiple layers:
-    * **Sanitized by default (`existing sanitizer + removeUnsafe()`):** Even when `sanitizer` is omitted, fetching via `src` strips `<script>`, inline event handlers, and nested `<template for>`; `sanitizer="unsafe"` only preserves (never relaxes) the enclosing sanitizer context. See [Default Safety (`removeUnsafe`) & Ambient Context Inheritance](#default-safety-removeunsafe--ambient-context-inheritance-sanitizerunsafe).
-    * **Strict `text/fragment` MIME check:** Responses must use `Content-Type: text/fragment` (no sniffing; `text/html` is rejected), preventing accidental full-page inclusion and direct-navigation XSS. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
-    * **CSP (`fragment-src` / `script-src`) & `nonce`:** Fragment URLs are governed by `fragment-src` (falling back to `script-src`, then `default-src`), and any scripts inside `sanitizer="unsafe"` fragments must satisfy `script-src`. See [Content Security Policy (CSP) Integration](#content-security-policy-csp-integration).
-    * **Subresource Integrity (`integrity`):** Verifies the full response digest prior to parsing when specified. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
+    * **Sanitized by default (context `Sanitizer` + `removeUnsafe()`):** Omitting `sanitizer` strips `<script>`, inline event handlers, and other XSS-unsafe constructs while keeping styles and scoping any nested `<template for>` / `<template for src>` strictly within the fragment's own context boundaries; `sanitizer="unsafe"` only preserves (never relaxes) the enclosing sanitizer context.
+    * **Strict `text/fragment` MIME check:** Responses must use `Content-Type: text/fragment` (no sniffing; `text/html` is rejected), preventing accidental full-page inclusion and direct-navigation XSS.
+    * **CSP (`fragment-src` / `script-src`) & `nonce`:** Fragment URLs are governed by `fragment-src` (falling back to `script-src`, then `default-src`), and any scripts inside `sanitizer="unsafe"` fragments must satisfy `script-src`.
+    * **Subresource Integrity (`integrity`):** Verifies the full response digest prior to parsing when specified.
 
 11. **Do features in this specification allow an origin to access other devices?**
     No.
@@ -303,7 +244,7 @@ Another alternative is decomposing includes into a global `sanitize` attribute o
     N/A.
 
 14. **How does this specification distinguish between behavior in first-party and third-party contexts?**
-    * **CORS by default (`crossorigin`):** Always uses Fetch mode `"cors"` with `"same-origin"` credentials by default (matching `<script type="module">`), requiring CORS headers cross-origin and `crossorigin="use-credentials"` to send cross-origin credentials. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
+    * **CORS by default (`crossorigin`):** Always uses Fetch mode `"cors"` with `"same-origin"` credentials by default (matching `<script type="module">`), requiring CORS headers cross-origin and `crossorigin="use-credentials"` to send cross-origin credentials.
     * **Referrer & partitioning:** Respects `referrerpolicy` and standard third-party cache/storage partitioning.
 
 15. **How do the features in this specification work in the context of a browser’s Private Browsing or Incognito mode?**
@@ -313,17 +254,21 @@ Another alternative is decomposing includes into a global `sanitize` attribute o
     Yes, these will be integrated into the HTML Standard.
 
 17. **Do features in your specification enable origins to downgrade default security protections?**
-    No:
-    * `sanitizer="unsafe"` only skips the added `removeUnsafe()` step and preserves the enclosing parser's sanitizer configuration—it can never relax an existing sanitizer, bypass CSP, or disable CORS / `text/fragment` MIME enforcement. See [Security & Sanitization (`sanitizer`)](#security--sanitization-sanitizer).
+    No. `sanitizer="unsafe"` only skips adding `removeUnsafe()` and inherits the enclosing parser's sanitizer configuration as-is—it can never relax an existing sanitizer, escape fragment context boundaries, bypass CSP, or disable CORS / `text/fragment` MIME enforcement.
 
 18. **What happens when a document that uses your feature is kept alive in BFCache (instead of getting destroyed) after navigation, and potentially gets reused on future navigations back to the document?**
     No specific impact; standard BFCache handling for in-flight subresource fetches applies.
 
 19. **What happens when a document that uses your feature gets disconnected?**
-    In-flight `src` fetches abort immediately if the target document or container is disconnected. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle).
+    In-flight `src` fetches abort immediately if the target document or container is disconnected.
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
-    Network failures, `text/fragment` MIME mismatches, CORS/CSP blocks, `integrity` failures, and disconnection aborts halt the include and surface via `templateStatus: "abort"`. See [Resource Fetching and Lifecycle](#resource-fetching-and-lifecycle) and [Observing Template Lifecycles and Attribution](#observing-template-lifecycles-and-attribution).
+    Network failures, `text/fragment` MIME mismatches, CORS/CSP blocks, `integrity` failures, and disconnection aborts halt the include and surface via `templateStatus: "abort"` ([template-mutation-observer-explainer.md](./template-mutation-observer-explainer.md)).
 
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.
+
+22. **What should this questionnaire have asked?**
+    Whether the feature introduces new declarative HTML injection surfaces and how nested includes are contained within ambient sanitizer and target context boundaries (addressed in [Security & Sanitization (`sanitizer`)](#security--sanitization-sanitizer) and [Activation and Targeting](#activation-and-targeting)).
+
+</details>

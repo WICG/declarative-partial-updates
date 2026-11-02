@@ -199,27 +199,32 @@ Calling `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in 
 
 ## Frequently Asked Questions (Q&A)
 
+<details>
+<summary><strong>Parser overhead, firing order, empty/already-parsed targets, and HTML adoption/foster-parenting</strong></summary>
+
 ### Q1: Does `delivery: "parse-end"` add overhead to the HTML parser or delay rendering?
-No:
-1. **Zero parser/rendering buffering:** The HTML parser inserts nodes into the live DOM immediately as bytes arrive. Layout, rendering, preload scanning, and other observers are never delayed.
-2. **Zero cost when `delivery: "parse-end"` is unused:** Holding records in an observer's pending queue only occurs for observer registrations that pass `delivery: "parse-end"`, gated on state the parser already maintains (stack of open elements and active `streamHTML*` context).
+No. The HTML parser inserts nodes into the live DOM immediately as bytes arrive—layout, rendering, preload scanning, and other observers are never delayed. Holding records in a pending queue only occurs for observer registrations that pass `delivery: "parse-end"`, gated on state the parser already maintains (stack of open elements and active `streamHTML*` context).
 
 ### Q2: Why can observers fire in a different order when `delivery: "parse-end"` is used?
-Because `delivery: "parse-end"` is **observer-specific**: an observer watching `<parent>` with `delivery: "parse-end"` holds its records across chunk boundaries while `<parent>` is still open, whereas an observer with `delivery: "default"`—or a `delivery: "parse-end"` observer watching a `<child>` whose `</child>` tag arrived in an earlier chunk—flushes immediately at that earlier chunk's microtask checkpoint. As a result, nested `delivery: "parse-end"` components naturally initialize **bottom-up** (`<s-option>` finishes parsing and flushes before `<s-select>`).
+Because `delivery: "parse-end"` is observer-specific: an observer watching `<parent>` with `delivery: "parse-end"` holds its records while `<parent>` is open, whereas a `delivery: "default"` observer—or a `delivery: "parse-end"` observer on `<child>` whose `</child>` arrived in an earlier chunk—flushes at that earlier chunk's microtask checkpoint. Nested `delivery: "parse-end"` components therefore initialize bottom-up (`<s-option>` flushes before `<s-select>`).
 
 ### Q3: Why is a `delivery: "parse-end"` observer guaranteed to fire even if the target is already parsed or has empty children?
-Without that guarantee:
-- Observing `<my-widget></my-widget>` in `connectedCallback()` would never fire at `</my-widget>` because zero child nodes were inserted.
-- Observing an element that was upgraded after parsing, created via `innerHTML` / `document.createElement()`, or discovered after closing in the same chunk would never fire if no *further* child mutations occurred.
-Guaranteeing a flush at parse end—or at the next microtask checkpoint if already parsed—(synthesizing an empty `childList` record `addedNodes: [], removedNodes: []` when no child records were queued) lets authors put all initial *and* ongoing child synchronization inside a single `MutationObserver` callback.
+Guaranteeing a flush at parse end—or at the next microtask checkpoint if already parsed—(synthesizing an empty `childList` record when no child records were queued) ensures `<my-widget></my-widget>` observed in `connectedCallback()` and elements upgraded or observed after parsing initialize through the exact same `MutationObserver` callback as multi-chunk elements.
 
 ### Q4: What happens with foster parenting and the adoption agency algorithm?
-- **Foster parenting (`<table><div>...</div></table>`):** Even when `<div>` is foster-parented outside `<table>`, `<div>` remains on the stack of open elements until `</div>` is seen, so a `delivery: "parse-end"` observer on `<div>` buffers until `</div>` pops it.
-- **Adoption agency (`<b><i>Bold </b>italic</i>`):** Popping the original `<i>` at `</b>` ends parsing for that `<i>` instance and flushes its `delivery: "parse-end"` buffer; the reconstructed `<i>` created for `italic` is a distinct element tracked until `</i>`.
+- **Foster parenting (`<table><div>...</div></table>`):** `<div>` remains on the stack of open elements until `</div>` is seen, so a `delivery: "parse-end"` observer on `<div>` buffers until `</div>` pops it.
+- **Adoption agency (`<b><i>Bold </b>italic</i>`):** Popping the original `<i>` at `</b>` ends parsing for that `<i>` instance and flushes its buffer; the reconstructed `<i>` created for `italic` is a distinct element tracked until `</i>`.
+
+</details>
 
 ---
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
+
+`delivery: "parse-end"` exposes no new user or cross-origin information: it only controls microtask delivery timing of `MutationRecord`s for a DOM element the caller can already observe, adds no new properties to `Element` or `MutationRecord`, and emits nothing for sanitizer-discarded elements.
+
+<details>
+<summary><strong>Full Security & Privacy Questionnaire Responses (1–22)</strong></summary>
 
 1. **What information does this feature expose, and for what purposes?**
    No new user or cross-origin information. `delivery: "parse-end"` only controls microtask delivery timing of `MutationRecord`s for a DOM element the caller can already observe.
@@ -286,3 +291,5 @@ Guaranteeing a flush at parse end—or at the next microtask checkpoint if alrea
 
 22. **What should this questionnaire have asked?**
     Nothing.
+
+</details>
