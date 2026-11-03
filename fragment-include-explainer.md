@@ -82,7 +82,7 @@ When both `for` and `src` are present on `<template>`, the browser asynchronousl
 - **Error, truncation, and disconnection behavior:**
   - *Pre-stream failure* (network error, HTTP error, non-`text/fragment` MIME type, CORS block, CSP block, or `integrity` mismatch): The include aborts before `"start"`. Any fallback content inside `<?start name="...">...<?end>` **remains intact and visible** in the DOM.
   - *Mid-stream truncation or disconnection:* Once streaming has started, the initial placeholder has already been replaced by incoming chunks. If the network stream drops before completion or the target container/document disconnects, any in-flight fetch aborts, already-streamed DOM nodes remain in place, markers are cleaned up, and any [`hidden="while-loading"`](./partial-render-blocking-explainer.md) boundary settles so content is never stuck hidden.
-  - *Programmatic observation & retry UI:* Both pre-stream and mid-stream failures emit a `MutationRecord` with `templateStatus: "abort"` to observers opted into [`MutationObserver` (`template: true`)](./template-mutation-observer-explainer.md), enabling applications to render retry UI or restore fallback state.
+  - *Programmatic observation & retry UI:* Both pre-stream and mid-stream failures emit a `MutationRecord` with `activeTemplateStatus: "abort"` to observers opted into [`MutationObserver` (`activeTemplateAttributeFilter`)](./template-mutation-observer-explainer.md), enabling applications to render retry UI or restore fallback state.
 
 ### Avoiding Layout Shifts and FOUC
 
@@ -280,7 +280,7 @@ External fragment includes enforce `Content-Type: text/fragment` (no sniffing), 
     In-flight `src` fetches abort immediately if the target document or container is disconnected.
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
-    Network failures, `text/fragment` MIME mismatches, CORS/CSP blocks, `integrity` failures, and disconnection aborts halt the include and surface via `templateStatus: "abort"` ([template-mutation-observer-explainer.md](./template-mutation-observer-explainer.md)).
+    Network failures, `text/fragment` MIME mismatches, CORS/CSP blocks, `integrity` failures, and disconnection aborts halt the include and surface via `activeTemplateStatus: "abort"` ([template-mutation-observer-explainer.md](./template-mutation-observer-explainer.md)).
 
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.

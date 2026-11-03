@@ -176,7 +176,7 @@ The synthesized record is `{ type: "childList", target, addedNodes: [], removedN
 
 Buffering lasts as long as `target` is parsing. For a long-lived stream (such as an LLM chat response streamed into an element through `streamHTML()` for minutes), a parse-end observer holds **every** record for that `target` until the stream ends. That is by design, but authors should know about it:
 
-- **Parse-end delivery is the wrong choice for progressively rendered targets.** If a component should react to content as it arrives, use a default observer (or `template: true` for `<template for>` patches; see the [template `MutationObserver` explainer](./template-mutation-observer-explainer.md)).
+- **Parse-end delivery is the wrong choice for progressively rendered targets.** If a component should react to content as it arrives, use a default observer (or `activeTemplateAttributeFilter` for `<template for>` patches; see the [template `MutationObserver` explainer](./template-mutation-observer-explainer.md)).
 - **`takeRecords()` is the escape hatch.** A component can drain buffered records at any time (for example from a `requestAnimationFrame` loop or a timer) without waiting for parse end. The guaranteed final callback still fires when the stream closes.
 - **Implementations may store buffered records compactly** (for example by coalescing adjacent `childList` records for the same `target`), since only the final batch can be observed.
 
