@@ -220,7 +220,7 @@ In addition to patching from a stream or interleaved in HTML, `<template for="..
 
 ### Avoiding layout shifts and FOUC
 
-Because out-of-order `<template for>` patches stream into containers after surrounding markup may have already painted, authors can combine placeholders inside `<?start name="...">...<?end>`, document-level `<link rel="expect" href="#..." blocking="render">` in `<head>`, and element-scoped [Hide While Loading (`loading="hidden"`)](./partial-render-blocking-explainer.md) to avoid layout shifts, half-parsed subtrees, and flashes of unstyled content.
+Because out-of-order `<template for>` patches stream into containers after surrounding markup may have already painted, authors can combine placeholders inside `<?start name="...">...<?end>`, document-level `<link rel="expect" href="#..." blocking="render">` in `<head>`, and element-scoped [Hide While Loading (`hidden="while-loading"`)](./partial-render-blocking-explainer.md) to avoid layout shifts, half-parsed subtrees, and flashes of unstyled content.
 
 ## Alternatives considered
 

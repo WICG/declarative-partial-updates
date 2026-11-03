@@ -1,4 +1,4 @@
-# Hide While Loading (`loading="hidden"` & `:loading`)
+# Hide While Loading (`hidden="while-loading"` & `:loading`)
 
 ## Status of this document
 
@@ -29,18 +29,15 @@ However, JavaScript framework boundaries cannot natively observe or coordinate b
 
 ## Proposed Solution
 
-We propose extending HTML's `loading` attribute from `<img>` and `<iframe>` into a **global, space-separated token attribute** on all HTML elements:
+1. **A new `hidden="while-loading"` state** for the global `hidden` attribute, alongside the existing `hidden` (Hidden) and `hidden="until-found"` (Hidden Until Found) states. It opts the element into loading-boundary tracking and hides it by default while it is loading.
+2. **`:loading` CSS pseudo-class:** Matches an element in the `while-loading` state while it is parsing and/or while its gating subresources are loading (subject to a browser fallback timeout so stalled subresources never hide content indefinitely).
+3. **Customizable UA stylesheet default (`visibility: hidden` + `opacity: 0` + `@starting-style`):** Hides incomplete content while preserving real layout geometry and enabling zero-JS CSS fade-in transitions. It is an ordinary UA style, so authors can override it (e.g. dim instead of hide).
+4. **Accessibility & lifecycle (`aria-busy` + `load` event):** Maps `:loading` to implicit `aria-busy="true"` and fires a completion event at the element each time it stops loading.
 
-1. **Multi-token global `loading` attribute (`eager | lazy` and `hidden`):**
-   - **Opt-in boundary:** Placing `loading` on any element opts it into loading-boundary tracking.
-   - **Scheduling token (`eager` | `lazy`):** Controls fetch scheduling for the element itself (`<img>`, `<iframe>`) and sets the inherited default for descendant subresources inside a container (`<img>`, `<iframe>`, `<template for src>`) that omit an explicit scheduling token.
-   - **Presentation token (`hidden`):** Opts into the default UA hide-while-loading stylesheet (`loading="hidden"`, `loading="lazy hidden"`, `loading="eager hidden"`).
-2. **`:loading` CSS pseudo-class (scoped to `[loading]` elements):** Matches an element with a `loading` attribute while it is parsing and/or while its gating subresources are loading (subject to a browser fallback timeout so stalled subresources never hide content indefinitely).
-3. **Customizable UA stylesheet default (`visibility: hidden` + `opacity: 0` + `@starting-style`):** Provides a sensible default for `[loading~="hidden"]:loading` that hides incomplete content while preserving real layout geometry and enabling zero-JS CSS fade-in transitions—while remaining intentionally overridable in the CSS cascade when authors want custom `:loading` styling.
-4. **Accessibility & lifecycle (`aria-busy` + `load` event on `[loading]` elements):** Maps `:loading` to implicit `aria-busy="true"` and fires a completion event on the boundary element when loading finishes.
+The attribute stays on the element after loading finishes. If the element starts loading again (for example, a later `streamHTML()` or `<template for>` patch into it), `:loading` matches again and the element is hidden again until it settles.
 
 > [!IMPORTANT]
-> **Performance & 1:1 mental model:** Both `:loading` and the container completion event **only apply to elements with a `loading` attribute**. Flipping `:loading` (invalidating styles) or queueing tasks on *every* HTML end tag (`</div>`, `</p>`, `</li>`, `</span>`) across a document would be prohibitively chatty during parsing. Tying `:loading` and completion events directly to `[loading]` keeps tracking 100% opt-in on containers. *(See [Key Design Questions](#key-design-questions) for ongoing discussion on visible-boundary opt-in tokens, `<img>` backwards compatibility, and event naming.)*
+> **Opt-in only:** `:loading` and the completion event apply only to elements in the `while-loading` state. Flipping `:loading` or queueing tasks on *every* HTML end tag across a document would be prohibitively chatty during parsing.
 
 ### At a Glance
 
@@ -48,34 +45,30 @@ We propose extending HTML's `loading` attribute from `<img>` and `<iframe>` into
 <style>
   .card {
     min-height: 12rem;
-    /* Smoothly fades from 0 -> 1 when :loading clears, thanks to UA @starting-style / opacity: 0 */
+    /* Fades from 0 -> 1 when :loading clears, thanks to UA @starting-style / opacity: 0 */
     transition: opacity 200ms ease-out;
   }
 
-  /* Custom visible loading state without hiding */
+  /* Dim instead of hiding */
   .feed:loading {
+    visibility: visible;
     opacity: 0.5;
   }
 </style>
 
-<!-- 1. Shell-to-content card: shell paints immediately; card stays hidden while its
-        HTML streams in and while card.css + avatar.jpg finish loading, then fades in -->
-<article class="card" loading="hidden" onload="console.log('Card ready!')">
+<!-- 1. Shell-to-content card: the shell paints immediately; the card stays hidden while its
+        HTML streams in and while card.css + avatar.jpg load, then fades in -->
+<article class="card" hidden="while-loading" onload="console.log('Card ready!')">
   <link rel="stylesheet" href="/styles/card.css">
   <img src="/avatars/ada.jpg" width="64" height="64" alt="Ada">
   <p>Bio content streamed or rendered after the app shell...</p>
 </article>
 
-<!-- 2. Below-the-fold lazy + hidden boundary: inner images/iframes default to lazy,
-        and the section stays hidden while loading once scrolled near the viewport -->
-<section class="card" loading="lazy hidden">
-  <link rel="stylesheet" href="/styles/gallery.css">
-  <img src="/photos/1.jpg" width="300" height="200" alt="">
-  <img src="/photos/2.jpg" width="300" height="200" alt="">
-</section>
+<!-- 2. A visible boundary: stays visible but dimmed while loading -->
+<section class="feed" hidden="while-loading">...</section>
 
 <!-- 3. Composes with declarative partial updates (<template for> / src) -->
-<aside class="card" loading="hidden">
+<aside class="card" hidden="while-loading">
   <?marker name="promo">
 </aside>
 <template for="promo" src="/partials/promo.fragment"></template>
@@ -85,69 +78,63 @@ We propose extending HTML's `loading` attribute from `<img>` and `<iframe>` into
 
 ## Detailed Design
 
-### 1. The Global Multi-Token `loading` Attribute
+### 1. The `hidden="while-loading"` State
 
-`loading` is promoted to a global content attribute on `HTMLElement` parsed as an unordered set of unique space-separated ASCII case-insensitive tokens from two orthogonal categories:
+The `hidden` attribute gains a third state, **While Loading**, for the ASCII case-insensitive keyword `while-loading`:
 
-| Category | Tokens | Meaning |
+| Keyword | State | Rendering |
 |---|---|---|
-| **Fetch scheduling** *(at most one)* | `eager`, `lazy` | Controls whether resource fetching starts immediately (`eager`) or defers until near the viewport (`lazy`). If omitted, inherits from the nearest ancestor with an `eager`/`lazy` token, defaulting to `eager`. |
-| **Presentation** *(optional)* | `hidden` | Applies the default UA `[loading~="hidden"]:loading` stylesheet rules so the element is hidden while `:loading` matches. |
+| (empty / `hidden` / invalid) | Hidden | `display: none` |
+| `until-found` | Hidden Until Found | `content-visibility: hidden`, revealed by find-in-page and fragment navigation |
+| `while-loading` | **While Loading** | `visibility: hidden; opacity: 0` while `:loading` matches; rendered normally otherwise |
 
-- Writing `loading="hidden"` both opts into boundary tracking and hides the element by default while `:loading`.
-- Writing `loading="lazy hidden"` defers lazy-eligible subresources while far off-screen and hides the boundary until ready.
-- Opting into `:loading` and lifecycle events *without* hiding is also supported (currently sketched via `loading="eager"` / `loading=""`; see [Key Design Question #1](#1-opting-into-visible-boundaries--backwards-compatibility-on-img--iframe) for cleaner token/attribute options).
+- **IDL reflection:** As with `until-found`, the `HTMLElement.hidden` getter returns the string `"while-loading"` for this state, and setting `el.hidden = "while-loading"` sets the attribute value.
+- **Not loading → rendered normally:** An element in the While Loading state that is not `:loading` is rendered as if it had no `hidden` attribute. The UA stylesheet's `[hidden]` rule excludes it the same way it excludes `until-found`.
+- **Separate from `loading=lazy`:** Fetch scheduling stays with the `loading` attribute on `<img>`/`<iframe>`. `hidden="while-loading"` is only about presentation and readiness tracking, so `<img loading="lazy" hidden="while-loading">` has no keyword collision and no legacy reflection issue.
 
-#### Web IDL & Precedent (`rel` / `relList`)
+#### Backwards compatibility & polyfilling
 
-Promoting `loading` to `HTMLElement` removes the separate `loading` IDL attribute declarations from `HTMLImageElement` and `HTMLIFrameElement`. Following HTML's `HTMLLinkElement.rel` / `relList` (and `HTMLAnchorElement.rel` / `relList`) precedent—preserving `typeof img.loading === "string"` while providing `DOMTokenList` ergonomics—`HTMLElement` exposes both `loading` and `loadingList`:
+Browsers that don't support the state treat `hidden="while-loading"` as plain `hidden` (`display: none`), the same as `hidden="until-found"` in browsers without support for it. A polyfill can approximate the native behavior by tracking the element's parsing and subresource loads and removing the `hidden` attribute when the element finishes loading, as `hidden="until-found"` polyfills do when they reveal content. Unlike the native behavior, the polyfilled element won't hide again if it starts loading again.
 
-```webidl
-partial interface HTMLElement {
-  [CEReactions] attribute DOMString loading;
-  [SameObject, PutForwards=value] readonly attribute DOMTokenList loadingList;
-};
-```
-
-- **Graceful degradation on containers:** On containers (`<section loading="hidden">`, `<article loading="lazy hidden">`), legacy browsers ignore the unrecognized `loading` attribute and render content progressively as usual (avoiding the permanent `display: none` trap of overloading `[hidden]`). *(Note: on `<img>` and `<iframe>` specifically, legacy browsers treat multi-token `loading="lazy hidden"` as an invalid enumerated keyword and fall back to `"eager"`; see [Key Design Question #1](#1-opting-into-visible-boundaries--backwards-compatibility-on-img--iframe).)*
+The failure mode without a polyfill is content that stays hidden, not content that flashes, so pages that can't rely on a polyfill should feature-detect (e.g. `CSS.supports("selector(:loading)")`) before emitting the attribute.
 
 ### 2. The `:loading` CSS Pseudo-Class & Shared "Parsing" Definition
 
-An element only matches `:loading` when it has a **`loading` content attribute** (`[loading]`). Removing the `loading` attribute immediately stops `:loading` from matching.
+An element only matches `:loading` when its `hidden` attribute is in the **While Loading** state. Removing the attribute (or changing its value) immediately stops `:loading` from matching.
 
-*(Note on existing `<img loading="lazy">` pages: `<img>` and `<iframe>` are leaf/void elements with no HTML end-tag chatter, and browsers already track their fetch completion and queue a single `load`/`error` task per resource—so matching `:loading` on `[loading]` images/iframes adds no new parser invalidation passes, while containers remain 100% opt-in.)*
-
-When an element has a `loading` attribute, `:loading` matches while **any** of the following hold (up to the UA fallback timeout):
+When an element is in the While Loading state, `:loading` matches while **any** of the following hold (up to the UA fallback timeout):
 
 - **The element is parsing** *(shared definition with [`delivery: "parse-end"` `MutationObserver`](./parse-end-mutation-observer-explainer.md#1-definition-of-parsing); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts#12578)):*
   1. It is on the HTML parser's [stack of open elements](https://html.spec.whatwg.org/multipage/parsing.html#stack-of-open-elements) (its start tag has been inserted, and its end tag has not yet been popped), **or**
   2. It is the context element of an active streaming fragment parser—either an active `element.streamHTML*()` call, or an active `<template for="...">` / `<template for="..." src="...">` patch currently streaming into a marker whose parent is this element.
-- **Own external resource (`<img>`, `<video>`, `<iframe>`, `<link rel="stylesheet">` with `[loading]`):**
-  - **`<img>` (and `<input type="image">`):** Matches while an active image request is pending (before its `load` or `error` task runs; for `loading="lazy"`, once its fetch starts—or while deferred if `hidden` is also specified).
+- **Own external resource** (when the element itself is an `<img>`, `<video>`, `<iframe>`, or `<link rel="stylesheet">`):
+  - **`<img>` (and `<input type="image">`):** Matches while an active image request is pending (before its `load` or `error` task runs). A `loading="lazy"` image that hasn't started fetching does not match.
   - **`<video>`:** Matches while fetching media resources required for its initial visual state (`poster` image if specified, or metadata/first frame up to `loadeddata` / `error` when `preload` is not `"none"`).
   - **`<iframe>`:** Matches while its child navigable is loading (until the `<iframe>`'s `load` event fires).
   - **`<link rel="stylesheet">`:** Matches while the stylesheet is being fetched and parsed (until `load` or `error`).
-- **Pending descendant subresources (containers with `[loading]`):** Continues to match after the container finishes parsing while any gating descendant subresource (including an in-flight `<template for="..." src="...">` fetch targeting a marker inside the container) is still pending (see [Subresource Gating](#2-subresource-gating-blockingrender-vs-existing-delays-the-load-event)).
-- **Default slow-network fallback timeout:** Matching document-level render-blocking (`blocking="render"`) and `font-display: block` safeguards, browsers apply a default fallback timeout (e.g., **~3 seconds** from when the boundary begins waiting on network subresources) after which `[loading~="hidden"]` stops suppressing rendering of already-parsed content even if a slow subresource has not yet settled—ensuring stalled subresources on poor connections never leave users staring at a permanently blank region.
+- **Pending descendant subresources:** Continues to match after the element finishes parsing while any gating descendant subresource (including an in-flight `<template for="..." src="...">` fetch targeting a marker inside the element) is still pending (see [Subresource Gating](#1-subresource-gating-blockingrender-vs-existing-delays-the-load-event)).
+- **Default slow-network fallback timeout:** Matching document-level render-blocking (`blocking="render"`) and `font-display: block` safeguards, browsers apply a default fallback timeout (e.g., **~3 seconds** from when the element begins waiting on network subresources) after which `:loading` stops matching even if a slow subresource has not yet settled—ensuring stalled subresources on poor connections never leave users staring at a permanently blank region.
 
-### 3. Default UA Stylesheet for `loading~="hidden"`
+### 3. Default UA Stylesheet
 
 ```css
-[loading~="hidden"]:loading {
+[hidden="while-loading" i]:loading {
   visibility: hidden;
   opacity: 0;
 }
 
 @starting-style {
-  [loading~="hidden"] {
+  [hidden="while-loading" i] {
     opacity: 0;
   }
 }
 ```
 
-#### `"hidden"` is a customizable default, not a hard rendering lock
+The existing `[hidden]:not([hidden="until-found" i])` rule that applies `display: none` also excludes `[hidden="while-loading" i]`.
 
-Putting `[loading~="hidden"]:loading` in the **normal UA stylesheet** (without `!important` or engine-locked suppression) is **deliberate**: `"hidden"` defines the *default* presentation while loading—just as HTML's `[hidden] { display: none }` provides a default style that authors can customize in CSS. This gives authors zero-CSS hiding out of the box, while letting components or design systems override *how* a `loading="hidden"` element looks while loading (for example, `opacity: 0.25`, `filter: blur(6px)`, or custom `@starting-style` keyframes) using ordinary CSS selectors. *(As with `[hidden]`, authors setting unconditional `opacity: 1` or `visibility: visible` on the element itself should scope those overrides with `:not(:loading)` if they want to preserve the default hiding behavior.)*
+#### Hiding is a customizable default, not a hard rendering lock
+
+The rule above is in the **normal UA stylesheet** (without `!important` or engine-locked suppression) on purpose: it defines the *default* presentation while loading—just as HTML's `[hidden] { display: none }` is a default that authors can override in CSS. Authors get hiding with zero CSS, and components or design systems can change *how* a loading element looks (for example, `opacity: 0.25`, `filter: blur(6px)`, or custom `@starting-style` keyframes) with ordinary selectors. *(As with `[hidden]`, authors setting unconditional `opacity: 1` or `visibility: visible` on the element itself should scope those overrides with `:not(:loading)` if they want to keep the default hiding.)*
 
 #### Why `visibility: hidden`, `opacity: 0`, and `@starting-style`?
 
@@ -158,72 +145,67 @@ Putting `[loading~="hidden"]:loading` in the **normal UA stylesheet** (without `
 2. **Prevents descendant `visibility: visible` leaks (`opacity: 0`):**
    - Pairing `visibility: hidden` with `opacity: 0` forms a `0`-opacity group so a descendant with `visibility: visible` cannot accidentally paint prematurely.
 3. **Zero-JS entry animations (`opacity: 0` + `@starting-style`):**
-   - Adding `transition: opacity 200ms` smoothly fades the container in when `:loading` clears—both when `:loading` spanned multiple frames and (via `@starting-style`) when cached subresources resolved in the initial frame.
+   - Adding `transition: opacity 200ms` fades the element in when `:loading` clears—both when `:loading` spanned multiple frames and (via `@starting-style`) when cached subresources resolved in the initial frame.
 4. **Interaction with inline placeholders (`<?start>...<?end>`):**
-   - Because `loading="hidden"` hides the **entire** container while `:loading` matches, any fallback/skeleton markup placed *inside* that same container (e.g., `<aside loading="hidden"><?start name="promo">Loading…<?end></aside>`) will **also be hidden**. To show a visible skeleton or spinner while loading, either omit `hidden` on the container holding `<?start>...<?end>`, render the skeleton as a sibling/wrapper *outside* the `loading="hidden"` element, or place `loading="hidden"` on an inner element inside the streamed fragment.
-5. **Find-in-page & below-the-fold `loading="lazy hidden"`:**
-   - Standard `visibility: hidden` omits descendants from browser find-in-page (`Ctrl+F` / `Cmd+F`) and the accessibility tree while hidden. Consequently, `loading="lazy hidden"` far below the fold is best suited for visual media/widget sections rather than primary searchable article text (where `loading="lazy"` without `hidden` keeps text immediately searchable).
+   - Because `hidden="while-loading"` hides the **entire** element while `:loading` matches, any fallback/skeleton markup placed *inside* it (e.g., `<aside hidden="while-loading"><?start name="promo">Loading…<?end></aside>`) is **also hidden**. To show a visible skeleton while loading, render it outside the hidden element, put `hidden="while-loading"` on an inner element inside the streamed fragment, or override the default style to keep the element visible.
+5. **Find-in-page:**
+   - `visibility: hidden` omits descendants from find-in-page (`Ctrl+F` / `Cmd+F`) and the accessibility tree while hidden. Unlike `hidden="until-found"`, find-in-page does not reveal a loading element early; its content becomes searchable once it finishes loading.
 
 ### 4. Accessibility: Mapping to `aria-busy`
 
 In WAI-ARIA, [`aria-busy="true"`](https://w3c.github.io/aria/#aria-busy) signals to assistive technologies that an element is currently being populated or modified and that screen readers should wait until updates finish before announcing live changes.
 
-- While a `[loading]` container matches `:loading` (unless overridden by an explicit `aria-busy` attribute), its implicit ARIA state maps to **`aria-busy="true"`**, returning to **`aria-busy="false"`** when `:loading` clears.
-- Under `[loading~="hidden"]:loading`, `visibility: hidden` suppresses half-parsed text nodes and unstyled controls from the accessibility tree while incomplete, then exposes the complete subtree once ready.
-- On a visible `[loading]` container without `hidden`, implicit `aria-busy="true"` communicates the active loading state to assistive technologies while skeleton or dimmed content is visible.
+- While an element matches `:loading` (unless overridden by an explicit `aria-busy` attribute), its implicit ARIA state maps to **`aria-busy="true"`**, returning to **`aria-busy="false"`** when `:loading` clears.
+- With the default style, `visibility: hidden` keeps half-parsed text and unstyled controls out of the accessibility tree while incomplete, then exposes the complete subtree once ready.
+- When authors override the default to keep the element visible, implicit `aria-busy="true"` still communicates the loading state while dimmed or partial content is shown.
 
 ### 5. Lifecycle: Firing the Completion Event (`load` vs. Dedicated Event Name)
 
-When a container with a `loading` attribute transitions out of `:loading`—meaning it is no longer parsing **and** all of its gating subresources have settled—the browser queues a global task on the DOM manipulation task source to fire a simple (non-bubbling) **`load`** `Event` at that element:
+Each time an element in the While Loading state transitions out of `:loading`—meaning it is no longer parsing **and** all of its gating subresources have settled (or the fallback timeout elapsed)—the browser queues a global task on the DOM manipulation task source to fire a simple (non-bubbling) **`load`** `Event` at that element:
 
-- **Scoped to `[loading]` elements:** Ordinary containers (`<div>`, `<section>`, `<article>`) without `loading` **never** fire `load` events on end tags or child resource loads.
-- **Reuses `GlobalEventHandlers.onload`:** `<section loading="hidden" onload="...">` and `el.addEventListener("load", ...)` work with no new event handler IDL attributes.
+- **Scoped to opted-in elements:** Ordinary containers (`<div>`, `<section>`, `<article>`) without `hidden="while-loading"` **never** fire `load` events on end tags or child resource loads.
+- **Reuses `GlobalEventHandlers.onload`:** `<section hidden="while-loading" onload="...">` and `el.addEventListener("load", ...)` work with no new event handler IDL attributes.
 - **Subresource errors never wedge visibility:** Just as `window.onload` still fires when an image `404`s or a stylesheet errors, any subresource that fails (or any parser stream that aborts/truncates at EOF) settles its pending count so `:loading` clears and `load` fires.
 - **Known quirks of reusing `load` (and alternative event name consideration):**
   1. *`<body>` outlier:* In HTML, `<body onload="...">` / `document.body.onload` is a legacy window-reflecting handler for `window.onload` rather than listening on `<body>` itself (though `document.body.addEventListener("load", ...)` receives target `load` events on `<body>`). Having `<body>` remain an outlier for inline `onload` is acceptable in practice since loading boundaries normally wrap sections inside `<body>`, not `<body>` itself.
-  2. *Capture-phase listeners:* Existing `document.addEventListener("load", fn, true)` capture listeners (used by some analytics or image-tracking scripts) will also receive container `load` events (filterable via tag name or `e.target.hasAttribute("loading")`).
+  2. *Capture-phase listeners:* Existing `document.addEventListener("load", fn, true)` capture listeners (used by some analytics or image-tracking scripts) will also receive container `load` events (filterable via `e.target.hidden === "while-loading"`).
   3. *Alternative:* If avoiding `body.onload` and capture-listener overlap is preferred over reusing `onload`, we can fire a dedicated non-bubbling event name such as **`loadingend`** or **`contentload`** instead.
 
 ---
 
 ## Key Design Questions
 
-### 1. Opting into Visible Boundaries & Backwards Compatibility on `<img>` / `<iframe>`
+### 1. Subresource Gating: `blocking="render"` vs. Existing "Delays the Load Event"
 
-Two design details of multi-token `loading` warrant discussion:
-- **Visible boundary opt-in:** Using `loading="eager"` or `loading=""` on `<section>` to opt into `:loading` + `onload` *without* hiding overloads a fetch-scheduling keyword (`eager`). Adding an explicit presentation token such as `loading="visible"` (pairing `hidden | visible` orthogonally with `eager | lazy`), or splitting boundary presentation into a dedicated attribute, would make the opt-in clearer.
-- **`<img loading="lazy hidden">` in legacy browsers:** Shipping browsers parse `HTMLImageElement.loading` as a single enumerated keyword (`"eager" | "lazy"`, invalid default `"eager"`), so `<img loading="lazy hidden">` degrades to *eager* in older browsers (and changing `img.loading` string reflection could affect scripts checking `img.loading === "lazy"`). Possible resolutions include keeping `hidden` container-only, keeping `img.loading` enum reflection unchanged while exposing tokens on `loadingList`, or using a separate attribute for hide-while-loading.
-
-### 2. Subresource Gating: `blocking="render"` vs. Existing "Delays the Load Event"
-
-Which descendant subresources keep a `[loading]` container in `:loading`?
+Which descendant subresources keep an element in `:loading`?
 
 - **Option A — Reuse HTML's [delays the load event](https://html.spec.whatwg.org/multipage/parsing.html#delay-the-load-event) predicate (scoped to the subtree):** Waits for descendant `<link rel="stylesheet">`, eager `<img>` (and `loading="lazy"` images once started), `<iframe>`, `<script>`, initial `<video>`/`<audio>` poster/metadata, and active `<template for src>` includes. Zero inner-markup boilerplate and 1:1 alignment with `load`, though a single slow eager `<img>` holds back text reveal unless marked `loading="lazy"` (or until the fallback timeout).
-- **Option B — Explicit `blocking="render"` on non-stylesheet subresources:** Waits by default only for parser completion, descendant `<link rel="stylesheet">`, and active fragment streams/includes; `<img>`/`<video>`/`<iframe>` only hold back the `[loading]` ancestor when explicitly marked `blocking="render"`. Avoids accidental image stalls, at the cost of inner-markup boilerplate and overloading `<head>`'s `blocking="render"`.
+- **Option B — Explicit `blocking="render"` on non-stylesheet subresources:** Waits by default only for parser completion, descendant `<link rel="stylesheet">`, and active fragment streams/includes; `<img>`/`<video>`/`<iframe>` only hold back the ancestor when explicitly marked `blocking="render"`. Avoids accidental image stalls, at the cost of inner-markup boilerplate and overloading `<head>`'s `blocking="render"`.
 
-### 3. Container `loading="lazy"` Inheritance & LCP
+### 2. Lazy Descendants
 
-Allowing `<section loading="lazy">` to set the default scheduling mode for descendant `<img>`, `<iframe>`, and `<template for src>` elements avoids repeating `loading="lazy"` on every element inside a below-the-fold section. Unlike browser *auto-lazy* heuristics, `<section loading="lazy">` is an explicit author signal—authors would not place their primary LCP hero inside a lazy section to begin with (and an explicit `loading="eager"` on a descendant can always override). Still, two aspects merit further discussion:
-- **Responsive layouts & reusable components:** A sidebar or secondary section below the fold on desktop may shift above the fold on mobile viewports, accidentally deferring an LCP candidate if authors apply `loading="lazy"` broadly to layout wrappers.
-- **Preload scanner state:** Speculative preload scanners must track ancestor `loading` tokens on an open-tag stack before full tree construction (similar to existing `<picture>` / `<template>` tracking).
+A `loading="lazy"` image inside a `hidden="while-loading"` element doesn't gate it until its fetch starts. Since a hidden element still has layout boxes, lazy images inside it start fetching as normal once they are near the viewport, and the element is then `:loading` until they settle. Should a lazy image that starts fetching *after* the element has already been revealed re-enter `:loading` (hiding the element again), or should only subresources pending at reveal time count? The current sketch is the latter: once revealed, only new parsing or a new streamed patch re-enters `:loading`.
 
-### 4. Lazy Boundary State Before Entering the Viewport (`loading="lazy hidden"`)
+### 3. Fallback Timeout
 
-When `<section loading="lazy hidden">` is far below the viewport (so inner lazy fetches have not yet started), keeping `:loading` active from insertion until those deferred fetches eventually run and complete avoids flashing empty image boxes on fast scroll (whereas `<section loading="lazy">` without `hidden` stays visible throughout). We also welcome feedback on whether the ~3s slow-network fallback timeout should be configurable via CSS or HTML.
+We welcome feedback on whether the ~3s slow-network fallback timeout should be configurable via CSS or HTML.
 
 ---
 
 ## Explored Alternatives & Platform Relationships
 
 <details>
-<summary><strong>Explored Alternatives (`hidden="while-loading"`, `<template buffer>`) & Relationship to Other Features</strong></summary>
+<summary><strong>Explored Alternatives (multi-token <code>loading="hidden"</code>, <code>&lt;template buffer&gt;</code>) &amp; Relationship to Other Features</strong></summary>
 
-### 1. `hidden="while-loading"` (Overloading the `hidden` Attribute)
+### 1. Multi-token global `loading` attribute (`loading="hidden"`, `loading="lazy hidden"`)
 
-An earlier draft proposed `<section hidden="while-loading">`. Moving to `loading="hidden"` solved three major issues:
-1. **Backwards-compatibility hazard:** HTML's UA stylesheet applies `display: none` to `[hidden]:not([hidden="until-found" i])`, so legacy browsers permanently hide `hidden="while-loading"` content. Legacy browsers ignore `loading="hidden"` on containers and render content normally.
-2. **Contradiction for visible `:loading` states:** Gating `:loading` on `hidden="while-loading"` forced authors wanting visible `:loading` styles (`opacity: 0.5`) to write `hidden="while-loading"` and override `visibility: visible`.
-3. **Unifies scheduling and presentation:** Combines `lazy` and `hidden` cleanly on containers (`loading="lazy hidden"`).
+An earlier draft promoted `loading` to a global, space-separated token attribute combining fetch scheduling (`eager` | `lazy`) with a `hidden` presentation token. It degraded gracefully on containers (legacy browsers ignore an unknown `loading` attribute), but:
+
+1. **Conflated two concerns:** `loading` means fetch scheduling on `<img>`/`<iframe>`; mixing in presentation made `loading="eager"` double as a "visible boundary" opt-in.
+2. **Broke `<img>`/`<iframe>` compatibility:** Shipping browsers parse `loading` as a single enumerated keyword, so `<img loading="lazy hidden">` degrades to *eager*, and changing `img.loading` reflection could affect scripts that check `img.loading === "lazy"`.
+3. **Required new IDL** (`loadingList`) and container-level `loading="lazy"` inheritance, which raises its own LCP and preload-scanner questions. Container-level lazy inheritance may still be worth pursuing as a separate proposal.
+
+`hidden="while-loading"` follows the `hidden="until-found"` precedent instead: a hidden state that the browser lifts under specific conditions, with the same "hidden in legacy browsers, polyfillable" compatibility story.
 
 ### 2. Off-Screen `DocumentFragment` Buffering (`<template buffer>`)
 
@@ -233,10 +215,11 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
 
 | Feature | Scope | How it relates |
 |---|---|---|
-| **Framework `<Suspense>` boundaries** | JS component trees | Solves shell-to-content coordination in userland JS; `loading="hidden"` provides a native HTML/CSS counterpart coordinating HTML parsing, `<link rel="stylesheet">`, and media loads. |
-| **`<link rel="expect" href="#id" blocking="render">`** | Document first paint (`<head>` only) | Holds initial page render for critical above-the-fold elements; `loading="hidden"` handles localized shell-to-content and post-first-paint boundaries without blocking the whole page. |
-| **`content-visibility: hidden`** | CSS containment & rendering | Skips layout and painting entirely, whereas `loading="hidden"` uses `visibility: hidden` so real layout boxes and subresource loads proceed normally. |
-| **`<template for>`, `<template for src>`, `streamHTML()`** | Declarative & streaming updates | Stream HTML into shell outlets after first paint; `loading="hidden"` prevents half-streamed flashes and FOUC in the live DOM. |
+| **Framework `<Suspense>` boundaries** | JS component trees | Solves shell-to-content coordination in userland JS; `hidden="while-loading"` provides a native HTML/CSS counterpart coordinating HTML parsing, `<link rel="stylesheet">`, and media loads. |
+| **`hidden="until-found"`** | Hidden content revealed on demand | Same pattern: a `hidden` state with a UA-defined condition for showing the content. `until-found` reveals on find-in-page / fragment navigation; `while-loading` shows the content once it has loaded. |
+| **`<link rel="expect" href="#id" blocking="render">`** | Document first paint (`<head>` only) | Holds initial page render for critical above-the-fold elements; `hidden="while-loading"` handles localized shell-to-content and post-first-paint boundaries without blocking the whole page. |
+| **`content-visibility: hidden`** | CSS containment & rendering | Skips layout and painting entirely, whereas `hidden="while-loading"` uses `visibility: hidden` so real layout boxes and subresource loads proceed normally. |
+| **`<template for>`, `<template for src>`, `streamHTML()`** | Declarative & streaming updates | Stream HTML into shell outlets after first paint; `hidden="while-loading"` prevents half-streamed flashes and FOUC in the live DOM. |
 | **`MutationObserver` `delivery: "parse-end"`** | JS observation | Imperative counterpart ([explainer](./parse-end-mutation-observer-explainer.md)) sharing the exact same "element is parsing" definition. |
 
 </details>
@@ -245,16 +228,16 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
 
-`loading="hidden"` and `:loading` expose no new cross-origin information: subresource settlement (`<img>`, `<iframe>`, `<link rel="stylesheet">`, `<video>`) already fires observable `load`/`error` events and delays `window.onload`, and clearing `:loading` / firing `load` on an opted-in `[loading]` ancestor when those same subresources settle (whether on load, error, or timeout) adds no new timing channels or script execution capabilities.
+`hidden="while-loading"` and `:loading` expose no new cross-origin information: subresource settlement (`<img>`, `<iframe>`, `<link rel="stylesheet">`, `<video>`) already fires observable `load`/`error` events and delays `window.onload`, and clearing `:loading` / firing `load` on an opted-in ancestor when those same subresources settle (whether on load, error, or timeout) adds no new timing channels or script execution capabilities.
 
 <details>
 <summary><strong>Full Security & Privacy Questionnaire Responses (1–22)</strong></summary>
 
 1. **What information does this feature expose, and for what purposes?**
-   No new user or cross-origin information. `:loading` and the container completion event reflect only HTML parser openness of same-document elements and settlement (load or error) of subresources whose `load`/`error` events are already observable by the embedding document.
+   No new user or cross-origin information. `:loading` and the completion event reflect only HTML parser openness of same-document elements and settlement (load or error) of subresources whose `load`/`error` events are already observable by the embedding document.
 
 2. **Do features in your specification expose the minimum amount of information necessary to implement the intended functionality?**
-   Yes. Both load and error settle pending subresource counts identically on the ancestor container, leaking no cross-origin error details.
+   Yes. Both load and error settle pending subresource counts identically on the ancestor element, leaking no cross-origin error details.
 
 3. **Do the features in your specification expose personal information, personally-identifiable information (PII), or information derived from either?**
    No.
@@ -278,7 +261,7 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
    No.
 
 10. **Do features in this specification enable new script execution/loading mechanisms?**
-    No. Unlike `<script>`, container `onload` only dispatches a standard `Event` when an opted-in `[loading]` boundary finishes loading; existing CSP rules for inline event handlers (`script-src`) apply unchanged.
+    No. Unlike `<script>`, element `onload` only dispatches a standard `Event` when an opted-in element finishes loading; existing CSP rules for inline event handlers (`script-src`) apply unchanged.
 
 11. **Do features in this specification allow an origin to access other devices?**
     No.
@@ -290,7 +273,7 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
     N/A.
 
 14. **How does this specification distinguish between behavior in first-party and third-party contexts?**
-    Cross-origin subresources (`<img>`, `<link rel="stylesheet">`, `<iframe>`, `<template for src>`) follow their existing Fetch/CORS/framing security models; `loading="hidden"` inside or around an `<iframe>` exposes nothing across frame boundaries beyond the existing `iframe.onload` signal.
+    Cross-origin subresources (`<img>`, `<link rel="stylesheet">`, `<iframe>`, `<template for src>`) follow their existing Fetch/CORS/framing security models; `hidden="while-loading"` inside or around an `<iframe>` exposes nothing across frame boundaries beyond the existing `iframe.onload` signal.
 
 15. **How do the features in this specification work in the context of a browser’s Private Browsing or Incognito mode?**
     Identically to normal browsing mode, using the ephemeral profile's partitioned network/cache state.
@@ -302,10 +285,10 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
     No.
 
 18. **What happens when a document that uses your feature is kept alive in BFCache (instead of getting destroyed) after navigation, and potentially gets reused on future navigations back to the document?**
-    Standard BFCache rules apply; already-loaded `[loading]` boundaries remain settled across BFCache restoration.
+    Standard BFCache rules apply; already-loaded elements remain settled across BFCache restoration.
 
 19. **What happens when a document that uses your feature gets disconnected?**
-    Disconnecting a `[loading]` element or its document aborts/settles parser tracking and stops `:loading` matching as appropriate without firing spurious completion events on detached documents.
+    Disconnecting an opted-in element or its document aborts/settles parser tracking and stops `:loading` matching as appropriate without firing spurious completion events on detached documents.
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
     No new exceptions or error types are raised; subresource failures and slow-network timeouts settle `:loading` gracefully so content is never permanently hidden.
@@ -314,6 +297,6 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
     No. Mapping `:loading` to implicit `aria-busy="true"` is one-way from the DOM/style engine to platform accessibility APIs.
 
 22. **What should this questionnaire have asked?**
-    Whether visually suppressing content via `loading="hidden"` can leave regions permanently blank on stalled networks or subresource errors—mitigated by settling `:loading` on subresource errors/aborts and enforcing a default UA fallback timeout.
+    Whether visually suppressing content via `hidden="while-loading"` can leave regions permanently blank on stalled networks or subresource errors—mitigated by settling `:loading` on subresource errors/aborts and enforcing a default UA fallback timeout. In browsers without support, the content stays hidden (`display: none`) unless a polyfill or feature detection is used; see [Backwards compatibility & polyfilling](#backwards-compatibility--polyfilling).
 
 </details>

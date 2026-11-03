@@ -43,7 +43,7 @@ Building on [declarative patching (`<template for="target-name">`)](./patching-e
 Previous attempts at declarative client-side includes stalled on three fundamental problems that modern HTML primitives now address together:
 
 1. **Parser-Blocking Waterfalls → Out-of-Order Streaming ([`<template for>`](./patching-explainer.md)):** Synchronous includes halted the HTML parser while waiting on the network. `<template for="..." src="...">` decouples where a fetch is initiated from where its markup is inserted, fetching fragments asynchronously in parallel while the main document continues parsing and rendering placeholders (`<?start name="...">Loading...<?end>`).
-2. **FOUC & Layout Shifts → Render Blocking (`rel="expect"`) & Hide While Loading ([`loading="hidden"`](./partial-render-blocking-explainer.md)):** Asynchronous fragments previously risked painting before their stylesheets loaded or pushing down already-rendered content. Authors can now hold initial page render for critical includes via `<link rel="expect" href="#..." blocking="render">`, hide an individual container until its markup and subresources settle via `loading="hidden"`, or reserve space around placeholders.
+2. **FOUC & Layout Shifts → Render Blocking (`rel="expect"`) & Hide While Loading ([`hidden="while-loading"`](./partial-render-blocking-explainer.md)):** Asynchronous fragments previously risked painting before their stylesheets loaded or pushing down already-rendered content. Authors can now hold initial page render for critical includes via `<link rel="expect" href="#..." blocking="render">`, hide an individual container until its markup and subresources settle via `hidden="while-loading"`, or reserve space around placeholders.
 3. **Cross-Site Scripting (XSS) → Built-in Sanitization (`sanitizer`) & CSP (`fragment-src`):** Fetched fragments are sanitized with `removeUnsafe()` by default, stay bounded within their own target context, and are governed by Content Security Policy (`fragment-src`, falling back to `script-src`).
 
 ---
@@ -71,7 +71,7 @@ When both `for` and `src` are present on `<template>`, the browser asynchronousl
 - **Inline content with `src` (ignored):** When `src` is present, inline child content inside `<template>` is ignored; fallback markup belongs inside `<?start name="...">...<?end>` in the target container.
 - **Error, truncation, and disconnection behavior:**
   - *Pre-stream failure* (network error, HTTP error, non-`text/fragment` MIME type, CORS block, CSP block, or `integrity` mismatch): The include aborts before `"start"`. Any fallback content inside `<?start name="...">...<?end>` **remains intact and visible** in the DOM.
-  - *Mid-stream truncation or disconnection:* Once streaming has started, the initial placeholder has already been replaced by incoming chunks. If the network stream drops before completion or the target container/document disconnects, any in-flight fetch aborts, already-streamed DOM nodes remain in place, markers are cleaned up, and any [`loading="hidden"`](./partial-render-blocking-explainer.md) boundary settles so content is never stuck hidden.
+  - *Mid-stream truncation or disconnection:* Once streaming has started, the initial placeholder has already been replaced by incoming chunks. If the network stream drops before completion or the target container/document disconnects, any in-flight fetch aborts, already-streamed DOM nodes remain in place, markers are cleaned up, and any [`hidden="while-loading"`](./partial-render-blocking-explainer.md) boundary settles so content is never stuck hidden.
   - *Programmatic observation & retry UI:* Both pre-stream and mid-stream failures emit a `MutationRecord` with `templateStatus: "abort"` to observers opted into [`MutationObserver` (`template: true`)](./template-mutation-observer-explainer.md), enabling applications to render retry UI or restore fallback state.
 
 ### Avoiding Layout Shifts and FOUC
@@ -79,7 +79,7 @@ When both `for` and `src` are present on `<template>`, the browser asynchronousl
 Authors have three complementary tools to prevent Cumulative Layout Shift (CLS) and Flash of Unstyled Content (FOUC) for asynchronous includes:
 
 1. **Document-level render blocking for critical includes (`<link rel="expect">`):** `<link rel="expect" href="#header-content" blocking="render">` in `<head>` blocks initial page rendering until `<template id="header-content" for="header" src="header.fragment">` is fetched, parsed, and applied, while the parser continues scanning the rest of the document in parallel.
-2. **Hide while loading ([`loading="hidden"`](./partial-render-blocking-explainer.md)):** Placing `loading="hidden"` on a target container (`<section class="comments" loading="hidden"><?marker name="comments"></section>`) keeps the container `visibility: hidden` (matching `:loading` with implicit `aria-busy="true"`) while its fragment streams in and its `<link rel="stylesheet">` / media subresources load, revealing cleanly once ready. *(Note: because `loading="hidden"` hides the container while loading, use `<?start>...<?end>` skeletons when you want immediate visible placeholder UI instead of `loading="hidden"`, or place loading indicators outside the hidden container.)*
+2. **Hide while loading ([`hidden="while-loading"`](./partial-render-blocking-explainer.md)):** Placing `hidden="while-loading"` on a target container (`<section class="comments" hidden="while-loading"><?marker name="comments"></section>`) keeps the container `visibility: hidden` (matching `:loading` with implicit `aria-busy="true"`) while its fragment streams in and its `<link rel="stylesheet">` / media subresources load, revealing cleanly once ready. *(Note: because `hidden="while-loading"` hides the container while loading, use `<?start>...<?end>` skeletons when you want immediate visible placeholder UI instead of `hidden="while-loading"`, or place loading indicators outside the hidden container.)*
 3. **Placeholders and CSS space reservation:** Put skeleton/loading markup inside `<?start name="...">...<?end>` and reserve container dimensions (`min-height`, `aspect-ratio`, or `contain-intrinsic-size`) so surrounding layout stays stable when the fragment arrives.
 
 ### Security & Sanitization (`sanitizer`)
@@ -127,7 +127,7 @@ Every HTML parsing context has an ambient sanitizer state: an **unsafe context**
 
 ### Try it out
 
-An early experimental prototype of `<template>`-based patching and external fetching is in progress in Chromium behind `chrome://flags/#enable-experimental-web-platform-features`. Attribute names and newer parts of this explainer (such as `text/fragment` enforcement, `sanitizer`, and `loading="hidden"`) are actively evolving and may differ in current Canary builds; feedback is welcome as issues on this repo.
+An early experimental prototype of `<template>`-based patching and external fetching is in progress in Chromium behind `chrome://flags/#enable-experimental-web-platform-features`. Attribute names and newer parts of this explainer (such as `text/fragment` enforcement, `sanitizer`, and `hidden="while-loading"`) are actively evolving and may differ in current Canary builds; feedback is welcome as issues on this repo.
 
 ---
 
@@ -142,7 +142,7 @@ Unlike `<img>` or `<iframe>` (which load leaf media or isolated subdocuments), `
 
 ### Potential Future Enhancement: In-place includes via empty `for` (`<template for src="...">`)
 
-Allowing an empty `for` attribute (`<template for src="/partials/header.fragment"></template>`) to insert a fetched fragment in place at the `<template>`'s own position is a natural future extension. It is omitted from the initial proposal because asynchronous includes generally benefit from explicit `<?start>...<?end>` placeholders (or `loading="hidden"` containers) and keeping `<template for src>` identical in targeting semantics to inline `<template for>` avoids needing a temporary live-DOM `<template>` anchor in v1.
+Allowing an empty `for` attribute (`<template for src="/partials/header.fragment"></template>`) to insert a fetched fragment in place at the `<template>`'s own position is a natural future extension. It is omitted from the initial proposal because asynchronous includes generally benefit from explicit `<?start>...<?end>` placeholders (or `hidden="while-loading"` containers) and keeping `<template for src>` identical in targeting semantics to inline `<template for>` avoids needing a temporary live-DOM `<template>` anchor in v1.
 
 ---
 
@@ -175,7 +175,7 @@ Allowing an empty `for` attribute (`<template for src="/partials/header.fragment
 An earlier revision included a boolean `buffer` attribute on `<template>` that accumulated incoming markup inside an inert `DocumentFragment`, speculatively preloaded subresources, and swapped into the live DOM on EOF. We moved away from `<template buffer>` because:
 1. Inert `DocumentFragment`s do not normally load subresources or participate in layout, requiring bespoke parser/preload rules duplicating the live DOM.
 2. FOUC and half-parsed rendering affect ordinary streamed elements (`<article>`) and `element.streamHTML()` too, not just `<template>`.
-3. Off-screen fragments had no layout geometry, `aria-busy`, or CSS `@starting-style` transitions—all of which [Hide While Loading (`loading="hidden"`)](./partial-render-blocking-explainer.md) provides directly in the live DOM.
+3. Off-screen fragments had no layout geometry, `aria-busy`, or CSS `@starting-style` transitions—all of which [Hide While Loading (`hidden="while-loading"`)](./partial-render-blocking-explainer.md) provides directly in the live DOM.
 
 ### 2. Extending `<script>` (`<script type="html" for="..." src="...">`)
 
