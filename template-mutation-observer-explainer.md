@@ -9,7 +9,7 @@ Because standard `MutationObserver` records only report `addedNodes` and `remove
 - **Misattributed mutations:** Client-side UI mutations on the same container can be confused with incoming server patches, and server metadata attributes on the `<template>` (`for`, `src`, `data-turn`, request IDs) are lost across network chunks.
 - **Silent failures & hung loading states (`"abort"`):** When a stream truncates mid-response, a target marker is missing, or a `<template for src>` fetch fails CORS, CSP, `text/fragment` MIME, or `integrity` checks—often with zero DOM nodes inserted—applications get no signal to clear spinners or show retry UI.
 
-This explainer proposes an opt-in `template: true` option on `MutationObserverInit` that surfaces `templateStatus` and `templateAttributes` on `MutationRecord`s produced by parser-consumed `<template for>` operations.
+This explainer proposes an opt-in `template: true` option on `MutationObserverInit` that surfaces `activeTemplateStatus` and `activeTemplateAttributes` on `MutationRecord`s produced by parser-consumed `<template for>` operations.
 
 *(For batching `MutationObserver` records until an element finishes parsing, see [parse-end-mutation-observer-explainer.md](./parse-end-mutation-observer-explainer.md).)*
 
@@ -47,23 +47,25 @@ Streaming UIs that update regions via `<template for>` or `<template for src>` n
 
 Passing `template: true` in `MutationObserverInit` enables **per-observer record filtering and projection** for parser-consumed `<template for>` operations, populating two nullable fields on template-initiated `MutationRecord`s (and `null` on all other records):
 
-- **`record.templateStatus`:** `"start" | "update" | "end" | "abort"`, or `null`.
-- **`record.templateAttributes`:** A frozen, null-prototype object (`record<DOMString, DOMString>` snapshot of the `<template>` element's attributes, e.g. `{ for: "chat", "data-turn": "3" }`), or `null`. All records emitted by a single `<template>` invocation share the **same object identity** (`r1.templateAttributes === r2.templateAttributes`).
+- **`record.activeTemplateStatus`:** `"start" | "update" | "end" | "abort"`, or `null`.
+- **`record.activeTemplateAttributes`:** A frozen, null-prototype object (`record<DOMString, DOMString>` snapshot of the `<template>` element's attributes, e.g. `{ for: "chat", "data-turn": "3" }`), or `null`. All records emitted by a single `<template>` invocation share the **same object identity** (`r1.activeTemplateAttributes === r2.activeTemplateAttributes`).
 
-Observers registered without `template: true` never receive template-only empty `childList` lifecycle records, and always observe `templateStatus === null` and `templateAttributes === null`.
+Observers registered without `template: true` never receive template-only empty `childList` lifecycle records, and always observe `activeTemplateStatus === null` and `activeTemplateAttributes === null`.
+
+*(Naming: "active" because the fields describe the `<template for>` invocation that was being applied when the mutation happened; the consumed `<template>` itself is never in the DOM.)*
 
 ### Example Usage
 
 ```js
 const observer = new MutationObserver((records) => {
   for (const r of records) {
-    const attrs = r.templateAttributes;
+    const attrs = r.activeTemplateAttributes;
     if (!attrs) continue;
 
     const targetName = attrs.for;
     const turn = attrs["data-turn"];
 
-    switch (r.templateStatus) {
+    switch (r.activeTemplateStatus) {
       case "start":
         onPatchStart(r.target, targetName, turn, r.removedNodes);
         break;
@@ -95,21 +97,21 @@ partial dictionary MutationObserverInit {
   boolean template = false;
 };
 
-enum MutationRecordTemplateStatus { "start", "update", "end", "abort" };
+enum MutationRecordActiveTemplateStatus { "start", "update", "end", "abort" };
 
 partial interface MutationRecord {
-  readonly attribute MutationRecordTemplateStatus? templateStatus;
-  readonly attribute object? templateAttributes; // Frozen record<DOMString, DOMString>
+  readonly attribute MutationRecordActiveTemplateStatus? activeTemplateStatus;
+  readonly attribute object? activeTemplateAttributes; // Frozen record<DOMString, DOMString>
 };
 ```
 
-*(Note on Web IDL: Web IDL forbids `record<K, V>` as an attribute type, so `templateAttributes` has IDL type `object?`, as `PaymentResponse.details` does. It returns a frozen object with a null prototype (so inherited names like `constructor` or `toString` are never mistaken for attributes), created once per `<template>` invocation from its attribute list, preserving `r1.templateAttributes === r2.templateAttributes`. The object is kept alive only by the records and callbacks that reference it; the consumed `<template>` element itself is not retained.)*
+*(Note on Web IDL: Web IDL forbids `record<K, V>` as an attribute type, so `activeTemplateAttributes` has IDL type `object?`, as `PaymentResponse.details` does. It returns a frozen object with a null prototype (so inherited names like `constructor` or `toString` are never mistaken for attributes), created once per `<template>` invocation from its attribute list, preserving `r1.activeTemplateAttributes === r2.activeTemplateAttributes`. The object is kept alive only by the records and callbacks that reference it; the consumed `<template>` element itself is not retained.)*
 
 ---
 
 ## Detailed Design
 
-### Lifecycle Phases (`templateStatus`)
+### Lifecycle Phases (`activeTemplateStatus`)
 
 | Phase | When emitted | `record.target` & payload |
 |---|---|---|
@@ -118,20 +120,20 @@ partial interface MutationRecord {
 | **`"end"`** | When the matching `</template>` (or end of a complete `<template for src>` stream) is reached. | `childList` record on the patch target parent removing `<?end>` or `<?marker>`. |
 | **`"abort"`** | When a patch fails or terminates abnormally: EOF or stream abort before `</template>` ([#104](https://github.com/WICG/declarative-partial-updates/issues/104)), marker moved/removed mid-stream ([whatwg/html#11818](https://github.com/whatwg/html/pull/11818)), missing target marker, or `<template for src>` fetch/CORS/CSP/`text/fragment`/`integrity` failure. | `childList` record on the patch target parent. If no target marker matched, the parser inserts the `<template>` as an ordinary inert element, and the abort record **is that insertion** (`addedNodes: [<template>]`, see [Walkthrough C](#walkthrough-c-missing-target)). |
 
-- **Attribution:** Only mutations directly performed by the HTML parser as part of that `<template for>` operation carry non-null `templateStatus` and `templateAttributes`. Imperative script mutations on the target container during a paused stream (e.g., `section.append(node)`), custom-element constructor/upgrade side-effects, or sibling mutations have `templateStatus: null` and `templateAttributes: null`. As with all DOM records, each record comes from a single insertion or removal, so a record never mixes parser-inserted and script-inserted nodes.
+- **Attribution:** Only mutations directly performed by the HTML parser as part of that `<template for>` operation carry non-null `activeTemplateStatus` and `activeTemplateAttributes`. Imperative script mutations on the target container during a paused stream (e.g., `section.append(node)`), custom-element constructor/upgrade side-effects, or sibling mutations have `activeTemplateStatus: null` and `activeTemplateAttributes: null`. As with all DOM records, each record comes from a single insertion or removal, so a record never mixes parser-inserted and script-inserted nodes.
 - <a id="nested-invocations"></a>**Nested invocations:** A `<template for>` can appear inside the content of another one (inline, or inside a fetched fragment). Each record carries the attributes of the **innermost** invocation whose parser performed the mutation; an inner `"abort"` carries only the inner attributes. The outer `"end"` means the outer stream finished. It can arrive before nested `<template for src>` content does, so it does not mean "region complete" (use [`hidden="while-loading"`](./partial-render-blocking-explainer.md) and its `load` event for that).
 - **Detached targets:** Records are queued by the normal DOM rules. If script removes the target container mid-stream, the parser notices on a later chunk and queues `"abort"` on the (now detached) container. Observers registered on the container still receive it; an observer on `document` does not, since the container is no longer in its subtree. The script that removed the container already knows.
 - **Why `type: "childList"` even when `addedNodes` and `removedNodes` are empty:** Lifecycle boundaries such as `"start"` on `<?marker>`, empty patches (`<template for="r"></template>`), or pre-stream `"abort"` use `type: "childList"` rather than inventing new `MutationRecord.type` strings. Reusing `"childList"` avoids confusion and extra type-branching in observer callbacks, and an opt-in empty `NodeList` (never delivered when `template: false`) is harmless compared to splitting metadata away from node-carrying `childList` records. This is a normative DOM change: [queue a tree mutation record](https://dom.spec.whatwg.org/#queue-a-tree-mutation-record) asserts that `addedNodes` or `removedNodes` is non-empty, and that assertion would be relaxed for records delivered only to `template: true` observers (the same relaxation [`delivery: "parse-end"`](./parse-end-mutation-observer-explainer.md) needs).
 - **Dependency on [whatwg/html#12744](https://github.com/whatwg/html/issues/12744) for multi-chunk text:** HTML parsers currently append streamed characters to an open `Text` node without queueing `characterData` records. Emitting `characterData` `"update"` records when a `Text` node spans chunks depends on resolving [whatwg/html#12744](https://github.com/whatwg/html/issues/12744); until then, only `childList` `"update"` records fire.
-- **Correlation identity ([#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** Every `"start"`, `"update"`, `"end"`, and `"abort"` record from a single `<template>` invocation shares the exact same frozen `templateAttributes` object (`r1.templateAttributes === r2.templateAttributes`), making `WeakMap` per-patch state trivial.
+- **Correlation identity ([#110](https://github.com/WICG/declarative-partial-updates/issues/110)):** Every `"start"`, `"update"`, `"end"`, and `"abort"` record from a single `<template>` invocation shares the exact same frozen `activeTemplateAttributes` object (`r1.activeTemplateAttributes === r2.activeTemplateAttributes`), making `WeakMap` per-patch state trivial.
 - **Option defaults & `subtree` scoping:** `template: true` implies `childList: true`, the same way `attributeOldValue` implies `attributes` in [`observe()`](https://dom.spec.whatwg.org/#dom-mutationobserver-observe); passing `template: true` with an explicit `childList: false` throws a `TypeError`. Because `"start"`, `"end"`, and `"abort"` target the patch range's parent element (or the parent of a fallback `<template>`), observing `document` or an ancestor above that parent requires `subtree: true` to receive patch records on descendant containers.
-- **Sanitization & CSP nonces:** `templateAttributes` only exposes attributes that survived any active sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)), and `nonce` attributes follow standard nonce-hiding rules ([WICG/declarative-partial-updates#111](https://github.com/WICG/declarative-partial-updates/issues/111)).
+- **Sanitization & CSP nonces:** `activeTemplateAttributes` only exposes attributes that survived any active sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)), and `nonce` attributes follow standard nonce-hiding rules ([WICG/declarative-partial-updates#111](https://github.com/WICG/declarative-partial-updates/issues/111)).
 
 ### Walkthrough A: `<template for>` across two network chunks
 
 Given `<section><?start name="r">Loading…<?end></section>`, when `main.streamAppendHTMLUnsafe(...)` (or any `streamHTML*` method) receives chunk 1 (`<template for="r" data-turn="3"><p>H`) and chunk 2 (`i<span>!</span></p></template>`) under `{ childList: true, characterData: true, subtree: true, template: true }`:
 
-| # | Chunk | `type` | `target` | `removedNodes` | `addedNodes` | `templateAttributes` | `templateStatus` |
+| # | Chunk | `type` | `target` | `removedNodes` | `addedNodes` | `activeTemplateAttributes` | `activeTemplateStatus` |
 |---|---|---|---|---|---|---|---|
 | 1 | 1 | `childList` | `<section>` | `[<?start>, "Loading…"]` | `[]` | `{ for: "r", "data-turn": "3" }` | `"start"` |
 | 2 | 1 | `childList` | `<section>` | `[]` | `[<p>]` | `{ for: "r", "data-turn": "3" }` | `"update"` |
@@ -147,7 +149,7 @@ Given `<section><?start name="r">Loading…<?end></section>`, when `main.streamA
 
 When `<template for="r" data-turn="3"><p>Hi</p></template>` targets `<section><?marker name="r"></section>` in a single chunk, `<?marker>` stays in place as the insertion anchor until `</template>` removes it:
 
-| # | `type` | `target` | `removedNodes` | `addedNodes` | `nextSibling` | `templateAttributes` | `templateStatus` |
+| # | `type` | `target` | `removedNodes` | `addedNodes` | `nextSibling` | `activeTemplateAttributes` | `activeTemplateStatus` |
 |---|---|---|---|---|---|---|---|
 | 1 | `childList` | `<section>` | `[]` | `[]` | `<?marker>` | `{ for: "r", "data-turn": "3" }` | `"start"` |
 | 2 | `childList` | `<section>` | `[]` | `[<p>]` | `<?marker>` | `{ for: "r", "data-turn": "3" }` | `"update"` |
@@ -160,18 +162,18 @@ When `<template for="r" data-turn="3"><p>Hi</p></template>` targets `<section><?
 
 When `<main>` contains no `name="r"` marker and `main.streamAppendHTMLUnsafe(...)` receives `<template for="r" data-turn="3"><p>Hi</p></template>`, the parser finds no target, so it inserts the `<template>` into `<main>` as an ordinary inert element (its contents go into `template.content`, which observers on the document don't see):
 
-| # | `type` | `target` | `removedNodes` | `addedNodes` | `templateAttributes` | `templateStatus` |
+| # | `type` | `target` | `removedNodes` | `addedNodes` | `activeTemplateAttributes` | `activeTemplateStatus` |
 |---|---|---|---|---|---|---|
 | 1 | `childList` | `<main>` | `[]` | `[<template>]` | `{ for: "r", "data-turn": "3" }` | `"abort"` |
 
-Observers without `template: true` see the same insertion as an ordinary `childList` record with `templateStatus: null`. For `<template for src>`, a fetch failure after the target was resolved produces an empty `childList` `"abort"` record on the target's parent instead.
+Observers without `template: true` see the same insertion as an ordinary `childList` record with `activeTemplateStatus: null`. For `<template for src>`, a fetch failure after the target was resolved produces an empty `childList` `"abort"` record on the target's parent instead.
 
 ---
 
 ## Considered Extensions (Not Currently Proposed)
 
 - **Observing Declarative Shadow DOM (`<template shadowrootmode="open">`):** Extending `template: true` to emit `"start"` / `"end"` / `"abort"` records on the shadow host for `<template shadowrootmode="open">` (never `"closed"`), or addressing shadow root discovery ([whatwg/dom#1287](https://github.com/whatwg/dom/issues/1287), [#1439](https://github.com/whatwg/dom/issues/1439)) via a non-parser-specific hook covering both `attachShadow()` and DSD.
-- **Fragment Parsing Context (`record.parserContextElement`):** Exposing `readonly attribute Element? parserContextElement` on `MutationRecord` for `streamHTML*()` / `setHTML()` / `innerHTML` if use cases aren't already covered by `templateAttributes` and container-scoped observers.
+- **Fragment Parsing Context (`record.parserContextElement`):** Exposing `readonly attribute Element? parserContextElement` on `MutationRecord` for `streamHTML*()` / `setHTML()` / `innerHTML` if use cases aren't already covered by `activeTemplateAttributes` and container-scoped observers.
 
 ---
 
@@ -186,16 +188,16 @@ Observers without `template: true` see the same insertion as an ordinary `childL
 
 ## [Self-Review Questionnaire: Security and Privacy](https://w3c.github.io/security-questionnaire/)
 
-`template: true` exposes no new user or cross-origin information: it reflects only `<template for>` attributes that survived sanitization (with standard CSP `nonce` hiding) on a DOM subtree the caller can already observe, and reports failed `<template for src>` fetches via `templateStatus: "abort"` without leaking cross-origin response bodies or failure reasons.
+`template: true` exposes no new user or cross-origin information: it reflects only `<template for>` attributes that survived sanitization (with standard CSP `nonce` hiding) on a DOM subtree the caller can already observe, and reports failed `<template for src>` fetches via `activeTemplateStatus: "abort"` without leaking cross-origin response bodies or failure reasons.
 
 <details>
 <summary><strong>Full Security & Privacy Questionnaire Responses (1–22)</strong></summary>
 
 1. **What information does this feature expose, and for what purposes?**
-   No new user or cross-origin information. All state surfaced by `template: true` originates from `<template for>` markup parsed into a DOM subtree the caller can already observe (for external `<template for src>` includes, only after standard CORS, CSP `fragment-src`/`script-src`, and `text/fragment` checks; failed fetches report `templateStatus: "abort"` without exposing cross-origin response bodies or failure details).
+   No new user or cross-origin information. All state surfaced by `template: true` originates from `<template for>` markup parsed into a DOM subtree the caller can already observe (for external `<template for src>` includes, only after standard CORS, CSP `fragment-src`/`script-src`, and `text/fragment` checks; failed fetches report `activeTemplateStatus: "abort"` without exposing cross-origin response bodies or failure details).
 
 2. **Do features in your specification expose the minimum amount of information necessary to implement the intended functionality?**
-   Yes: `templateAttributes` only reflects attributes that survived the sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)), and `nonce` attributes follow standard nonce hiding ([WICG/declarative-partial-updates#111](https://github.com/WICG/declarative-partial-updates/issues/111)).
+   Yes: `activeTemplateAttributes` only reflects attributes that survived the sanitizer ([whatwg/html#12756](https://github.com/whatwg/html/pull/12756)), and `nonce` attributes follow standard nonce hiding ([WICG/declarative-partial-updates#111](https://github.com/WICG/declarative-partial-updates/issues/111)).
 
 3. **Do the features in your specification expose personal information, personally-identifiable information (PII), or information derived from either?**
    No.
@@ -246,10 +248,10 @@ Observers without `template: true` see the same insertion as an ordinary `childL
     Nothing beyond existing `MutationObserver` behavior.
 
 19. **What happens when a document that uses your feature gets disconnected?**
-    Disconnecting the target container during an active `<template for>` / `<template for src>` halts the patch and queues `templateStatus: "abort"` on the detached container by the normal DOM rules, so only observers that can still see the container receive it (see [Detached targets](#detailed-design)).
+    Disconnecting the target container during an active `<template for>` / `<template for src>` halts the patch and queues `activeTemplateStatus: "abort"` on the detached container by the normal DOM rules, so only observers that can still see the container receive it (see [Detached targets](#detailed-design)).
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
-    Parser-aborted or fetch-aborted `<template for>` operations are reported via `templateStatus: "abort"` rather than exceptions; passing `template: true` with an explicit `childList: false` throws a `TypeError`.
+    Parser-aborted or fetch-aborted `<template for>` operations are reported via `activeTemplateStatus: "abort"` rather than exceptions; passing `template: true` with an explicit `childList: false` throws a `TypeError`.
 
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.
