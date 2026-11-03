@@ -1,4 +1,4 @@
-# Explainer: Parse-End Delivery for `MutationObserver` (`new MutationObserver(cb, { delivery: "parse-end" })`)
+# Explainer: Parse-End Delivery for `MutationObserver` (`delivery: "parse-end"`)
 
 ## Introduction
 
@@ -6,14 +6,14 @@ The HTML parser tracks [which elements are still open](https://html.spec.whatwg.
 
 `MutationObserver`, however, only sees the start tag: when markup streams across network chunks, the parser inserts an element on its opening tag and yields before its closing tag arrives, flushing half-built subtrees to observers at intermediate microtask checkpoints. By contrast, when DOM is built synchronously in JavaScript (`el.append(a); el.append(b);`), `MutationObserver` naturally batches all mutations in the task and delivers them together at the microtask checkpoint.
 
-This explainer proposes an optional second argument to the `MutationObserver` constructor, `{ delivery: "parse-end" }` (`MutationObserverDelivery` enum, defaulting to `"default"`), which creates a **parse-end observer** that extends `MutationObserver` batching across parser chunks:
+This explainer proposes adding a `delivery: "parse-end"` option to `MutationObserverInit` (`MutationObserverDelivery` enum, defaulting to `"default"`). Observing a target with it (a **parse-end registration**; an observer with one is called a **parse-end observer** below) extends `MutationObserver` batching across parser chunks:
 
 1. **The browser already tracks this state** (the parser's stack of open elements and active streaming fragment parsers—`streamHTML*` and `<template for>` patches), so holding an observer's records until parse end introduces no new parser concepts or DOM tree buffering.
 2. **Server-driven and streaming apps already depend on it**, reconstructing it today with sentinel nodes, inline scripts, ancestor `nextSibling` walks, regexes over raw HTML, and per-element `subtree: true` observers at measurable main-thread and wire cost (see [Existing workarounds](#existing-workarounds)).
 3. **It fits the existing reactive model.** Rather than introducing a one-shot hook that tempts authors to ignore subsequent dynamic mutations ([WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809)), parse-end delivery is a mode of `MutationObserver` itself—delivering a single batched callback when parsing finishes (or on the next microtask if already parsed, even with empty children), and continuing to observe future DOM changes and streams.
 
 > [!NOTE]
-> Unlike today's `MutationObserver`, **`observe()` on a parse-end observer can schedule a callback by itself**: each observed target fires once, even if no mutation happens. Opting in at construction keeps this contract next to the callback that receives it. See [§3](#3-observe-schedules-a-callback-guaranteed-firing--empty-children) and [Why a constructor option](#why-a-constructor-option-rather-than-an-observe-option).
+> Unlike today's `MutationObserver`, **`observe(target, { delivery: "parse-end", ... })` can schedule a callback by itself**: each parse-end registration fires once, even if no mutation happens. See [§3](#3-observe-schedules-a-callback-guaranteed-firing--empty-children), and [Alternatives Considered](#alternatives-considered) for a constructor option and a dedicated method.
 
 *(For observing parser-consumed `<template for>` lifecycle and attribution, see the companion explainer: [template-mutation-observer-explainer.md](./template-mutation-observer-explainer.md).)*
 
@@ -54,7 +54,7 @@ Because element parse completion isn't exposed to `MutationObserver`, server-dri
 
 ### Goals
 
-- **Buffer `MutationRecord` delivery across parser chunks (`{ delivery: "parse-end" }`):** Hold a parse-end observer's records for each observed `target` while that `target` is [parsing](#1-definition-of-parsing).
+- **Buffer `MutationRecord` delivery across parser chunks (`delivery: "parse-end"`):** Hold an observer's records for each target observed with `delivery: "parse-end"` while that `target` is [parsing](#1-definition-of-parsing).
 - **Guarantee callback delivery at parse end—or if already parsed—even with empty children:** Ensure a single observer setup handles streamed elements, empty elements (`<x-el></x-el>`), imperative/already-parsed elements, and subsequent dynamic mutations.
 - Eliminate the client-side workarounds above with **zero cost when unused** and **no new properties on `MutationRecord` or `Element`**.
 
@@ -68,12 +68,12 @@ Because element parse completion isn't exposed to `MutationObserver`, server-dri
 
 ## Proposed Approach
 
-An optional `MutationObserverOptions` dictionary on the `MutationObserver` constructor with a `delivery` member (`"default" | "parse-end"`, defaulting to `"default"`). `new MutationObserver(callback, { delivery: "parse-end" })` creates a **parse-end observer**; `observe()` and its `MutationObserverInit` options are unchanged:
+A `delivery` member in `MutationObserverInit` (`"default" | "parse-end"`, defaulting to `"default"`). `observer.observe(target, { childList: true, delivery: "parse-end" })` creates a **parse-end registration** for `target`:
 
 - **When a target is considered parsing:** See [§1](#1-definition-of-parsing) (the same definition as `:loading` in [Hide While Loading](./partial-render-blocking-explainer.md)): the observed element is on the parser's stack of open elements, or is the context of an active streaming fragment parser (`streamHTML*` or a `<template for>` patch).
 - **Buffering is keyed on the observed target:** While an **observed** `target` is parsing, **all** of the observer's `MutationRecord`s for that `target`—from the parser or from script, and including descendant records when `subtree: true`—are **held back** until `target` itself is no longer parsing. The parse state of descendants is irrelevant.
-- **Observer-specific firing order:** Buffering applies only to parse-end observers, so other observers (default observers, or parse-end observers on child elements whose end tags arrive earlier) are not held back and may fire in a different order.
-- **`observe()` schedules a callback:** A parse-end observer is **guaranteed to fire** once per observed target: at parse end, **or at the next microtask checkpoint if the target is already parsed** when `observe()` is called—synthesizing an empty `childList` record (`addedNodes: []`, `removedNodes: []`) if nothing was queued. This is a new side effect for `observe()` (see [§3](#3-observe-schedules-a-callback-guaranteed-firing--empty-children)).
+- **Observer-specific firing order:** Buffering applies only to parse-end registrations, so other observers (default observers, or parse-end observers on child elements whose end tags arrive earlier) are not held back and may fire in a different order. To keep each callback's timing uniform, use separate observers for default and parse-end delivery rather than mixing both on one observer (as in [Example 2](#2-delegated-island-hydration-from-a-document-observer)).
+- **`observe()` schedules a callback:** A parse-end registration is **guaranteed to fire** once: at parse end, **or at the next microtask checkpoint if the target is already parsed** when `observe()` is called—synthesizing an empty `childList` record (`addedNodes: []`, `removedNodes: []`) if nothing was queued. This is a new side effect for `observe()` (see [§3](#3-observe-schedules-a-callback-guaranteed-firing--empty-children)).
 
 ### Example Usage
 
@@ -87,10 +87,10 @@ class CustomSelect extends HTMLElement {
     // even if <custom-select></custom-select> has empty children.
     // Also runs on subsequent dynamic DOM changes—and batches future streamHTML() calls!
     this.#syncOptions(records);
-  }, { delivery: "parse-end" });
+  });
 
   connectedCallback() {
-    this.#mo.observe(this, { childList: true });
+    this.#mo.observe(this, { childList: true, delivery: "parse-end" });
   }
 
   disconnectedCallback() {
@@ -106,14 +106,14 @@ class CustomSelect extends HTMLElement {
 const articleObserver = new MutationObserver((records) => {
   const ready = new Set(records.map((r) => r.target));
   for (const article of ready) enhanceArticle(article);
-}, { delivery: "parse-end" });
+});
 
 // Discovers <article> elements on their start tag without delaying incremental observation:
 const docObserver = new MutationObserver((records) => {
   for (const r of records) {
     for (const node of r.addedNodes) {
       if (node instanceof Element && node.matches("article")) {
-        articleObserver.observe(node, { childList: true });
+        articleObserver.observe(node, { childList: true, delivery: "parse-end" });
       }
     }
   }
@@ -127,24 +127,12 @@ docObserver.observe(document, { subtree: true, childList: true });
 ```webidl
 enum MutationObserverDelivery { "default", "parse-end" };
 
-dictionary MutationObserverOptions {
+partial dictionary MutationObserverInit {
   MutationObserverDelivery delivery = "default";
-};
-
-partial interface MutationObserver {
-  constructor(MutationCallback callback, optional MutationObserverOptions options = {});
 };
 ```
 
 *(Naming: `"default"` was chosen over `"auto"`—the usual platform spelling, as in `ScrollBehavior`—because `"auto"` implies the UA picks the timing, whereas this value means "today's standard microtask delivery".)*
-
-#### Why a constructor option rather than an `observe()` option
-
-An earlier draft put `delivery` in `MutationObserverInit`, per `observe()` call. Moving it to the constructor:
-
-- **Matches where delivery lives.** A `MutationObserver` has one record queue and one callback; delivery timing is a property of that queue, not of a single registration. With a per-registration option, one observer could mix default and parse-end targets, producing callbacks that contain records for some targets but not others, and an unclear `takeRecords()`.
-- **Puts the side effect next to the callback.** The callback that must handle the synthesized initial record is defined in the same expression that opts into it, similar to how `IntersectionObserver` and `ResizeObserver` are configured at construction and notify on `observe()`.
-- **Costs:** `MutationObserver`'s constructor gains its first options dictionary, and an author who wants both timings needs two observers (as [Example 2](#2-delegated-island-hydration-from-a-document-observer) already does). `observe()` still has to schedule the initial callback for already-parsed targets; the constructor option makes that behavior explicit but does not remove it.
 
 ---
 
@@ -162,7 +150,7 @@ Only `Element` targets can be parsing. For a `Document`, `DocumentFragment`, or 
 
 ### 2. Per-observer batching, keyed on the observed target
 
-When a parse-end observer calls `observer.observe(target, { childList: true, ... })`:
+When `observer.observe(target, { childList: true, delivery: "parse-end", ... })` is called:
 
 - **Keyed on the observed target, including with `subtree: true`:** While `target` is parsing, **all** of the observer's `MutationRecord`s for `target` are held, including parser insertions, script mutations (`append()`, `remove()`, `setAttribute()`), and with `subtree: true`, records for any descendant. They are delivered together once **`target`** is no longer parsing. Descendants that close earlier do not cause an early flush. For per-descendant readiness, observe each descendant separately (as in [Example 2](#2-delegated-island-hydration-from-a-document-observer)). If one parse-end observer observes several targets, each target is buffered separately, so a completed element flushes without waiting for an unrelated element that is still open.
 - **Observer-specific firing order:** Default observers flush at every microtask checkpoint in observer creation order. A parse-end observer holds its records, so **other observers may fire earlier and in a different order**:
@@ -171,14 +159,14 @@ When a parse-end observer calls `observer.observe(target, { childList: true, ...
 
 ### 3. `observe()` schedules a callback: guaranteed firing & empty children
 
-Today, `observe()` only registers interest: the callback runs only if a mutation occurs. On a parse-end observer, **`observe()` itself can cause a callback**, and the callback fires once per observed target even if nothing changes. There is precedent: `IntersectionObserver.observe()` and `ResizeObserver.observe()` both deliver an initial notification without any change.
+Today, `observe()` only registers interest: the callback runs only if a mutation occurs. With `delivery: "parse-end"`, **`observe()` itself can cause a callback**, and the callback fires once per registration even if nothing changes. There is precedent: `IntersectionObserver.observe()` and `ResizeObserver.observe()` both deliver an initial notification without any change.
 
 - **At parse end:** When `target` finishes parsing (end tag popped, implied end tag, EOF, parser abort, or the active stream/patch closing or aborting), all buffered records for `target` flush at the next microtask checkpoint. If no records were queued while parsing (for example `<my-widget></my-widget>`, or an empty `streamHTML*` write), an empty `childList` record is synthesized so the observer **always fires**.
 - **When already parsed:** If `target` is *already* parsed when `observe()` is called (a custom element upgraded after parsing, `innerHTML` / `setHTML`, `document.createElement()`, or a node that already closed earlier in the same chunk), `observe()` **schedules a callback for the next microtask checkpoint**. It delivers any mutations made later in the same task (such as `el.append(a, b)`), or an empty `childList` record if none occurred.
-- **Re-observing (including element moves):** If a parse-end observer calls `observe()` again on a target it already observes, the options are replaced as today and **no additional initial callback is scheduled**. This covers custom elements whose `connectedCallback` runs again after a move without an intervening `disconnect()`. After `observer.disconnect()`, a later `observe()` is a new registration and schedules a new initial callback. In the [example above](#1-custom-element-readiness--ongoing-mutations), that means a non-atomic move (`disconnectedCallback` then `connectedCallback`) runs setup again. Components that want to avoid this can implement `connectedMoveCallback` and use `moveBefore()`.
+- **Re-observing (including element moves):** If `observe()` is called again for a target the observer already observes, the options are replaced as today. Re-observing with `delivery: "parse-end"` **does not schedule another initial callback**; switching an existing default registration to `"parse-end"` does, and switching from `"parse-end"` to `"default"` releases any held records at the next microtask checkpoint. This covers custom elements whose `connectedCallback` runs again after a move without an intervening `disconnect()`. After `observer.disconnect()`, a later `observe()` is a new registration and schedules a new initial callback. In the [example above](#1-custom-element-readiness--ongoing-mutations), that means a non-atomic move (`disconnectedCallback` then `connectedCallback`) runs setup again. Components that want to avoid this can implement `connectedMoveCallback` and use `moveBefore()`.
 - **Trade-off vs. checking `childNodes` in `connectedCallback`:** Authors could instead check `this.childNodes` once in `connectedCallback` and observe only for changes after that. But `connectedCallback` cannot tell a fully parsed element apart from one that is still streaming, so this approach brings back the workarounds above. The guaranteed callback keeps initial setup and later updates in a single code path (see [§6](#6-custom-elements-and-wicgwebcomponents809)).
 - **Subsequent dynamic mutations & streams:** After that flush, ordinary DOM mutations (`el.append(c)`) flush normally at the microtask checkpoint. A later `el.streamHTML*()` call, or a `<template for>` patch into `el`, puts `el` back into the parsing state and buffers its mutations until the stream ends (again firing with an empty `childList` record if the stream added no children).
-- **Option validation, `takeRecords()`, & disconnection:** An unrecognized `MutationObserverDelivery` value in the constructor throws a `TypeError`. Calling `observe()` on a parse-end observer with `childList: false` also throws a `TypeError`. `observer.takeRecords()` synchronously drains and returns **all** queued records on `observer`, including records buffered for a target that is still parsing. If `target` is still parsing, the observer still fires at parse end with any later mutations, or an empty `childList` record if there are none. If `target` was already parsed, draining cancels the pending initial callback. Calling `observer.disconnect()` discards any buffered records. Elements discarded by the sanitizer never connect and never fire.
+- **Option validation, `takeRecords()`, & disconnection:** Passing `delivery: "parse-end"` with `childList: false` (or an unrecognized `MutationObserverDelivery` value) throws a `TypeError`. `observer.takeRecords()` synchronously drains and returns **all** queued records on `observer`, including records buffered for a target that is still parsing. If `target` is still parsing, the observer still fires at parse end with any later mutations, or an empty `childList` record if there are none. If `target` was already parsed, draining cancels the pending initial callback. Calling `observer.disconnect()` discards any buffered records. Elements discarded by the sanitizer never connect and never fire.
 
 #### Shape of the synthesized record
 
@@ -194,7 +182,7 @@ Buffering lasts as long as `target` is parsing. For a long-lived stream (such as
 
 ### 5. Walkthrough: Batching & observer-specific ordering across two chunks
 
-Suppose `<s-select>` and `<s-option>` each create a parse-end observer `#mo` and call `this.#mo.observe(this, { childList: true })` in `connectedCallback()`, while a default observer `docObserver` observes `document` with `{ childList: true, subtree: true }`. The network delivers:
+Suppose `<s-select>` and `<s-option>` each call `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in `connectedCallback()`, while a default observer `docObserver` observes `document` with `{ childList: true, subtree: true }`. The network delivers:
 - **Chunk 1:** `<s-select><s-option>A</s-option>`
 - **Chunk 2:** `<s-option>B</s-option></s-select>`
 
@@ -209,7 +197,7 @@ Suppose `<s-select>` and `<s-option>` each create a parse-end observer `#mo` and
 
 The central objection in [WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809) to a dedicated custom element `parsedCallback()` is that an end-tag callback invites authors to read `this.children` once and ignore subsequent dynamic mutations, imperative `createElement` + `append()`, or post-parse insertions ([#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1460917211), [(comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1757047993)).
 
-Calling `this.#mo.observe(this, { childList: true })` on a parse-end observer in `connectedCallback()` satisfies that principle across every creation mode with a single callback and no extra properties on `Element`:
+Calling `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in `connectedCallback()` satisfies that principle across every creation mode with a single callback and no extra properties on `Element`:
 1. **Streamed across network chunks (`<s-select>` ... `</s-select>`):** `#mo` buffers all child insertions across chunks and fires once `</s-select>` is seen.
 2. **Empty children (`<s-select></s-select>`):** Guaranteed to fire at `</s-select>` with an empty `childList` record (`addedNodes: []`, `removedNodes: []`), so initial setup still runs.
 3. **Imperative `createElement` + `append()`, `innerHTML`, or late upgrade:** Because a parse-end observer is guaranteed to fire on the next microtask when the target is already parsed, `const s = document.createElement("s-select"); document.body.append(s); s.append(opt1, opt2);` runs `connectedCallback()` on `body.append(s)`, batches `s.append(opt1, opt2)` in the same synchronous task, and fires once at the microtask checkpoint (or fires with an empty `childList` record if no children were appended or if upgraded after parsing).
@@ -229,9 +217,10 @@ Calling `this.#mo.observe(this, { childList: true })` on a parse-end observer in
 1. **Exposing synchronous `Element.isParsing` + unbatched cross-chunk completion records:** An earlier iteration exposed `el.isParsing`, flushed `addedNodes` on every intermediate chunk while `el.isParsing === true`, and emitted a trailing empty `childList` record when `</el>` finally arrived. However, that enlarged the API surface with a synchronous parser-state getter, forced every observer to manually filter out `node.isParsing` elements and maintain external state across chunks, and did not fire on already-parsed elements or single-chunk `<x-el></x-el>` elements observed in `connectedCallback()`. Parse-end observers achieve the use cases without `Element.isParsing` or manual state tracking.
 2. **A `record.parsedElements` `NodeList` on `MutationRecord`:** Required a `NodeList` allocation per `MutationRecord`, forced observing `el.parentNode` rather than `el` directly, and still delivered half-parsed child mutations across chunk boundaries.
 3. **Combining parse-end delivery and `<template>` observation into a single `parser: true` option:** Streaming `<template for>` observers ([template-mutation-observer-explainer.md](./template-mutation-observer-explainer.md)) want incremental per-chunk `"start"` / `"update"` / `"end"` records (default delivery), whereas parse-end observers want records held until the observed target finishes parsing. Keeping them separate avoids conflating opposite delivery models.
-4. **A per-`observe()` `delivery` option in `MutationObserverInit`:** The previous draft. Rejected in favor of a constructor option because delivery timing belongs to the observer's single queue and callback, and mixing timings on one observer complicates callbacks and `takeRecords()` (see [Why a constructor option](#why-a-constructor-option-rather-than-an-observe-option)).
-5. **DOM Events (`parseend`):** Per-element event dispatch during parsing repeats the performance issues of legacy `MutationEvent` and neither batches `MutationRecord`s nor observes subsequent dynamic mutations.
-6. **Status quo (client-side reconstruction):** Requires per-element `subtree: true` observers, ancestor `nextSibling` walks, chunk regexes, or sentinel nodes/scripts, and cannot observe active `streamHTML*` boundaries.
+4. **A constructor option (`new MutationObserver(cb, { delivery: "parse-end" })`):** Makes delivery a property of the whole observer, so one callback never mixes default and parse-end targets, and the opt-in sits next to the callback that must handle the synthesized record. Not chosen because it buys little: per-target buffering already mixes held and flushed targets within one parse-end observer; `observe()` still schedules the initial callback for already-parsed targets; authors who find mixed timing confusing can use two observers; and it would add the first options dictionary to `MutationObserver`'s constructor, while every existing option lives in `MutationObserverInit`.
+5. **A dedicated one-shot method (e.g. `observer.notifyWhenParsed(target)`):** `observe()` stays side-effect free; a separate call means "hold this observer's records for `target` until it finishes parsing, then deliver at least one record". This makes the synthesized record easy to justify ("you asked to be notified") and settles re-observing and long streams, since nothing happens unless the method is called. Not chosen because it takes two calls with ordering rules (throw if `target` isn't observed; no-op while a hold is pending; dropped by `disconnect()`), and later `streamHTML*()` streams or `<template for>` patches are not held automatically: the component owning the observer must notice them and call the method again. Kept as the main fallback if DOM editors object to `observe()` scheduling a callback.
+6. **DOM Events (`parseend`):** Per-element event dispatch during parsing repeats the performance issues of legacy `MutationEvent` and neither batches `MutationRecord`s nor observes subsequent dynamic mutations.
+7. **Status quo (client-side reconstruction):** Requires per-element `subtree: true` observers, ancestor `nextSibling` walks, chunk regexes, or sentinel nodes/scripts, and cannot observe active `streamHTML*` boundaries.
 
 ---
 
@@ -323,7 +312,7 @@ Guaranteeing a flush at parse end—or at the next microtask checkpoint if alrea
     If a document is disconnected or its parser aborts while an observed target is still parsing, parsing ends (as at EOF/abort) and standard `MutationObserver` lifecycle rules apply; calling `observer.disconnect()` discards any buffered records.
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
-    An invalid `MutationObserverDelivery` value in the constructor throws a `TypeError`, and calling `observe()` on a parse-end observer with `childList: false` throws a `TypeError`, matching existing `MutationObserver` option validation.
+    Passing `delivery: "parse-end"` with `childList: false` (or an invalid `MutationObserverDelivery` value) throws a `TypeError`, matching existing `MutationObserver.prototype.observe()` option validation.
 
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.
