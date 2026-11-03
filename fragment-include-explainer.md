@@ -150,6 +150,13 @@ Unlike `<img>` or `<iframe>` (which load leaf media or isolated subdocuments), `
 - **Case for delaying only `window.onload` (or differentiating eager vs. lazy includes):** When `<template for src>` is used for slower secondary subsections (such as `/partials/comments.fragment`), holding back `DOMContentLoaded` delays all `defer` scripts and `DOMContentLoaded` listeners on the slowest fragment fetch.
 - **Options to evaluate:** (1) Delay `DOMContentLoaded` by default, (2) delay only `window.onload`, or (3) have eager includes delay `DOMContentLoaded` while allowing deferred/below-the-fold includes (e.g., paired with `loading="lazy"`) to opt out.
 
+### Should the default sanitizer also strip `<meta http-equiv>`?
+
+`removeUnsafe()` only removes elements HTML categorizes as *Unsafe*. `<meta>` isn't one of them, so `<meta http-equiv="refresh" content="0;url=https://evil.example">` survives default sanitization, and a sanitized fragment could redirect the host page. It can't run script, but it is still a page-level side effect that authors wouldn't expect from a "safe" include. Options:
+1. Strip `<meta http-equiv>` (or all `<meta>`) from includes in default safe mode, on top of `removeUnsafe()`.
+2. Propose categorizing `<meta http-equiv="refresh">` as *Unsafe* in the Sanitizer itself, which would also fix `setHTML()` with a custom configuration.
+3. Leave it, and rely on CSP and `fragment-src` to limit who can supply fragments.
+
 ### Potential Future Enhancement: In-place includes via empty `for` (`<template for src="...">`)
 
 Allowing an empty `for` attribute (`<template for src="/partials/header.fragment"></template>`) to insert a fetched fragment in place at the `<template>`'s own position is a natural future extension. It is omitted from the initial proposal because asynchronous includes generally benefit from explicit `<?start>...<?end>` placeholders (or `hidden="while-loading"` containers) and keeping `<template for src>` identical in targeting semantics to inline `<template for>` avoids needing a temporary live-DOM `<template>` anchor in v1.
