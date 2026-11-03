@@ -29,12 +29,12 @@ However, JavaScript framework boundaries cannot natively observe or coordinate b
 
 ## Proposed Solution
 
-1. **A new `hidden="while-loading"` state** for the global `hidden` attribute, alongside the existing `hidden` (Hidden) and `hidden="until-found"` (Hidden Until Found) states. It opts the element into loading-boundary tracking and hides it by default while it is loading.
+1. **A new `hidden="while-loading"` state** for the global `hidden` attribute, alongside the existing `hidden` (Hidden) and `hidden="until-found"` (Hidden Until Found) states. It opts the element into loading-boundary tracking and hides it by default while it is loading. When loading finishes, the browser removes the attribute.
 2. **`:loading` CSS pseudo-class:** Matches an element in the `while-loading` state while it is parsing and/or while its gating subresources are loading (subject to a browser fallback timeout so stalled subresources never hide content indefinitely).
 3. **Customizable UA stylesheet default (`visibility: hidden` + `opacity: 0` + `@starting-style`):** Hides incomplete content while preserving real layout geometry and enabling zero-JS CSS fade-in transitions. It is an ordinary UA style, so authors can override it (e.g. dim instead of hide).
-4. **Accessibility & lifecycle (`aria-busy` + `load` event):** Maps `:loading` to implicit `aria-busy="true"` and fires a completion event at the element each time it stops loading.
+4. **Accessibility & lifecycle (`aria-busy` + `load` event):** Maps `:loading` to implicit `aria-busy="true"` and fires a completion event at the element when it finishes loading.
 
-The attribute stays on the element after loading finishes. If the element starts loading again (for example, a later `streamHTML()` or `<template for>` patch into it), `:loading` matches again and the element is hidden again until it settles.
+**One-shot:** Like `hidden="until-found"`, which the browser removes when it reveals content, `hidden="while-loading"` is removed once the element finishes loading. Content that has been shown is never hidden again by later updates (for example, a later `streamHTML()` or `<template for>` patch into it), so text the user is reading, a focused control, or a find-in-page match doesn't disappear. To hide an element during a later update, set `hidden="while-loading"` again before starting it.
 
 > [!IMPORTANT]
 > **Opt-in only:** `:loading` and the completion event apply only to elements in the `while-loading` state. Flipping `:loading` or queueing tasks on *every* HTML end tag across a document would be prohibitively chatty during parsing.
@@ -86,15 +86,15 @@ The `hidden` attribute gains a third state, **While Loading**, for the ASCII cas
 |---|---|---|
 | (empty / `hidden` / invalid) | Hidden | `display: none` |
 | `until-found` | Hidden Until Found | `content-visibility: hidden`, revealed by find-in-page and fragment navigation |
-| `while-loading` | **While Loading** | `visibility: hidden; opacity: 0` while `:loading` matches; rendered normally otherwise |
+| `while-loading` | **While Loading** | `visibility: hidden; opacity: 0` while `:loading` matches; the attribute is removed once loading finishes |
 
-- **IDL reflection:** As with `until-found`, the `HTMLElement.hidden` getter returns the string `"while-loading"` for this state, and setting `el.hidden = "while-loading"` sets the attribute value.
-- **Not loading → rendered normally:** An element in the While Loading state that is not `:loading` is rendered as if it had no `hidden` attribute. The UA stylesheet's `[hidden]` rule excludes it the same way it excludes `until-found`.
+- **IDL reflection:** As with `until-found`, the `HTMLElement.hidden` getter returns the string `"while-loading"` for this state, and setting `el.hidden = "while-loading"` sets the attribute value. Once the element has loaded and the attribute is removed, `el.hidden` returns `false`.
+- **Removing the attribute:** When an element in the While Loading state stops matching `:loading`, the browser removes its `hidden` attribute, then fires `load` (see [Lifecycle](#5-lifecycle-firing-the-completion-event-load-vs-dedicated-event-name)). If the attribute is set on an element that isn't loading (e.g. a script-created element whose children are already settled), it is removed at the next rendering update. The removal is a normal attribute mutation, observable by `MutationObserver`, just like the `until-found` removal. The UA stylesheet's `[hidden]` rule excludes `while-loading` the same way it excludes `until-found`, so the element is never `display: none` while in this state.
 - **Separate from `loading=lazy`:** Fetch scheduling stays with the `loading` attribute on `<img>`/`<iframe>`. `hidden="while-loading"` is only about presentation and readiness tracking, so `<img loading="lazy" hidden="while-loading">` has no keyword collision and no legacy reflection issue.
 
 #### Backwards compatibility & polyfilling
 
-Browsers that don't support the state treat `hidden="while-loading"` as plain `hidden` (`display: none`), the same as `hidden="until-found"` in browsers without support for it. A polyfill can approximate the native behavior by tracking the element's parsing and subresource loads and removing the `hidden` attribute when the element finishes loading, as `hidden="until-found"` polyfills do when they reveal content. Unlike the native behavior, the polyfilled element won't hide again if it starts loading again.
+Browsers that don't support the state treat `hidden="while-loading"` as plain `hidden` (`display: none`), the same as `hidden="until-found"` in browsers without support for it. A polyfill can match the native behavior by tracking the element's parsing and subresource loads and removing the `hidden` attribute when the element finishes loading, as `hidden="until-found"` polyfills do when they reveal content.
 
 The failure mode without a polyfill is content that stays hidden, not content that flashes, so pages that can't rely on a polyfill should feature-detect (e.g. `CSS.supports("selector(:loading)")`) before emitting the attribute.
 
@@ -104,7 +104,7 @@ An element only matches `:loading` when its `hidden` attribute is in the **While
 
 When an element is in the While Loading state, `:loading` matches while **any** of the following hold (up to the UA fallback timeout):
 
-- **The element is parsing** *(shared definition with [`delivery: "parse-end"` `MutationObserver`](./parse-end-mutation-observer-explainer.md#1-definition-of-parsing); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts#12578)):*
+- **The element is parsing** *(shared definition with [`delivery: "parse-end"` `MutationObserver`](./parse-end-mutation-observer-explainer.md#1-definition-of-parsing); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578)):*
   1. It is on the HTML parser's [stack of open elements](https://html.spec.whatwg.org/multipage/parsing.html#stack-of-open-elements) (its start tag has been inserted, and its end tag has not yet been popped), **or**
   2. It is the context element of an active streaming fragment parser—either an active `element.streamHTML*()` call, or an active `<template for="...">` / `<template for="..." src="...">` patch currently streaming into a marker whose parent is this element.
 - **Own external resource** (when the element itself is an `<img>`, `<video>`, `<iframe>`, or `<link rel="stylesheet">`):
@@ -161,14 +161,14 @@ In WAI-ARIA, [`aria-busy="true"`](https://w3c.github.io/aria/#aria-busy) signals
 
 ### 5. Lifecycle: Firing the Completion Event (`load` vs. Dedicated Event Name)
 
-Each time an element in the While Loading state transitions out of `:loading`—meaning it is no longer parsing **and** all of its gating subresources have settled (or the fallback timeout elapsed)—the browser queues a global task on the DOM manipulation task source to fire a simple (non-bubbling) **`load`** `Event` at that element:
+When an element in the While Loading state transitions out of `:loading`—meaning it is no longer parsing **and** all of its gating subresources have settled (or the fallback timeout elapsed)—the browser removes its `hidden` attribute and queues a global task on the DOM manipulation task source to fire a simple (non-bubbling) **`load`** `Event` at that element. This happens once per `hidden="while-loading"` attribute:
 
 - **Scoped to opted-in elements:** Ordinary containers (`<div>`, `<section>`, `<article>`) without `hidden="while-loading"` **never** fire `load` events on end tags or child resource loads.
 - **Reuses `GlobalEventHandlers.onload`:** `<section hidden="while-loading" onload="...">` and `el.addEventListener("load", ...)` work with no new event handler IDL attributes.
 - **Subresource errors never wedge visibility:** Just as `window.onload` still fires when an image `404`s or a stylesheet errors, any subresource that fails (or any parser stream that aborts/truncates at EOF) settles its pending count so `:loading` clears and `load` fires.
 - **Known quirks of reusing `load` (and alternative event name consideration):**
   1. *`<body>` outlier:* In HTML, `<body onload="...">` / `document.body.onload` is a legacy window-reflecting handler for `window.onload` rather than listening on `<body>` itself (though `document.body.addEventListener("load", ...)` receives target `load` events on `<body>`). Having `<body>` remain an outlier for inline `onload` is acceptable in practice since loading boundaries normally wrap sections inside `<body>`, not `<body>` itself.
-  2. *Capture-phase listeners:* Existing `document.addEventListener("load", fn, true)` capture listeners (used by some analytics or image-tracking scripts) will also receive container `load` events (filterable via `e.target.hidden === "while-loading"`).
+  2. *Capture-phase listeners:* Existing `document.addEventListener("load", fn, true)` capture listeners (used by some analytics or image-tracking scripts) will also receive container `load` events (filterable by target type, since container events target elements that don't otherwise fire `load`).
   3. *Alternative:* If avoiding `body.onload` and capture-listener overlap is preferred over reusing `onload`, we can fire a dedicated non-bubbling event name such as **`loadingend`** or **`contentload`** instead.
 
 ---
@@ -184,7 +184,7 @@ Which descendant subresources keep an element in `:loading`?
 
 ### 2. Lazy Descendants
 
-A `loading="lazy"` image inside a `hidden="while-loading"` element doesn't gate it until its fetch starts. Since a hidden element still has layout boxes, lazy images inside it start fetching as normal once they are near the viewport, and the element is then `:loading` until they settle. Should a lazy image that starts fetching *after* the element has already been revealed re-enter `:loading` (hiding the element again), or should only subresources pending at reveal time count? The current sketch is the latter: once revealed, only new parsing or a new streamed patch re-enters `:loading`.
+A `loading="lazy"` image inside a `hidden="while-loading"` element doesn't gate it until its fetch starts. Since a hidden element still has layout boxes, lazy images inside it start fetching as normal once they are near the viewport, and the element is then `:loading` until they settle. Lazy images that start fetching *after* the element has been revealed don't affect it, because the attribute is already gone.
 
 ### 3. Fallback Timeout
 
@@ -205,7 +205,7 @@ An earlier draft promoted `loading` to a global, space-separated token attribute
 2. **Broke `<img>`/`<iframe>` compatibility:** Shipping browsers parse `loading` as a single enumerated keyword, so `<img loading="lazy hidden">` degrades to *eager*, and changing `img.loading` reflection could affect scripts that check `img.loading === "lazy"`.
 3. **Required new IDL** (`loadingList`) and container-level `loading="lazy"` inheritance, which raises its own LCP and preload-scanner questions. Container-level lazy inheritance may still be worth pursuing as a separate proposal.
 
-`hidden="while-loading"` follows the `hidden="until-found"` precedent instead: a hidden state that the browser lifts under specific conditions, with the same "hidden in legacy browsers, polyfillable" compatibility story.
+`hidden="while-loading"` follows the `hidden="until-found"` precedent instead: a one-shot hidden state that the browser lifts (and removes) under specific conditions, with the same "hidden in legacy browsers, polyfillable" compatibility story.
 
 ### 2. Off-Screen `DocumentFragment` Buffering (`<template buffer>`)
 
@@ -216,7 +216,7 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
 | Feature | Scope | How it relates |
 |---|---|---|
 | **Framework `<Suspense>` boundaries** | JS component trees | Solves shell-to-content coordination in userland JS; `hidden="while-loading"` provides a native HTML/CSS counterpart coordinating HTML parsing, `<link rel="stylesheet">`, and media loads. |
-| **`hidden="until-found"`** | Hidden content revealed on demand | Same pattern: a `hidden` state with a UA-defined condition for showing the content. `until-found` reveals on find-in-page / fragment navigation; `while-loading` shows the content once it has loaded. |
+| **`hidden="until-found"`** | Hidden content revealed on demand | Same pattern: a `hidden` state with a UA-defined condition for showing the content, after which the browser removes the attribute. `until-found` reveals on find-in-page / fragment navigation; `while-loading` reveals once the content has loaded. |
 | **`<link rel="expect" href="#id" blocking="render">`** | Document first paint (`<head>` only) | Holds initial page render for critical above-the-fold elements; `hidden="while-loading"` handles localized shell-to-content and post-first-paint boundaries without blocking the whole page. |
 | **`content-visibility: hidden`** | CSS containment & rendering | Skips layout and painting entirely, whereas `hidden="while-loading"` uses `visibility: hidden` so real layout boxes and subresource loads proceed normally. |
 | **`<template for>`, `<template for src>`, `streamHTML()`** | Declarative & streaming updates | Stream HTML into shell outlets after first paint; `hidden="while-loading"` prevents half-streamed flashes and FOUC in the live DOM. |
