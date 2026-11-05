@@ -180,18 +180,85 @@ Buffering lasts as long as `target` is parsing. For a long-lived stream (such as
 - **`takeRecords()` is the escape hatch.** A component can drain buffered records at any time (for example from a `requestAnimationFrame` loop or a timer) without waiting for parse end. The guaranteed final callback still fires when the stream closes.
 - **Implementations may store buffered records compactly** (for example by coalescing adjacent `childList` records for the same `target`), since only the final batch can be observed.
 
-### 5. Walkthrough: Batching & observer-specific ordering across two chunks
+### 5. Scenarios & Edge-Case Walkthroughs
 
-Suppose `<s-select>` and `<s-option>` each call `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in `connectedCallback()`, while a default observer `docObserver` observes `document` with `{ childList: true, subtree: true }`. The network delivers:
+The tables below show what a `MutationObserver` receives in each scenario. Throughout, `emptyRecord(target, prev = target.lastChild)` denotes the synthesized record `{ type: "childList", target, addedNodes: [], removedNodes: [], previousSibling: prev, nextSibling: null }`.
+
+#### 5.1 Multi-chunk streaming & nested bottom-up ordering
+
+`<s-select>` and `<s-option>` each call `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in `connectedCallback()`, while `docObserver` observes `document` with `{ childList: true, subtree: true }` (default delivery):
 - **Chunk 1:** `<s-select><s-option>A</s-option>`
 - **Chunk 2:** `<s-option>B</s-option></s-select>`
+- **Later task:** `select.append(optC)`
 
 | Checkpoint | `docObserver` (default) | `<s-option>A`'s observer (parse-end) | `<s-select>`'s observer (parse-end) |
 |---|---|---|---|
-| **End of Chunk 1** | **Fires** (`addedNodes`: `<s-select>`, `<s-option>A`, `"A"`). | **Fires** (`addedNodes: ["A"]`) because `</s-option>` was seen in Chunk 1—even though `<s-select>`'s observer was registered earlier! | **Buffered (does not fire):** `<s-select>` has not seen `</s-select>` yet (`addedNodes: [<s-option>A]` held). |
-| **End of Chunk 2** | **Fires** (`addedNodes`: `<s-option>B`, `"B"`). | *(No changes to `<s-option>A`)* | **Fires once** with **all** buffered records from both chunks (`addedNodes: [<s-option>A]` and `addedNodes: [<s-option>B]`). |
+| **End of Chunk 1** | **Fires:** `addedNodes: [<s-select>]`, `addedNodes: [<s-option>A]`, `addedNodes: ["A"]`. | **Fires:** `[addedNodes: ["A"]]` because `</s-option>` closed in Chunk 1—even though `<s-select>`'s observer was registered first. | **Held:** `<s-select>` is still on the stack of open elements (`addedNodes: [<s-option>A]` buffered). |
+| **End of Chunk 2** | **Fires:** `addedNodes: [<s-option>B]`, `addedNodes: ["B"]`. | *(No changes)* | **Fires once** with all buffered records from both chunks: `[addedNodes: [<s-option>A], addedNodes: [<s-option>B]]`. |
+| **After `select.append(optC)`** | **Fires:** `addedNodes: [<s-option>C]`. | *(No changes)* | **Fires at microtask checkpoint:** `[addedNodes: [<s-option>C]]`. |
 
-*(If the markup had instead been `<s-select></s-select>` across the two chunks with empty children, `<s-select>`'s observer would still hold at Chunk 1 and **fire at Chunk 2** with `{ type: "childList", target: <s-select>, addedNodes: [], removedNodes: [] }`.)*
+#### 5.2 Empty elements, `createElement`, `innerHTML`, and late custom-element upgrades
+
+When `<s-select>` calls `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in `connectedCallback()`:
+
+| Scenario | State when `observe()` runs | Records queued before flush | What `<s-select>`'s observer receives |
+|---|---|---|---|
+| **Empty across two chunks** (`Chunk 1: <s-select>`, `Chunk 2: </s-select>`) | Parsing (on stack of open elements) | None | Held at Chunk 1; **fires at end of Chunk 2** with `[emptyRecord(<s-select>, null)]`. |
+| **Empty in one chunk** (`<s-select></s-select>`) | Parsing (on stack when `connectedCallback` runs; popped at `</s-select>` in same chunk) | None | **Fires at end of chunk** with `[emptyRecord(<s-select>, null)]`. |
+| **Imperative `createElement` + synchronous `append()`** (`body.append(s); s.append(optA, optB);`) | Already parsed (`connectedCallback` runs during `body.append(s)`) | `s.append(optA, optB)` queues `addedNodes: [optA, optB]` in the same task | **Fires once at microtask checkpoint** with `[addedNodes: [optA, optB]]` (no synthesized empty record needed because a real record was queued). |
+| **Imperative `createElement` with no children** (`body.append(s);`) | Already parsed | None | **Fires at microtask checkpoint** with `[emptyRecord(<s-select>, null)]`. |
+| **`el.innerHTML = "<s-select><s-option>A</s-option></s-select>"`** | Already parsed (custom element reactions run after the synchronous fragment parser finishes) | None after `connectedCallback()` (children were inserted before `connectedCallback` ran) | **Fires at microtask checkpoint** with `[emptyRecord(<s-select>, <s-option>A)]`. |
+| **Late `customElements.define("s-select", ...)`** after `<s-select><s-option>A</s-option></s-select>` is already in the DOM | Already parsed | None | **Fires at microtask checkpoint** with `[emptyRecord(<s-select>, <s-option>A)]`. |
+
+#### 5.3 Delegated observation from a parent/document default observer
+
+Suppose `docObserver` (`{ childList: true, subtree: true }`, default delivery) discovers `<article>` in `addedNodes` at the end of Chunk 1 and calls `articleObserver.observe(article, { childList: true, delivery: "parse-end" })`:
+
+| Chunk 1 & Chunk 2 markup | State of `<article>` when `docObserver` runs at end of Chunk 1 | What `articleObserver` receives |
+|---|---|---|
+| **Chunk 1:** `<article><h1>Title</h1>`<br>**Chunk 2:** `<p>Body</p></article>` | **Still parsing** (`<h1>` was already inserted before `observe()` was called, so `<h1>` is already in `article.children`). | Held until `</article>` in Chunk 2; **fires at end of Chunk 2** with `[addedNodes: [<p>]]`. |
+| **Chunk 1:** `<article><h1>Title</h1>`<br>**Chunk 2:** `</article>` *(no new children in Chunk 2)* | **Still parsing** | Held until `</article>` in Chunk 2; **fires at end of Chunk 2** with `[emptyRecord(<article>, <h1>)]`. |
+| **Chunk 1:** `<article><h1>Title</h1></article>` *(opened and closed in Chunk 1)* | **Already parsed** by the time `docObserver`'s microtask runs. | Schedules a microtask immediately; **fires in the same microtask checkpoint** with `[emptyRecord(<article>, <h1>)]`. |
+
+#### 5.4 Inline `<script>` inside an open element (`document.write()`, imperative mutations, `takeRecords()`)
+
+Suppose `<s-select>` is observed with `{ childList: true, attributes: true, delivery: "parse-end" }` and the parser processes:
+```html
+<s-select>
+  <s-option>A</s-option>
+  <script>/* runs while <s-select> is still on the stack of open elements */</script>
+  <s-option>B</s-option>
+</s-select>
+```
+When `</script>` is parsed, the parser executes the script and performs a microtask checkpoint before continuing to `<s-option>B</s-option></s-select>`:
+
+| Action inside `<script>` | At `</script>` microtask checkpoint | At `</s-select>` microtask checkpoint |
+|---|---|---|
+| **No-op `<script>`** | `<s-option>A`'s observer **fires** (`</s-option>` already closed). `<s-select>`'s observer **does not fire** (`<s-select>` is still on the stack of open elements). | `<s-select>`'s observer **fires once** with `[addedNodes: [<s-option>A], addedNodes: [<script>], addedNodes: [<s-option>B]]`. |
+| **Imperative mutation** (`select.setAttribute("data-x", "1"); select.append(optX);`) | **Held:** Because `<s-select>` is still parsing, both parser insertions and script mutations targeting `<s-select>` remain buffered. | **Fires once** with all buffered `childList` and `attributes` records in order. |
+| **`document.write("<s-option>W</s-option>")`** | **Held:** Tokens written into the active parser while `<s-select>` is on the stack of open elements are buffered with the rest. | **Fires once** including `addedNodes: [<s-option>W]`. |
+| **`const early = selectObserver.takeRecords()`** | `takeRecords()` synchronously drains and returns `[addedNodes: [<s-option>A], addedNodes: [<script>]]`. Because `<s-select>` is still parsing, the parse-end registration stays armed. | **Still fires at `</s-select>`** with `[addedNodes: [<s-option>B]]` (or `[emptyRecord(<s-select>)]` if no further mutations occurred after `takeRecords()`). |
+
+#### 5.5 Streaming updates after initial parse (`streamHTML*()` and `<template for>`)
+
+Suppose `<section id="feed">` is already parsed and observed with `feedObserver.observe(feed, { childList: true, subtree: true, delivery: "parse-end" })`:
+
+| Streaming operation | While stream is open across chunks | When stream finishes |
+|---|---|---|
+| **`const w = feed.streamHTML()`**<br>`w.write("<p>1</p>")` → yield → `w.write("<p>2</p>")` → `w.close()` | `feed.streamHTML()` synchronously removes existing children and marks `feed` as **parsing**. Both `removedNodes: [...oldChildren]` and `addedNodes: [<p>1]` are **held** across chunks. | `w.close()` ends parsing for `feed`; `feedObserver` **fires once** with `removedNodes: [...oldChildren]` and all `addedNodes` (`<p>1`, `<p>2`, and their text). |
+| **Empty `streamHTML()`** on an already-empty `feed` (`const w = feed.streamHTML(); w.close();`) | `feed` is parsing while `w` is open. | **Fires on `w.close()`** with `[emptyRecord(feed, null)]`. |
+| **`<template for="feed">`** streaming across chunks into `<section id="feed"><?marker name="feed"></section>` | `feed` is the target of an active `<template for>` patch, so records in `feed`'s buffer are **held** until `</template>`. | When `</template>` is parsed (or the stream aborts at EOF), `feedObserver` **fires once** with all mutations from the patch. |
+
+#### 5.6 HTML parser edge cases & aborts
+
+| Edge case | Parser behavior | What parse-end observer receives |
+|---|---|---|
+| **Implied end tags** (`<ul><li>One<li>Two</ul>`) | Parsing the second `<li>` start tag implicitly pops the first `<li>` from the stack of open elements. | Parse-end observer on the first `<li>` flushes at that chunk's microtask checkpoint, identically to an explicit `</li>`. |
+| **Adoption agency algorithm** (`<x-b><x-i>Bold </x-b>italic</x-i>`) | At `</x-b>`, the original `<x-i>` and `<x-b>` are popped from the stack of open elements; a *new* `<x-i>` element is created for `italic`. | Observers on the original `<x-i>` and `<x-b>` flush after `</x-b>`. The cloned `<x-i>` is a distinct `Element` instance that remains parsing until `</x-i>`. |
+| **Foster parenting** (`<table><x-div><span>hi</span></x-div><tr><td>cell</td></tr></table>`) | `<x-div>` is inserted as a sibling before `<table>`, but remains on the stack of open elements until `</x-div>`. | Observer on `<x-div>` holds `<span>hi</span>` until `</x-div>`. Because `<x-div>` is inserted into `<table>.parentNode` (not `<table>`), an observer on `<table>` only sees `<tbody>`/`<tr>`, while an observer on `<table>.parentNode` holds both `<x-div>` and `<table>` until `<table>.parentNode` closes. |
+| **Element removed mid-parse** (`Chunk 1: <x-box><p>1</p>` + `<script>box.remove()</script>`, `Chunk 2: <p>2</p></x-box>`) | The parser's stack of open elements holds a reference to `box` and continues appending `<p>2</p>` into the detached `box` until `</x-box>` pops it. | If `disconnectedCallback()` calls `this.#mo.disconnect()`, buffered records are cleared and nothing fires. If the observer does *not* disconnect, `box` stays parsing until `</x-box>` pops it in Chunk 2, then flushes `[addedNodes: [<p>1], addedNodes: [<p>2]]`. |
+| **Element moved mid-parse** (`newParent.append(box)` while `box` is still on the parser stack, re-running `connectedCallback`) | `box` remains on the stack of open elements until `</x-box>`. | If `disconnectedCallback` did not call `disconnect()`, calling `observe(box, { delivery: "parse-end" })` again in `connectedCallback` updates the existing registration in place without discarding held records or scheduling a premature flush; it flushes once `</x-box>` is parsed. |
+| **Premature EOF / `window.stop()` / aborted stream** (`<x-box><p>Half...` then EOF) | At EOF or abort, the parser pops all remaining elements from the stack of open elements. | `<x-box>` transitions out of the parsing state and flushes all buffered records (`[addedNodes: [<p>]]`) at the microtask checkpoint. |
 
 ### 6. Custom elements and `WICG/webcomponents#809`
 
@@ -227,7 +294,7 @@ Calling `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in 
 ## Frequently Asked Questions (Q&A)
 
 <details>
-<summary><strong>Parser overhead, firing order, empty/already-parsed targets, and HTML adoption/foster-parenting</strong></summary>
+<summary><strong>Parser overhead, firing order, and empty/already-parsed targets</strong></summary>
 
 ### Q1: Does parse-end delivery add overhead to the HTML parser or delay rendering?
 No. The HTML parser inserts nodes into the live DOM immediately as bytes arrive—layout, rendering, preload scanning, and other observers are never delayed. Holding records in a pending queue only occurs for parse-end observers, gated on state the parser already maintains (stack of open elements and active streaming fragment parsers).
@@ -239,11 +306,6 @@ Because buffering is observer-specific: a parse-end observer watching `<parent>`
 
 ### Q3: Why is a parse-end observer guaranteed to fire even if the target is already parsed or has empty children?
 Guaranteeing a flush at parse end—or at the next microtask checkpoint if already parsed—(synthesizing an empty `childList` record when no child records were queued) ensures `<my-widget></my-widget>` observed in `connectedCallback()` and elements upgraded or observed after parsing initialize through the exact same `MutationObserver` callback as multi-chunk elements.
-
-### Q4: What happens with foster parenting and the adoption agency algorithm?
-- **Foster parenting (`<table><div>...</div></table>`):** `<div>` remains on the stack of open elements until `</div>` is seen, so a parse-end observer on `<div>` buffers until `</div>` pops it.
-- **Adoption agency (`<b><i>Bold </b>italic</i>`):** Popping the original `<i>` at `</b>` ends parsing for that `<i>` instance and flushes its buffer; the reconstructed `<i>` created for `italic` is a distinct element tracked until `</i>`.
-- **`document.write()` from inside the element:** A `<script>` inside `<x-el>` that calls `document.write("<li>…")` inserts through the same parser while `<x-el>` is still open, so those children are buffered with the rest.
 
 </details>
 
