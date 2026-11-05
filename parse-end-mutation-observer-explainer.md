@@ -232,6 +232,8 @@ Calling `this.#mo.observe(this, { childList: true, delivery: "parse-end" })` in 
 ### Q1: Does parse-end delivery add overhead to the HTML parser or delay rendering?
 No. The HTML parser inserts nodes into the live DOM immediately as bytes arrive—layout, rendering, preload scanning, and other observers are never delayed. Holding records in a pending queue only occurs for parse-end observers, gated on state the parser already maintains (stack of open elements and active streaming fragment parsers).
 
+**Off-main-thread / tree-op parsers (e.g., Gecko):** An engine that separates parsing from main-thread DOM construction via queued tree operations does **not** need to emit an "end-parse" operation for every closing tag. Any element that opens and closes without an intervening parser batch flush (chunk or timer boundary), `<script>`, or custom element reaction can never be observed by script while open—by the time any `MutationObserver` or script sees it, it is already parsed. The parser only needs to mark elements as open (and later emit a close op, which can itself be batched up to the next such boundary) when they are actually on the stack of open elements at a batch flush, `<script>`, or custom element reaction.
+
 ### Q2: Why can observers fire in a different order when parse-end observers are used?
 Because buffering is observer-specific: a parse-end observer watching `<parent>` holds its records while `<parent>` is open, whereas a default observer—or a parse-end observer on `<child>` whose `</child>` arrived in an earlier chunk—flushes at that earlier chunk's microtask checkpoint. Nested parse-end components therefore initialize bottom-up (`<s-option>` flushes before `<s-select>`).
 
