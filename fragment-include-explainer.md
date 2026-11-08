@@ -55,6 +55,16 @@ A basic include is a few lines of userland JavaScript (`fetch()` followed by `in
 3. **Taking part in document loading:** Script can't hold back `DOMContentLoaded` or `window.onload` without being parser-blocking itself, so `defer` scripts and `DOMContentLoaded` handlers can run before userland includes have inserted shared markup such as the header or main content. A native include can delay the document's load events (which ones is an [open question](#should-template-for-src-delay-domcontentloaded-or-only-load)). It can also be render-blocking via `<link rel="expect" blocking="render">`, and the preload scanner can start fetching it before any script runs.
 4. **A building block other features can extend:** Once includes are a platform concept, other features can hook into them: `loading="lazy"` with the browser's viewport heuristics, gating [`hidden="while-loading"`](./partial-render-blocking-explainer.md) and `:loading` on in-flight includes, [`MutationObserver`](./template-mutation-observer-explainer.md) lifecycle records, and future speculative-loading or routing features. A userland library can't plug into browser scheduling and loading in these ways.
 
+### Relationship to HTML Modules (and HTML Imports)
+
+Earlier platform efforts in this space targeted **JavaScript component packaging** rather than declarative markup inclusion:
+
+- **HTML Imports (`<link rel="import">`, deprecated/removed):** Loaded full sub-documents with their own global script execution and stylesheet rules, which clashed with ES modules and blocked rendering.
+- **HTML Modules ([WICG/webcomponents#645](https://github.com/WICG/webcomponents/issues/645), [whatwg/html#4505](https://github.com/whatwg/html/pull/4505), currently stalled/inactive):** Proposed importing HTML files *into the JavaScript ES module graph* (`import doc from "./card.html" with { type: "html" }`), parsing the response into an inert `Document` so JavaScript code could export, clone, and stamp out nodes.
+  - **Why HTML Modules stalled:** The proposal got bogged down in how inline `<script>` tags inside an imported HTML file should interact with the ES module graph (`export` bindings, `import.meta`, module map deduplication, and execution ordering) vs. acting as an inert data import.
+  - **Why HTML Modules wouldn't solve declarative includes anyway:** Even if revived, an HTML module loads an inert tree into JavaScript memory after the full response downloads; turning it into page content still requires booting JavaScript, waiting for EOF, and imperatively cloning and inserting nodes—sacrificing streaming, non-JS rendering, and parser-driven placement.
+  - **How `<template for src>` avoids those pitfalls:** Fragment Include is an **HTML-first** parser primitive ([whatwg/html#2791](https://github.com/whatwg/html/issues/2791)), not an ES module type. It streams directly into a live target location in the DOM without JavaScript, has no module-map singleton or `export` semantics, and strips `<script>` by default (`removeUnsafe()`), avoiding the script-graph complexity that stalled HTML Modules. (If a data-only HTML/DOM module import for JS is ever standardized in the future, the two would be complementary: HTML Modules for importing inert templates into JS, and `<template for src>` for declaratively streaming HTML into the document.)
+
 ---
 
 ## Detailed Design
