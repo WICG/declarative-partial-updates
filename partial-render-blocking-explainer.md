@@ -95,7 +95,7 @@ The `hidden` attribute gains a third state, **While Loading**, for the ASCII cas
 
 An element in the While Loading state is **loading** while **any** of the following hold:
 
-- **The element is parsing** *(shared definition with [`delivery: "parse-end"` `MutationObserver`](./parse-end-mutation-observer-explainer.md#1-definition-of-parsing); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578)):*
+- **The element is streaming** *(shared definition with [`element.isStreaming` and `delivery: "batch"` `MutationObserver`](./parse-end-mutation-observer-explainer.md#1-definition-of-streaming); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578)):*
   1. It is on the HTML parser's [stack of open elements](https://html.spec.whatwg.org/multipage/parsing.html#stack-of-open-elements) (its start tag has been inserted, and its end tag has not yet been popped), **or**
   2. It is the context element of an open streaming fragment parser—either an open `element.streamHTML*()` stream (from the moment the stream is created until it is closed or aborted, even before any chunk is written), or an active `<template for="...">` / `<template for="..." src="...">` patch currently streaming into a marker whose parent is this element.
 - **Own external resource** (when the element itself is an `<img>`, `<video>`, `<iframe>`, or `<link rel="stylesheet">`):
