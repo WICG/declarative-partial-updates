@@ -8,7 +8,7 @@ Browsers are tuned for **top-down** HTML delivery, whereas modern web applicatio
 
 While server-side composition remains ideal when a single origin can assemble the full response up front, declarative client-side includes unlock four main benefits:
 
-1. **Buildless DRY HTML:** Reuse shared partials (headers, footers, navigation, icons) on static hosts or local setups without a server-side template runtime, build step, or JavaScript framework (requiring only a static `.fragment` → `text/fragment` MIME mapping).
+1. **Buildless DRY HTML:** Reuse shared partials (headers, footers, navigation, icons) on static hosts or local setups without a server-side template runtime, build step, or JavaScript framework (requiring only a static `Content-Type: text/fragment` header rule or `.fragment` MIME mapping).
 2. **Split Caching:** Cache shared chrome across navigations while fetching only page-specific content—or serve a CDN-cached static shell that pulls in dynamic, personalized fragments such as auth status, cart, or regional pricing (using `crossorigin="use-credentials"` with `Access-Control-Allow-Credentials: true` when personalized endpoints are cross-origin).
 3. **Async Subsections:** Load slower or secondary sections (comments, feeds, recommendations) independently without delaying the main document response.
 4. **Composition:** Combine HTML fragments across separate services or backends directly into the document's layout and styling tree, using native browser sanitization (`sanitizer`) and scoped context boundaries instead of heavyweight `<iframe>` isolation.
@@ -82,8 +82,8 @@ Earlier platform efforts in this space targeted **JavaScript component packaging
 
 When both `for` and `src` are present on `<template>`, the browser asynchronously fetches the fragment over the network:
 
-- **Always `text/fragment` (`.fragment` on static hosts):** Responses must be served with `Content-Type: text/fragment` (UTF-8, strict MIME checking with no sniffing, to be registered with IANA; `text/html` and other media types are rejected and abort the include). Requiring `text/fragment` ensures endpoints explicitly opt in to serving includable fragments—preventing accidental inclusion of full HTML fallback/error pages and preventing fragment endpoints from rendering as active standalone documents on direct top-level navigation. Static hosts and CDNs will need to add a `.fragment` → `text/fragment` extension mapping (much like `.mjs` or `.wasm`), which is a simple static configuration compared to running a bespoke SSI/ESI runtime. Once verified as `text/fragment`, the payload is parsed with the HTML fragment parsing algorithm in the target parent element's context, natively supporting HTML, `<svg>`, and `<math>`.
-- **Request destination `"fragment"`:** Include requests use a new Fetch [request destination](https://fetch.spec.whatwg.org/#concept-request-destination), `"fragment"`. CSP uses it to apply `fragment-src`, and servers see it as `Sec-Fetch-Dest: fragment`, so they can tell include requests apart from navigations and `fetch()` calls.
+- **Always `text/fragment`:** Responses must be served with `Content-Type: text/fragment` (UTF-8, strict MIME checking with no sniffing, to be registered with IANA; `text/html`, `image/svg+xml`, `text/plain`, and other media types are rejected and abort the include). Once verified as `text/fragment`, the payload is parsed with the HTML fragment parsing algorithm in the target parent element's context, natively supporting HTML, `<svg>`, and `<math>` (see [below](#why-require-textfragment-and-serving-html--svg-on-static-hosts)).
+- **Request destination `"fragment"`:** Include requests use a new Fetch [request destination](https://fetch.spec.whatwg.org/#concept-request-destination), `"fragment"`. CSP uses it to apply `fragment-src`, and servers see it as `Sec-Fetch-Dest: fragment`, so they can tell include requests apart from navigations, `<img>`, and `fetch()` calls.
 - **CORS by default (`crossorigin`, matching `<script type="module">`):** Fetches always use Fetch mode `"cors"`. Omitting `crossorigin` (or `crossorigin="anonymous"`) uses `"same-origin"` credentials (cookies sent same-origin, omitted cross-origin); `crossorigin="use-credentials"` uses `"include"` (requiring `Access-Control-Allow-Credentials: true` and an explicit `Access-Control-Allow-Origin` on cross-origin personalized endpoints).
 - **Subresource Integrity (`integrity`):** Verifies the cryptographic digest via standard Fetch SRI. Because Fetch verifies the full body before releasing bytes, `integrity` buffers the response prior to parsing rather than streaming chunk-by-chunk.
 - **Priority, referrer, and CSP (`fetchpriority`, `referrerpolicy`, `nonce`):** `fetchpriority` (`"high"`, `"low"`, `"auto"`) and `referrerpolicy` map directly to the underlying Fetch request, and `nonce` is passed on the request for CSP `fragment-src` / `script-src` matching.
@@ -93,6 +93,22 @@ When both `for` and `src` are present on `<template>`, the browser asynchronousl
   - *Pre-stream failure* (network error, HTTP error, non-`text/fragment` MIME type, CORS block, CSP block, or `integrity` mismatch): The include aborts before `"start"`. Any fallback content inside `<?start name="...">...<?end>` **remains intact and visible** in the DOM.
   - *Mid-stream truncation or disconnection:* Once streaming has started, the initial placeholder has already been replaced by incoming chunks. If the network stream drops before completion or the target container/document disconnects, any in-flight fetch aborts, already-streamed DOM nodes remain in place, markers are cleaned up, and any [`hidden="while-loading"`](./partial-render-blocking-explainer.md) boundary settles so content is never stuck hidden.
   - *Programmatic observation & retry UI:* Both pre-stream and mid-stream failures emit a `MutationRecord` with `activeTemplateStatus: "abort"` to observers opted into [`MutationObserver` (`activeTemplateAttributeFilter`)](./template-mutation-observer-explainer.md), enabling applications to render retry UI or restore fallback state.
+
+#### Why require `text/fragment` (and serving `.html` / `.svg` on static hosts)
+
+Like `text/javascript` for ES modules or `text/event-stream` for SSE, `Content-Type: text/fragment` is an explicit server opt-in that bytes are meant to be spliced into another document's DOM, avoiding the hazards of existing media types:
+- **`text/html`:** SPA rewrites (`try_files $uri /index.html`), auth redirects, and soft-404s return `200 OK` with full `text/html` pages, which would recursively inject the app shell instead of aborting; conversely, serving partials as `text/html` makes them active standalone documents on direct navigation (where `<template for src>`'s client-side `removeUnsafe()` does not run).
+- **`image/svg+xml`:** `.svg` files served as `image/svg+xml` assume `<img>` isolation (scoped CSS, inert scripts), whereas inlining merges `<style>` into the host's global cascade and parses via the HTML fragment parser rather than XML; direct navigation to `image/svg+xml` also executes scripts.
+- **`text/plain`:** `text/plain` (`nosniff`) is a security contract that untrusted text will *not* be parsed as HTML/CSS; conversely, switching to literal text insertion based on `Content-Type` would silently render raw `<div>` source on misconfigured servers instead of aborting.
+
+**Keeping `.html` / `.svg` filenames on static hosts:** Authors don't need to rename `.html` or `.svg` files to `.fragment` (preserving editor tooling and dual-use `<img src="icon.svg">`). Static hosts and CDNs can either map `/partials/*` to `Content-Type: text/fragment` by path, or match the forbidden `Sec-Fetch-Dest: fragment` header on opted-in paths (returning `404` on missing files rather than an SPA fallback, with `Vary: Sec-Fetch-Dest` for dual-use assets):
+
+```caddyfile
+# Caddy example (equivalent declarative header rules exist in Nginx, .htaccess, Vercel, and Cloudflare)
+@fragment { path /partials/* /icons/* ; header Sec-Fetch-Dest fragment }
+header @fragment Content-Type "text/fragment; charset=utf-8"
+header /icons/* Vary "Sec-Fetch-Dest"
+```
 
 ### Avoiding Layout Shifts and FOUC
 
