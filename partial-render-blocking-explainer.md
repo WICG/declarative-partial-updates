@@ -95,7 +95,7 @@ The `hidden` attribute gains a third state, **While Loading**, for the ASCII cas
 
 An element in the While Loading state is **loading** while **any** of the following hold:
 
-- **The element is streaming** *(shared definition with [`element.isStreaming` and `delivery: "batch"` `MutationObserver`](./parse-end-mutation-observer-explainer.md#1-definition-of-streaming); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578)):*
+- **The element is parsing** *(shared definition with [`element.isParsing` and parse-end `MutationObserver`](./parse-end-mutation-observer-explainer.md#1-definition-of-parsing); see also [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) / [w3c/csswg-drafts#12578](https://github.com/w3c/csswg-drafts/issues/12578)):*
   1. It is on the HTML parser's [stack of open elements](https://html.spec.whatwg.org/multipage/parsing.html#stack-of-open-elements) (its start tag has been inserted, and its end tag has not yet been popped), **or**
   2. It is the context element of an open streaming fragment parser—either an open `element.streamHTML*()` stream (from the moment the stream is created until it is closed or aborted, even before any chunk is written), or an active `<template for="...">` / `<template for="..." src="...">` patch currently streaming into a marker whose parent is this element.
 - **Own external resource** (when the element itself is an `<img>`, `<video>`, `<iframe>`, or `<link rel="stylesheet">`):
@@ -269,7 +269,7 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
 | **`<link rel="expect" href="#id" blocking="render">`** | Document first paint (`<head>` only) | Holds initial page render for critical above-the-fold elements; `hidden="while-loading"` handles localized shell-to-content and post-first-paint boundaries without blocking the whole page. |
 | **`content-visibility: hidden`** | CSS containment & rendering | Skips layout and painting entirely, whereas `hidden="while-loading"` uses `visibility: hidden` so real layout boxes and subresource loads proceed normally. |
 | **`<template for>`, `<template for src>`, `streamHTML()`** | Declarative & streaming updates | Stream HTML into shell outlets after first paint; `hidden="while-loading"` prevents half-streamed flashes and FOUC in the live DOM. |
-| **`MutationObserver` `delivery: "parse-end"`** | JS observation | Imperative counterpart ([explainer](./parse-end-mutation-observer-explainer.md)) sharing the exact same "element is parsing" definition. |
+| **`MutationObserver` parse-end notification** (`delivery: "parse-end"` or `parseEnd: true`) | JS observation | Imperative counterpart ([explainer](./parse-end-mutation-observer-explainer.md)) sharing the exact same "element is parsing" definition. |
 
 </details>
 
