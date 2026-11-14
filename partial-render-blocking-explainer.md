@@ -269,7 +269,7 @@ Buffering fragments inside an inert `DocumentFragment` ([Fragment Include: Explo
 | **`<link rel="expect" href="#id" blocking="render">`** | Document first paint (`<head>` only) | Holds initial page render for critical above-the-fold elements; `hidden="while-loading"` handles localized shell-to-content and post-first-paint boundaries without blocking the whole page. |
 | **`content-visibility: hidden`** | CSS containment & rendering | Skips layout and painting entirely, whereas `hidden="while-loading"` uses `visibility: hidden` so real layout boxes and subresource loads proceed normally. |
 | **`<template for>`, `<template for src>`, `streamHTML()`** | Declarative & streaming updates | Stream HTML into shell outlets after first paint; `hidden="while-loading"` prevents half-streamed flashes and FOUC in the live DOM. |
-| **`MutationObserver` parse-end notification** (`delivery: "parse-end"` or `parseEnd: true`) | JS observation | Imperative counterpart ([explainer](./parse-end-mutation-observer-explainer.md)) sharing the exact same "element is parsing" definition. |
+| **`MutationObserver` parse-end notification** (`waitForParser()` or `parseEnd: true`) | JS observation | Imperative counterpart ([explainer](./parse-end-mutation-observer-explainer.md)) sharing the exact same "element is parsing" definition. |
 
 </details>
 
