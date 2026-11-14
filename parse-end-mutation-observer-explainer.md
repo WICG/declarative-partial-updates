@@ -14,14 +14,14 @@ This explainer proposes a synchronous `element.isParsing` getter ([whatwg/html#1
 
 There are two candidate designs for the `MutationObserver` part, with no decision between them yet (discussion in [whatwg/html#13198](https://github.com/whatwg/html/issues/13198)). Both include `element.isParsing`.
 
-| | [Option 1: batched delivery](#option-1) | [Option 2: empty `childList` on parse end](#option-2) |
+| | [Option 1: batched delivery](#option-1) | [Option 2: parse-end `childList`](#option-2) |
 |---|---|---|
-| **API** | `observer.waitForParser({ target, signal })`, next to an unchanged `observe()` | `observe(target, { childList: true, emptyChildListOnParseEnd: true })` |
+| **API** | `observer.waitForParser({ target, signal })`, next to an unchanged `observe()` | `observe(target, { childList: true, parseEndChildList: true })` |
 | **Delivery timing** | The observer delivers nothing while a target it waits for is parsing, then delivers its whole queue in mutation order. | Unchanged from today. |
-| **Parse-end signal** | The held batch. If `target` was parsing when `waitForParser()` was called, the callback is invoked at parse end even with no records. No record is synthesized. | The first callback in which `target.isParsing` is `false`. Opts in to queuing an empty `childList` record when `target` finishes parsing if no `childList` record for it is pending, so that this callback always happens. `observe()` has no side effects. |
-| **`subtree: true` & several targets** | No restrictions and no new `TypeError`s. The observer is held as a whole, so elements that complete independently need separate observers. | `subtree: true` is a `TypeError`. Multiple targets and mixing `emptyChildListOnParseEnd: true` / `false` are allowed. |
-| **Main advantage** | The callback never has to check `isParsing`: it does not run while a target the observer waits for is parsing. | Delivery timing, `observe()`, `takeRecords()`, and `disconnect()` all keep today's behavior; the option name states the exact opt-in. |
-| **Main concern** | [Deferred microtask delivery](#scheduling-and-ordering): the observer's records are held across intermediate microtask checkpoints (including inline `<script>`s). | A [`childList` record that describes no change](#parse-end-record), plus checking `isParsing` in the callback and around `observe()`. |
+| **Parse-end signal** | The held batch. If `target` was parsing when `waitForParser()` was called, the callback is invoked at parse end even with no records. No record is synthesized. | The first callback in which `target.isParsing` is `false`. Guarantees a `childList` record on parse end: uses the pending `childList` record when the final chunk added children, or queues an empty fallback one otherwise. `observe()` has no side effects. |
+| **`subtree: true` & several targets** | No restrictions and no new `TypeError`s. The observer is held as a whole, so elements that complete independently need separate observers. | `subtree: true` is a `TypeError`. Multiple targets and mixing `parseEndChildList: true` / `false` are allowed. |
+| **Main advantage** | The callback never has to check `isParsing`: it does not run while a target the observer waits for is parsing. | Delivery timing, `observe()`, `takeRecords()`, and `disconnect()` all keep today's behavior; the option states that parse end is surfaced as a `childList` record. |
+| **Main concern** | [Deferred microtask delivery](#scheduling-and-ordering): the observer's records are held across intermediate microtask checkpoints (including inline `<script>`s). | An [empty fallback `childList` record](#parse-end-record) when no child arrived in the final chunk, plus checking `isParsing` in the callback and around `observe()`. |
 
 See [Comparing the options](#comparison) for the full trade-offs.
 
@@ -340,13 +340,13 @@ Each row is about an observer that waits for the element in question.
 ---
 
 <a id="option-2"></a>
-## Option 2: Empty `childList` on parse end (`emptyChildListOnParseEnd: true`)
+## Option 2: Parse-end `childList` (`parseEndChildList: true`)
 
-With `element.isParsing` alone, a `childList` observer already wakes up at parse end whenever the final chunk added at least one child—the only gap is when the end tag closes an empty element or arrives in a chunk after the last child. `emptyChildListOnParseEnd: true` in `MutationObserverInit` plugs that one gap explicitly: delivery timing is unchanged (records are delivered at every microtask checkpoint, including at chunk boundaries), and when an element observed with `emptyChildListOnParseEnd: true` [finishes parsing](#1-definition-of-parsing) with no `childList` record already pending for it, an empty `childList` record for that element is queued. Either way, the observer always gets a callback after `target.isParsing` has become `false`.
+With `element.isParsing` alone, a `childList` observer already receives a `childList` record at parse end whenever the final chunk added at least one child—the only gap is when the end tag closes an empty element or arrives in a chunk after the last child. `parseEndChildList: true` in `MutationObserverInit` closes that gap so parse end always produces a `childList` record: delivery timing is unchanged (records are delivered at every microtask checkpoint, including at chunk boundaries); if a `childList` record for the element is already pending when it [finishes parsing](#1-definition-of-parsing), that non-empty record is delivered as usual, and only if none is pending is an empty `childList` record queued. Either way, the observer always gets a callback with a `childList` record after `target.isParsing` has become `false`.
 
 - **No timing change, no buffering:** Nothing is held, so there is no per-registration hold state, no unbounded buffering for long-lived streams, and `takeRecords()` and `disconnect()` behave as today.
 - **`observe()` has no side effects:** If `target` is already parsed when `observe()` is called, no record is queued. Callers check `target.isParsing` at that point, as they would today check `childNodes`.
-- **Applies to the observed target's own `childList` only:** `emptyChildListOnParseEnd: true` requires `childList: true` and cannot be combined with `subtree: true`. Synthesizing empty `childList` records for every closing descendant would require the parser to report every element it closes, which is the per-element traffic that [Q1](#q1) avoids, and would flood subtree observers. Observers that need parse end for descendants observe each one, as in [Example 2.2](#example-2-2).
+- **Applies to the observed target's own `childList` only:** `parseEndChildList: true` requires `childList: true` and cannot be combined with `subtree: true`. Ensuring a `childList` record for every closing descendant would require the parser to report every element it closes, which is the per-element traffic that [Q1](#q1) avoids, and would flood subtree observers. Observers that need parse end for descendants observe each one, as in [Example 2.2](#example-2-2).
 
 ### Example usage
 
@@ -356,14 +356,14 @@ With `element.isParsing` alone, a `childList` observer already wakes up at parse
 ```js
 class CustomSelect extends HTMLElement {
   #mo = new MutationObserver(() => {
-    // Runs at every chunk, as today. The parse-end record guarantees a run
+    // Runs at every chunk, as today. parseEndChildList guarantees a run
     // after </custom-select>, even if no child arrived in the last chunk
     // (or at all). Also runs on subsequent dynamic DOM changes.
     if (!this.isParsing) this.#syncOptions();
   });
 
   connectedCallback() {
-    this.#mo.observe(this, { childList: true, emptyChildListOnParseEnd: true });
+    this.#mo.observe(this, { childList: true, parseEndChildList: true });
     // observe() schedules nothing: handle already-parsed elements here
     // (innerHTML, upgrade, createElement).
     if (!this.isParsing) this.#syncOptions();
@@ -393,7 +393,7 @@ const docObserver = new MutationObserver((records) => {
         // Opened and closed in the same chunk: enhance immediately.
         if (!node.isParsing) enhanceArticle(node);
         // Wait for </article> if still open, and observe ongoing mutations.
-        articleObserver.observe(node, { childList: true, emptyChildListOnParseEnd: true });
+        articleObserver.observe(node, { childList: true, parseEndChildList: true });
       }
     }
   }
@@ -406,28 +406,28 @@ docObserver.observe(document, { subtree: true, childList: true });
 
 ```webidl
 partial dictionary MutationObserverInit {
-  boolean emptyChildListOnParseEnd = false;
+  boolean parseEndChildList = false;
 };
 ```
 
 ### 2.1 Processing model
 
-- **Queuing:** When `target` finishes parsing, for each observer registered on `target` itself with `emptyChildListOnParseEnd: true`: if the observer's record queue contains no `childList` record whose target is `target`, queue the [empty `childList` record](#parse-end-record). It is delivered at the next microtask checkpoint like any other record.
-- **Only when needed:** If a usual `childList` record for `target` is already pending (for example because children arrived in the same chunk as the end tag), the observer will be called anyway and nothing is added. Pending records of other types, or for other targets, do not count. Records already delivered at an earlier checkpoint, or drained by `takeRecords()`, are no longer pending, so the guarantee is the same in every case: after `target` finishes parsing, the observer's queue holds at least one `childList` record for it.
-- **Later streams:** A later `el.streamHTML*()` call, or a `<template for>` patch into `el`, makes `el` parsing again. Its records are delivered per chunk as today, and another empty `childList` record is queued when the stream ends if none is pending.
-- **Option validation:** `emptyChildListOnParseEnd: true` with `subtree: true`, or with `childList: false`, throws a `TypeError`.
+- **Queuing:** When `target` finishes parsing, for each observer registered on `target` itself with `parseEndChildList: true`: if the observer's record queue contains no `childList` record whose target is `target`, queue the [empty fallback `childList` record](#parse-end-record). It is delivered at the next microtask checkpoint like any other record.
+- **Non-empty when children arrived in the final chunk:** If a usual `childList` record for `target` is already pending (for example because children arrived in the same chunk as the end tag), that non-empty `childList` record already covers parse end and nothing is added. Pending records of other types, or for other targets, do not count. Records already delivered at an earlier checkpoint, or drained by `takeRecords()`, are no longer pending, so the guarantee is the same in every case: after `target` finishes parsing, the observer's queue holds at least one `childList` record for it.
+- **Later streams:** A later `el.streamHTML*()` call, or a `<template for>` patch into `el`, makes `el` parsing again. Its records are delivered per chunk as today, and `parseEndChildList: true` again ensures a `childList` record when the stream ends.
+- **Option validation:** `parseEndChildList: true` without `childList: true`, or with `subtree: true`, throws a `TypeError`.
 - **Re-observing:** Calling `observe()` again for an observed target replaces the options as today, and queues nothing.
-- **Disconnection and removal:** After `observer.disconnect()` nothing is queued. An element removed from the document while still on the stack of open elements keeps its registration, so the record is still queued when the parser pops it. Elements discarded by the sanitizer never connect and never produce a record.
-- **Non-element targets:** For a `Document`, `DocumentFragment`, or `ShadowRoot` target, `emptyChildListOnParseEnd: true` has no effect.
+- **Disconnection and removal:** After `observer.disconnect()` nothing is queued. An element removed from the document while still on the stack of open elements keeps its registration, so the fallback record is still queued when the parser pops it if none is pending. Elements discarded by the sanitizer never connect and never produce a record.
+- **Non-element targets:** For a `Document`, `DocumentFragment`, or `ShadowRoot` target, `parseEndChildList: true` has no effect.
 
 <a id="parse-end-record"></a>
-### 2.2 The empty `childList` record
+### 2.2 The empty fallback `childList` record
 
-The record is `{ type: "childList", target, addedNodes: [], removedNodes: [], previousSibling: target.lastChild, nextSibling: null }`: a `childList` record that describes no change, named directly in the option so callers know what they are opting into.
+When children arrive in the same chunk as the end tag, the `childList` record delivered at parse end is the ordinary non-empty one. Only when no `childList` record for `target` is pending at parse end does Option 2 queue `{ type: "childList", target, addedNodes: [], removedNodes: [], previousSibling: target.lastChild, nextSibling: null }`: a `childList` record that describes no change.
 
-- **It is a wake-up, not a description.** Unlike options such as `connectedness: true` (which observe a distinct kind of mutation and emit their own record type), `emptyChildListOnParseEnd: true` exists only to cover the cases where no real `childList` record would trigger the callback at parse end: an empty element, or an end tag arriving in a chunk of its own. Whether it appears therefore depends on where chunk boundaries fall. (Option 1 covers the same cases by invoking the callback with an empty record list.)
+- **It is a fallback wake-up, not a separate event.** Unlike options such as `connectedness: true` (which observe a distinct kind of mutation and emit their own record type), `parseEndChildList: true` ensures `childList` observation covers parse end—using the pending `childList` record when there is one, and queuing an empty one only for an empty element or an end tag arriving in a chunk of its own. Whether the record at parse end is empty therefore depends on where chunk boundaries fall. (Option 1 covers the same empty-chunk cases by invoking the callback with an empty record list.)
 - **It is a normative DOM change.** [Queue a tree mutation record](https://dom.spec.whatwg.org/#queue-a-tree-mutation-record) asserts that `addedNodes` or `removedNodes` is non-empty; that assertion would be relaxed for records delivered only to observers that opted in. Option 1 does not need this. The `"start"` record in the [template `MutationObserver` explainer](./template-mutation-observer-explainer.md) does, and both should get the same answer.
-- **Callbacks should not look for it.** Since a parse end with pending records produces no empty `childList` record, code that needs parse end checks `target.isParsing` (as in the examples above) rather than looking for a record with two empty lists. The usual loops (`for (const r of records) handle(r.addedNodes)`) pass over it. Only observers that passed `emptyChildListOnParseEnd: true` ever see it.
+- **Callbacks should check `target.isParsing`, not `addedNodes.length === 0`.** Because the `childList` record at parse end is non-empty whenever children arrived in the final chunk, code that needs parse end checks `target.isParsing` (as in the examples above) rather than looking for a record with two empty lists. The usual loops (`for (const r of records) handle(r.addedNodes)`) pass over an empty record naturally. Only observers that passed `parseEndChildList: true` can ever receive an empty `childList` record.
 - **A dedicated record type** (for example `type: "parseEnd"`) is the main alternative; see [Alternatives Considered](#alternatives-considered) #6.
 
 ### 2.3 Other costs
@@ -438,40 +438,40 @@ The record is `{ type: "childList", target, addedNodes: [], removedNodes: [], pr
 
 ### 2.4 Scenarios
 
-`emptyChildList(target, prev = target.lastChild)` denotes the [empty `childList` record](#parse-end-record). In each row, `target` is observed with `{ childList: true, emptyChildListOnParseEnd: true }`.
+`emptyChildList(target, prev = target.lastChild)` denotes the [empty fallback `childList` record](#parse-end-record). In each row, `target` is observed with `{ childList: true, parseEndChildList: true }`.
 
 | Scenario | What the observer receives |
 |---|---|
-| **Multi-chunk** (`Chunk 1: <s-select><s-option>A</s-option>`, `Chunk 2: <s-option>B</s-option></s-select>`), observed in `connectedCallback()` | End of Chunk 1: `[addedNodes: [<s-option>A]]`, with `isParsing` still `true`. End of Chunk 2: `[addedNodes: [<s-option>B]]`, with `isParsing` now `false`. No parse-end record: a `childList` record was pending at `</s-select>`. |
+| **Multi-chunk** (`Chunk 1: <s-select><s-option>A</s-option>`, `Chunk 2: <s-option>B</s-option></s-select>`), observed in `connectedCallback()` | End of Chunk 1: `[addedNodes: [<s-option>A]]`, with `isParsing` still `true`. End of Chunk 2: `[addedNodes: [<s-option>B]]`, with `isParsing` now `false`. That non-empty `childList` record covers parse end; no empty fallback record is queued. |
 | **Only the end tag in the last chunk** (`Chunk 1: <s-select><s-option>A</s-option>`, `Chunk 2: </s-select>`) | End of Chunk 1: `[addedNodes: [<s-option>A]]`. End of Chunk 2: `[emptyChildList(<s-select>, <s-option>A)]`. This is the case `isParsing` alone cannot cover. |
 | **Empty element** (`<s-select></s-select>`, in one chunk or two), observed in `connectedCallback()` | `[emptyChildList(<s-select>, null)]` at the end of the chunk containing `</s-select>`. |
-| **Already parsed when `observe()` runs** (`createElement`, `innerHTML`, late upgrade, or closed earlier in the same chunk) | No parse-end record. Later mutations are delivered as today. |
+| **Already parsed when `observe()` runs** (`createElement`, `innerHTML`, late upgrade, or closed earlier in the same chunk) | Nothing queued by `observe()`. Later mutations are delivered as today. |
 | **Inline `<script>` inside the open element** (`<s-select><s-option>A</s-option><script>...</script></s-select>`) | `[addedNodes: [<s-option>A], addedNodes: [<script>]]` at the `</script>` microtask checkpoint, as today, with `isParsing` still `true`. Nothing is pending at `</s-select>`, so `[emptyChildList(<s-select>, <script>)]` at the next checkpoint. |
-| **`takeRecords()` while parsing** | Returns the pending records, as today. If no further `childList` record is queued before parse end, the parse-end record is queued then. |
+| **`takeRecords()` while parsing** | Returns the pending records, as today. If no further `childList` record is queued before parse end, `emptyChildList(target)` is queued then. |
 | **`const w = feed.streamHTML()`** on an already-parsed, observed `feed`; `w.write(...)` across tasks; `w.close()` | Records per chunk as today. `w.close()` queues `emptyChildList(feed)` unless a `childList` record for `feed` is still pending. |
-| **Implied end tags, EOF, `window.stop()`, aborted stream** | Same as an explicit end tag, for each observed element popped: a parse-end record unless a `childList` record for it is pending. |
+| **Implied end tags, EOF, `window.stop()`, aborted stream** | Same as an explicit end tag, for each observed element popped: `emptyChildList(el)` unless a `childList` record for `el` is pending. |
 | **Removed mid-parse** (`box.remove()` in an inline script, observer not disconnected) | Records for children the parser keeps appending to the detached `box`. When `</x-box>` pops it, `emptyChildList(box)` unless one of those is pending. |
-| **Adoption agency** (`<x-b><x-i>Bold </x-b>italic</x-i>`) | The original `<x-i>` and `<x-b>` finish parsing at `</x-b>`, each with a parse-end record unless a `childList` record for it is pending. The new `<x-i>` created for `italic` is a distinct element, with no registration unless it is observed separately. |
-| **Observing `outer` (`{ childList: true, subtree: true }`) and `inner` (`{ childList: true, emptyChildListOnParseEnd: true }`) on the same observer** (compare [§1.4](#scheduling-and-ordering)) | The `"x"` record once, at the `</script>` microtask checkpoint, as today. No empty `childList` record: `inner` had already closed when it was observed, and `outer`'s registration cannot ask for one. |
+| **Adoption agency** (`<x-b><x-i>Bold </x-b>italic</x-i>`) | The original `<x-i>` and `<x-b>` finish parsing at `</x-b>`, each getting `emptyChildList(el)` unless a `childList` record for it is pending. The new `<x-i>` created for `italic` is a distinct element, with no registration unless it is observed separately. |
+| **Observing `outer` (`{ childList: true, subtree: true }`) and `inner` (`{ childList: true, parseEndChildList: true }`) on the same observer** (compare [§1.4](#scheduling-and-ordering)) | The `"x"` record once, at the `</script>` microtask checkpoint, as today. No empty `childList` record: `inner` had already closed when it was observed, and `outer`'s registration cannot ask for one. |
 
 ---
 
 <a id="comparison"></a>
 ## Comparing the options
 
-| | Option 1: `waitForParser()` | Option 2: `emptyChildListOnParseEnd: true` |
+| | Option 1: `waitForParser()` | Option 2: `parseEndChildList: true` |
 |---|---|---|
 | **Delivery timing** | Changed for an observer that waits: its whole queue is held across intermediate microtask checkpoints while a waited target is parsing. | Unchanged. |
 | **Callbacks during parsing** | None for an observer that waits for the target; the callback never checks `isParsing`. | One per chunk, as today; the callback checks `isParsing`. |
-| **Records at parse end** | Everything the observer queued while held, in mutation order, in one batch. | Only what was queued since the last checkpoint, or the parse-end record if that is nothing. |
+| **Records at parse end** | Everything the observer queued while held, in mutation order, in one batch. | Whatever `childList` record was queued since the last checkpoint, or an empty fallback `childList` record if none was. |
 | **`observe()`** | Unchanged. | One new option; no side effects. |
 | **Already-parsed targets** | No callback is guaranteed; the caller checks `isParsing` after `waitForParser()`. | Caller checks `isParsing` after `observe()`. |
 | **`subtree: true`** | Allowed. | `TypeError`. |
-| **Several targets on one observer** | The observer waits for all of its waited targets, so one still-parsing target holds the records for the others. Elements that complete independently need one observer each ([§1.4](#scheduling-and-ordering)). | Multiple targets and mixing `emptyChildListOnParseEnd: true` / `false` (including with a normal `subtree: true` registration) allowed; each record is delivered once at today's timing. |
-| **Empty `childList` record** | Never. After a wait, the callback can be invoked with an empty record list. | Whenever no `childList` record for the target is pending at parse end. |
+| **Several targets on one observer** | The observer waits for all of its waited targets, so one still-parsing target holds the records for the others. Elements that complete independently need one observer each ([§1.4](#scheduling-and-ordering)). | Multiple targets and mixing `parseEndChildList: true` / `false` (including with a normal `subtree: true` registration) allowed; each record is delivered once at today's timing. |
+| **Empty `childList` record** | Never. After a wait, the callback can be invoked with an empty record list. | Only when no `childList` record for the target is pending at parse end. |
 | **Long-lived streams** | Holds the observer's whole queue until the stream ends; aborting `signal`, or `takeRecords()`, is the escape hatch ([§1.3](#13-long-lived-streams--unbounded-buffering)). | Nothing buffered. |
 | **`takeRecords()` / `disconnect()`** | `takeRecords()` drains the held queue as today; `disconnect()` also removes the waits ([§1.2](#guaranteed-callback)). | As today. |
-| **New error conditions** | None. | Two `TypeError`s (`subtree: true`, `childList: false`). |
+| **New error conditions** | None. | Two `TypeError`s (`subtree: true`, missing `childList: true`). |
 | **Spec and implementation surface** | A list of waits per observer, one check in the notify step, scheduling at parse end, and invoking the callback with an empty list. | One conditional queuing step at parse end, one validation rule, empty fallback record. |
 
 In short: Option 1 keeps half-parsed children out of the callback without touching `observe()`, with no new error conditions and no synthesized record. Its cost is that an observer's records are held across microtask checkpoints (including inline `<script>`s), that each independently completing element needs its own observer, and that already-parsed elements are handled at the call site. Option 2 keeps `MutationObserver`'s delivery timing completely intact, at the cost of an empty `childList` wake-up record, per-chunk callbacks that the author filters with `isParsing`, and the same call-site check.
@@ -520,7 +520,7 @@ The central objection in [WICG/webcomponents#809](https://github.com/WICG/webcom
 
 <a id="q1"></a>
 ### Q1: Does either option, or `element.isParsing`, add overhead to the HTML parser or delay rendering?
-No. The HTML parser inserts nodes into the live DOM immediately as bytes arrive—layout, rendering, preload scanning, and other observers are never delayed. Option 1 leaves an observer's records in its queue while a target it waits for is parsing; Option 2 queues at most one extra record when a target observed with `emptyChildListOnParseEnd: true` finishes parsing. Both are gated on state the parser already maintains (stack of open elements and active streaming fragment parsers).
+No. The HTML parser inserts nodes into the live DOM immediately as bytes arrive—layout, rendering, preload scanning, and other observers are never delayed. Option 1 leaves an observer's records in its queue while a target it waits for is parsing; Option 2 queues at most one extra record when a target observed with `parseEndChildList: true` finishes parsing with no pending `childList` record. Both are gated on state the parser already maintains (stack of open elements and active streaming fragment parsers).
 
 **Off-main-thread / tree-op parsers (e.g., Gecko):** An engine that separates parsing from main-thread DOM construction via queued tree operations does **not** need to emit an "end-parse" operation or flip an `isParsing` bit on every element's opening and closing tags ([w3c/csswg-drafts#12578 (comment)](https://github.com/w3c/csswg-drafts/issues/12578#issuecomment-3209690246)). Any element that opens and closes without an intervening parser batch flush (chunk or timer boundary), `<script>`, or custom element reaction can never be observed by script while open—by the time any `MutationObserver` or script can hold a reference to that element and read `el.isParsing`, it is already parsed (`false`, the default). The same marking tells the main thread which closing elements can have a held batch to flush (Option 1) or a parse-end record to queue (Option 2). The parser only needs to mark the $O(\text{stack depth})$ ancestor elements that are actually on the stack of open elements *at* a batch flush, `<script>`, or custom element reaction (and later emit a close op for those few nodes, which can itself be batched up to the next such boundary).
 
@@ -599,7 +599,7 @@ A wait on a parsing target is an explicit request to be told when it completes, 
     If a document is disconnected or its parser aborts while an observed target is still parsing, parsing ends (as at EOF/abort) and standard `MutationObserver` lifecycle rules apply; under Option 1, calling `observer.disconnect()` discards any buffered records.
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
-    Option 1 adds none. Option 2: passing `emptyChildListOnParseEnd: true` with `childList: false` or with `subtree: true` throws a `TypeError`, matching existing `MutationObserver.prototype.observe()` option validation.
+    Option 1 adds none. Option 2: passing `parseEndChildList: true` without `childList: true` or with `subtree: true` throws a `TypeError`, matching existing `MutationObserver.prototype.observe()` option validation.
 
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.
