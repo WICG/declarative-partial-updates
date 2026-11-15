@@ -1,26 +1,26 @@
-# Explainer: Parse-End Notification for `MutationObserver` and `element.isParsing`
+# Explainer: Parser-Aligned `MutationObserver` and `element.isParsing`
 
 ## Introduction
 
 The HTML parser tracks [which elements are still open](https://html.spec.whatwg.org/multipage/parsing.html#stack-of-open-elements) and when each one closes (by an explicit end tag, an implied end tag, or EOF). Built-in elements like `<script>`, `<style>`, and `<object>` already rely on this state to act only once the parser finishes them.
 
-`MutationObserver`, however, only sees the start tag: when markup streams across network chunks, the parser inserts an element on its opening tag and yields before its closing tag arrives, flushing half-built subtrees to observers at intermediate microtask checkpoints. By contrast, when DOM is built synchronously in JavaScript (`el.append(a); el.append(b);`), `MutationObserver` naturally batches all mutations in the task and delivers them together at the microtask checkpoint.
+`MutationObserver`, however, is chunk-aligned rather than parser-aligned: when markup streams across network chunks, the parser inserts an element on its opening tag and yields before its closing tag arrives, flushing half-built subtrees to observers at arbitrary intermediate microtask checkpoints. By contrast, when DOM is built synchronously in JavaScript (`el.append(a); el.append(b);`), `MutationObserver` naturally batches all mutations in the task and delivers them together at the microtask checkpoint.
 
-This explainer proposes a synchronous `element.isParsing` getter ([whatwg/html#12200](https://github.com/whatwg/html/issues/12200)) and a way for a `MutationObserver` to learn that an observed element has finished parsing:
+This explainer proposes a synchronous `element.isParsing` getter ([whatwg/html#12200](https://github.com/whatwg/html/issues/12200)) and a way to align `MutationObserver` delivery with HTML parsing (without delaying DOM insertion itself—the parser still mutates the live DOM immediately):
 
 1. **The browser already tracks this state** (the parser's stack of open elements and active streaming fragment parsers—`streamHTML*` and `<template for>` patches), so exposing it introduces no new parser concepts or DOM tree buffering.
 2. **Server-driven and streaming apps already depend on it**, reconstructing it today with sentinel nodes, inline scripts, ancestor `nextSibling` walks, regexes over raw HTML, and per-element `subtree: true` observers at measurable main-thread and wire cost (see [Existing workarounds](#existing-workarounds)).
-3. **It fits the existing reactive model.** Rather than introducing a one-shot hook that tempts authors to ignore subsequent dynamic mutations ([WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809)), parse end is reported through `MutationObserver` itself, which keeps observing future DOM changes and streams.
+3. **It fits the existing reactive model.** Rather than introducing a one-shot hook that tempts authors to ignore subsequent dynamic mutations ([WICG/webcomponents#809](https://github.com/WICG/webcomponents/issues/809)), alignment lives on `MutationObserver` itself, which keeps observing future DOM changes and streams.
 
 There are two candidate designs for the `MutationObserver` part, with no decision between them yet (discussion in [whatwg/html#13198](https://github.com/whatwg/html/issues/13198)). Both include `element.isParsing`.
 
-| | [Option 1: batched delivery](#option-1) | [Option 2: parse-end `childList`](#option-2) |
+| | [Option 1: parser-aligned delivery](#option-1) | [Option 2: parse-end `childList`](#option-2) |
 |---|---|---|
-| **API** | `observer.waitForParser({ target, signal })`, next to an unchanged `observe()` | `observe(target, { childList: true, parseEndChildList: true })` |
-| **Delivery timing** | The observer delivers nothing while a target it waits for is parsing, then delivers its whole queue in mutation order. | Unchanged from today. |
-| **Parse-end signal** | The held batch. If `target` was parsing when `waitForParser()` was called, the callback is invoked at parse end even with no records. No record is synthesized. | The first callback in which `target.isParsing` is `false`. Guarantees a `childList` record on parse end: uses the pending `childList` record when the final chunk added children, or queues an empty fallback one otherwise. `observe()` has no side effects. |
-| **`subtree: true` & several targets** | No restrictions and no new `TypeError`s. The observer is held as a whole, so elements that complete independently need separate observers. | `subtree: true` is a `TypeError`. Multiple targets and mixing `parseEndChildList: true` / `false` are allowed. |
-| **Main advantage** | The callback never has to check `isParsing`: it does not run while a target the observer waits for is parsing. | Delivery timing, `observe()`, `takeRecords()`, and `disconnect()` all keep today's behavior; the option states that parse end is surfaced as a `childList` record. |
+| **API** | `observer.alignWithParser(target, { signal })`, next to an unchanged `observe()` | `observe(target, { childList: true, parseEndChildList: true })` |
+| **Delivery timing** | Full alignment: the observer delivers nothing while a target it is aligned with is parsing, then delivers its whole queue in mutation order. | Unchanged during parsing (end-only alignment). |
+| **Parse-end signal** | The held batch. If `target` was parsing when `alignWithParser()` was called, the callback is invoked at parse end even with no records. No record is synthesized. | The first callback in which `target.isParsing` is `false`. Guarantees a `childList` record on parse end: uses the pending `childList` record when the final chunk added children, or queues an empty fallback one otherwise. `observe()` has no side effects. |
+| **`subtree: true` & several targets** | No restrictions and no option-combination `TypeError`s. The observer is held as a whole, so elements that complete independently need separate observers. | `subtree: true` is a `TypeError`. Multiple targets and mixing `parseEndChildList: true` / `false` are allowed. |
+| **Main advantage** | The callback never has to check `isParsing`: it does not run while an aligned target is parsing. | Delivery timing, `observe()`, `takeRecords()`, and `disconnect()` all keep today's behavior; the option states that parse end is surfaced as a `childList` record. |
 | **Main concern** | [Deferred microtask delivery](#scheduling-and-ordering): the observer's records are held across intermediate microtask checkpoints (including inline `<script>`s). | An [empty fallback `childList` record](#parse-end-record) when no child arrived in the final chunk, plus checking `isParsing` in the callback and around `observe()`. |
 
 See [Comparing the options](#comparison) for the full trade-offs.
@@ -65,7 +65,7 @@ Because element parse completion isn't exposed to `MutationObserver`, server-dri
 
 ### Goals
 
-- **Let a `MutationObserver` act on complete children:** Tell an observer when an observed `target` has finished [parsing](#1-definition-of-parsing), so that it can process the target's children once instead of at every chunk boundary. Option 1 holds the observer's records until then; Option 2 keeps today's delivery and queues a record at that point.
+- **Align `MutationObserver` with complete elements:** Let an observer process an observed `target`'s children once it has finished [parsing](#1-definition-of-parsing), instead of only reacting to arbitrary chunk boundaries. Option 1 aligns the observer's delivery to parse end; Option 2 keeps chunk-by-chunk delivery and guarantees a `childList` record at parse end.
 - **Cover empty elements, already-parsed elements, and later changes with the same observer:** Streamed elements, empty elements (`<x-el></x-el>`), imperative/already-parsed elements, and subsequent dynamic mutations and streams.
 - **Expose synchronous parser-open state (`element.isParsing`) with zero per-element parser traffic:** Allow script and observers to check whether an element is currently parsing without emitting per-element open/close operations for elements that open and close within a parser batch.
 - Eliminate the client-side workarounds above with **zero cost when unused** and **no new properties on `MutationRecord`**.
@@ -73,7 +73,7 @@ Because element parse completion isn't exposed to `MutationObserver`, server-dri
 ### Non-Goals
 
 - **Discouraging dynamic mutation handling:** Observers remain active for ongoing DOM mutations after parse end, and for future streams into the target.
-- **Holding back DOM tree mutations themselves:** Nodes and attribute changes still apply to the DOM immediately so rendering, preload scanning, and other observers are unaffected. Option 1 only holds `MutationRecord` delivery for an observer that called `waitForParser()`; Option 2 holds nothing.
+- **Holding back DOM tree mutations themselves:** Nodes and attribute changes still apply to the DOM immediately so rendering, preload scanning, and other observers are unaffected. Option 1 only aligns `MutationRecord` delivery for an observer that called `alignWithParser()`; Option 2 holds nothing.
 - **Tracking non-element nodes**, or **replacing `PerformanceEntry` for sub-microtask RUM timing**.
 
 ---
@@ -100,17 +100,17 @@ Only `Element` nodes can be parsing (see [Considered Extensions](#considered-ext
 ---
 
 <a id="option-1"></a>
-## Option 1: Batched delivery (`waitForParser()`)
+## Option 1: Parser-aligned delivery (`alignWithParser()`)
 
-A new method on `MutationObserver`. `observer.waitForParser({ target, signal })` asks the observer to hold delivery while `target` is parsing. `observe()` and its options are unchanged.
+A new method on `MutationObserver`. `observer.alignWithParser(target, { signal })` aligns the observer's delivery with the parser on `target`, holding delivery while `target` is parsing. `observe()` and its options are unchanged.
 
-The main advantage of this option is that the callback never has to check `isParsing`: it does not run while a target the observer waits for is still parsing, so every time it runs, that target's children are complete. The one check left is at the call site, for elements that were already parsed (see [§1.2](#guaranteed-callback)).
+The main advantage of this option is that the callback never has to check `isParsing`: it does not run while any target the observer is aligned with is still parsing, so every time it runs, that target's children are complete. The one check left is at the call site, for elements that were already parsed (see [§1.2](#guaranteed-callback)).
 
-- **The whole observer is held:** While any target the observer waits for is parsing, the observer delivers nothing. Its record queue stays as it is, for every node it observes, with or without `subtree: true`. When no waited target is parsing, the queue is delivered in one callback, in mutation order.
-- **Standing:** A wait lasts until its `signal` is aborted or `disconnect()` is called. A later `streamHTML*()` call or `<template for>` patch into `target` holds the observer again, with no further call.
-- **Several targets:** An observer can wait for several targets, one call each. It delivers only when none of them is parsing.
-- **Guaranteed callback after a wait:** If `target` is parsing when `waitForParser()` is called, the callback is invoked when the wait ends, even if no record was queued. If `target` is not parsing, the call schedules nothing and guarantees nothing.
-- **Other observers are unaffected**, so they can fire earlier than an observer that waits (see [§1.1](#11-holding-the-whole-observer)).
+- **The whole observer is held:** While any target the observer is aligned with is parsing, the observer delivers nothing. Its record queue stays as it is, for every node it observes, with or without `subtree: true`. When no aligned target is parsing, the queue is delivered in one callback, in mutation order.
+- **Standing:** An alignment lasts until its `signal` is aborted or `disconnect()` is called. A later `streamHTML*()` call or `<template for>` patch into `target` holds the observer again, with no further call.
+- **Several targets:** An observer can align with several targets, one call each. It delivers only when none of them is parsing.
+- **Guaranteed callback when aligned during parsing:** If `target` is parsing when `alignWithParser()` is called, a flush is scheduled when parsing ends, invoking the callback even if no record was queued. If `target` is not parsing, the call schedules nothing right now (the alignment still stands for future streams).
+- **Other observers are unaffected**, so they can fire earlier than an aligned observer (see [§1.1](#11-holding-the-whole-observer)).
 
 ### Example usage
 
@@ -128,8 +128,8 @@ class CustomSelect extends HTMLElement {
 
   connectedCallback() {
     this.#mo.observe(this, { childList: true });
-    this.#mo.waitForParser({ target: this });
-    // Nothing is guaranteed for an element that is already parsed
+    this.#mo.alignWithParser(this);
+    // Nothing is scheduled for an element that is already parsed
     // (innerHTML, upgrade, createElement): handle it here.
     if (!this.isParsing) this.#syncOptions();
   }
@@ -148,7 +148,7 @@ class CustomSelect extends HTMLElement {
 function enhanceWhenParsed(article) {
   const observer = new MutationObserver(() => enhanceArticle(article));
   observer.observe(article, { childList: true });
-  observer.waitForParser({ target: article });
+  observer.alignWithParser(article);
 }
 
 // Discovers <article> elements without delaying incremental observation:
@@ -160,7 +160,7 @@ const docObserver = new MutationObserver((records) => {
           // Opened and closed in the same chunk: enhance immediately
           enhanceArticle(node);
         } else {
-          // Split across chunks: wait for </article>, then keep observing
+          // Split across chunks: align with </article>, then keep observing
           enhanceWhenParsed(node);
         }
       }
@@ -175,11 +175,10 @@ docObserver.observe(document, { subtree: true, childList: true });
 
 ```webidl
 partial interface MutationObserver {
-  undefined waitForParser(MutationObserverWaitOptions options);
+  undefined alignWithParser(Element target, optional MutationObserverAlignOptions options = {});
 };
 
-dictionary MutationObserverWaitOptions {
-  required Element target;
+dictionary MutationObserverAlignOptions {
   AbortSignal signal;
 };
 ```
@@ -188,45 +187,45 @@ Only `Element` nodes can be parsing, so `target` is an `Element`. It does not ha
 
 ### 1.1 Holding the whole observer
 
-- **One check at delivery:** [Notify mutation observers](https://dom.spec.whatwg.org/#notify-mutation-observers) skips an observer that waits for a parsing target: its record queue is not emptied and its callback is not invoked. Queuing records is unchanged. When a waited target finishes parsing and the observer no longer waits for any parsing target, the observer is scheduled for the next mutation observer microtask.
-- **Everything in the queue is held:** parser insertions, script mutations (`append()`, `remove()`, `setAttribute()`), records for descendants with `subtree: true`, and records for any other node the observer observes. An observer is therefore the unit that completes together. Elements that complete independently need one observer each (as in [Example 1.2](#example-1-2)); a shared observer delivers nothing for any of its targets while one waited target is parsing.
+- **One check at delivery:** [Notify mutation observers](https://dom.spec.whatwg.org/#notify-mutation-observers) skips an observer that is aligned with any parsing target: its record queue is not emptied and its callback is not invoked. Queuing records is unchanged. When an aligned target finishes parsing and no other aligned target is still parsing, the observer is scheduled for the next mutation observer microtask.
+- **Everything in the queue is held:** parser insertions, script mutations (`append()`, `remove()`, `setAttribute()`), records for descendants with `subtree: true`, and records for any other node the observer observes. An observer is therefore the unit that completes together. Elements that complete independently need one observer each (as in [Example 1.2](#example-1-2)); a shared observer delivers nothing for any of its targets while one aligned target is parsing.
 - **Order within the observer is always mutation order**, because its one queue is held and released as a whole.
-- **Order across observers changes:** observers that wait for nothing deliver at every microtask checkpoint in creation order, as today, so they fire earlier than an observer that is held:
-  - `docObserver` above fires at chunk 1's microtask checkpoint, while an observer waiting for an unclosed element is held until chunk 2.
-  - Nested components that each wait for themselves complete **bottom-up** as end tags arrive: `<s-option>`'s observer fires in chunk 1 as soon as `</s-option>` is seen, *before* its parent `<s-select>`'s earlier-created observer fires at `</s-select>` in chunk 2.
-- **`signal`:** Aborting it removes that wait. If the observer then waits for no parsing target, its queued records are delivered at the next microtask checkpoint. Passing an already-aborted signal has no effect. A target can be waited for more than once; it holds the observer while any of those waits is not aborted.
+- **Order across observers changes:** unaligned observers deliver at every microtask checkpoint in creation order, as today, so they fire earlier than an observer that is held:
+  - `docObserver` above fires at chunk 1's microtask checkpoint, while an observer aligned with an unclosed element is held until chunk 2.
+  - Nested components that each align their own observer with themselves complete **bottom-up** as end tags arrive: `<s-option>`'s observer fires in chunk 1 as soon as `</s-option>` is seen, *before* its parent `<s-select>`'s earlier-created observer fires at `</s-select>` in chunk 2.
+- **`signal`:** Aborting it removes that alignment. If the observer is then aligned with no parsing target, its queued records are delivered at the next microtask checkpoint. Passing an already-aborted signal has no effect. A target can be aligned more than once; it holds the observer while any of those alignments is not aborted.
 - **Removed subtrees:** The notify step also removes the observer's transient registered observers. For a held observer that moves with the delivery, so mutations in a subtree removed while held are recorded until then, as they are until the next delivery today.
 
 <a id="guaranteed-callback"></a>
 ### 1.2 The guaranteed callback
 
-Today the callback is invoked only when the record queue is not empty. A wait adds one case.
+Today the callback is invoked only when the record queue is not empty. Aligning with a parsing target adds one case.
 
-- **At parse end:** When a target the observer was waiting for finishes parsing (end tag popped, implied end tag, EOF, parser abort, or the active stream/patch closing or aborting), and the observer no longer waits for any parsing target, the callback is invoked at the next microtask checkpoint: with the held records, or with an empty list if there are none. That covers `<my-widget></my-widget>` and an end tag that arrives in a chunk of its own.
-- **No synthesized record:** The record list can be empty. `childList` records still always add or remove a node, and the assertion in [queue a tree mutation record](https://dom.spec.whatwg.org/#queue-a-tree-mutation-record) is untouched. Only observers that called `waitForParser()` can receive an empty list, and the usual loops over `records` handle it.
-- **Already parsed:** If `target` is not parsing when `waitForParser()` is called (a custom element upgraded after parsing, `innerHTML` / `setHTML`, `document.createElement()`, or a node that closed earlier in the same chunk), nothing is scheduled. Like `observe()`, the call has no immediate effect. Authors check `isParsing` once at the call site (as in [Example 1.1](#example-1-1)). The wait still stands for later streams.
+- **At parse end:** When an aligned target finishes parsing (end tag popped, implied end tag, EOF, parser abort, or the active stream/patch closing or aborting), and no other aligned target is still parsing, the callback is invoked at the next microtask checkpoint: with the held records, or with an empty list if there are none. That covers `<my-widget></my-widget>` and an end tag that arrives in a chunk of its own.
+- **No synthesized record:** The record list can be empty. `childList` records still always add or remove a node, and the assertion in [queue a tree mutation record](https://dom.spec.whatwg.org/#queue-a-tree-mutation-record) is untouched. Only observers that called `alignWithParser()` can receive an empty list, and the usual loops over `records` handle it.
+- **Already parsed:** If `target` is not parsing when `alignWithParser()` is called (a custom element upgraded after parsing, `innerHTML` / `setHTML`, `document.createElement()`, or a node that closed earlier in the same chunk), nothing is scheduled. Like `observe()`, the call has no immediate effect. Authors check `isParsing` once at the call site (as in [Example 1.1](#example-1-1)). The alignment still stands for later streams.
 - **Later streams:** A later `el.streamHTML*()` call, or a `<template for>` patch into `el`, makes `el` parsing again. The observer is held until it ends, and that parse end also invokes the callback, with or without records.
-- **Several targets:** The callback is invoked once, when the last waited target finishes parsing.
+- **Several targets:** The callback is invoked once, when the last aligned target finishes parsing.
 - **`takeRecords()`:** Drains and returns the queue as today, including held records. The callback at parse end is still guaranteed, with any later records or an empty list.
-- **`disconnect()`:** Empties the queue as today and also removes the observer's waits, so nothing fires. A component that disconnects in `disconnectedCallback` calls `observe()` and `waitForParser()` again in `connectedCallback`.
-- **Aborting a wait is not a parse end:** it releases queued records, but invokes nothing if there are none.
-- **No validation:** There is no combination of arguments that throws, and no dependency on what the observer observes. Elements discarded by the sanitizer never connect and never fire.
+- **`disconnect()`:** Empties the queue as today and also removes the observer's alignments, so nothing fires. A component that disconnects in `disconnectedCallback` calls `observe()` and `alignWithParser()` again in `connectedCallback`.
+- **Aborting an alignment is not a parse end:** it releases queued records, but invokes nothing if there are none.
+- **No option-combination errors:** Beyond standard Web IDL argument conversion (`Element` and `AbortSignal`), no combination of options or `observe()` registrations throws. Elements discarded by the sanitizer never connect and never fire.
 
 ### 1.3 Long-lived streams & unbounded buffering
 
-The observer is held as long as a waited target is parsing. For a long-lived stream (such as an LLM chat response streamed into an element through `streamHTML()` for minutes), the observer holds **every** record it queues until the stream ends. That is by design, but authors should know about it:
+The observer is held as long as an aligned target is parsing. For a long-lived stream (such as an LLM chat response streamed into an element through `streamHTML()` for minutes), the observer holds **every** record it queues until the stream ends. That is by design, but authors should know about it:
 
-- **Waiting is the wrong choice for progressively rendered targets.** If a component should react to content as it arrives, do not call `waitForParser()` for that target (or use `activeTemplateAttributeFilter` for `<template for>` patches; see the [template `MutationObserver` explainer](./template-mutation-observer-explainer.md)).
-- **`signal` is the escape hatch.** Aborting it returns the observer to delivery at every microtask checkpoint. `takeRecords()` drains the held records at any time without ending the wait.
+- **Parser alignment is the wrong choice for progressively rendered targets.** If a component should react to content as it arrives, do not call `alignWithParser()` for that target (or use `activeTemplateAttributeFilter` for `<template for>` patches; see the [template `MutationObserver` explainer](./template-mutation-observer-explainer.md)).
+- **`signal` is the escape hatch.** Aborting it returns the observer to delivery at every microtask checkpoint. `takeRecords()` drains the held records at any time without removing the alignment.
 - **Implementations may store held records compactly** (for example by coalescing adjacent `childList` records for the same target), since only the final batch can be observed.
 
 <a id="overlapping-registrations"></a>
 <a id="scheduling-and-ordering"></a>
 ### 1.4 Overlapping registrations, and remaining trade-offs
 
-#### Why the hold belongs to the observer
+#### Why alignment belongs to the observer
 
-A mutation record is queued at most once per observer, even when it matches several of that observer's registrations ([queue a mutation record](https://dom.spec.whatwg.org/#queue-a-mutation-record)). If holding were decided per registration (as with an `observe()` option), two registrations could match the same record while disagreeing on whether to hold it. Holding the observer as a whole leaves nothing to disagree about:
+A mutation record is queued at most once per observer, even when it matches several of that observer's registrations ([queue a mutation record](https://dom.spec.whatwg.org/#queue-a-mutation-record)). If holding were decided per registration (as with an `observe()` option), two registrations could match the same record while disagreeing on whether to hold it. Aligning the observer as a whole leaves nothing to disagree about:
 
 ```html
 <div id="outer">
@@ -235,7 +234,7 @@ A mutation record is queued at most once per observer, even when it matches seve
     const mo = new MutationObserver(console.log);
     mo.observe(outer, { childList: true, subtree: true });
     mo.observe(inner, { childList: true });
-    mo.waitForParser({ target: outer });
+    mo.alignWithParser(outer);
     inner.append("x");
   </script>
   <!-- network pause -->
@@ -246,10 +245,10 @@ When the script runs, `outer` is still parsing and `inner` has already closed. T
 
 #### Remaining trade-offs of Option 1
 
-- **Deferred microtask delivery & mid-parse script mutations:** Today, every record in a `MutationObserver`'s queue is delivered at the very next microtask checkpoint. Under Option 1, a held observer keeps its records across chunk boundaries and inline-`<script>` microtask checkpoints. If an inline `<script>` inside `<outer>` mutates the tree, an observer waiting for `outer` holds that record across any network pause until `</div>` rather than delivering it after `</script>`.
-- **One observer per element that completes independently:** A shared observer cannot report a finished element while another waited element is still parsing.
-- **Already-parsed targets take a second code path:** Nothing is guaranteed for them, so setup runs from the call site. `body.append(s); s.append(a, b);` runs setup in `connectedCallback` and again from the ordinary mutation callback.
-- **The callback can receive an empty record list** after a wait.
+- **Deferred microtask delivery & mid-parse script mutations:** Today, every record in a `MutationObserver`'s queue is delivered at the very next microtask checkpoint. Under Option 1, a held observer keeps its records across chunk boundaries and inline-`<script>` microtask checkpoints. If an inline `<script>` inside `<outer>` mutates the tree, an observer aligned with `outer` holds that record across any network pause until `</div>` rather than delivering it after `</script>`.
+- **One observer per element that completes independently:** A shared observer cannot report a finished element while another aligned element is still parsing.
+- **Already-parsed targets take a second code path:** Nothing is scheduled for them, so setup runs from the call site. `body.append(s); s.append(a, b);` runs setup in `connectedCallback` and again from the ordinary mutation callback.
+- **The callback can receive an empty record list** at parse end when no mutations were queued while held.
 
 [Option 2](#option-2) avoids changing microtask delivery timing, at the cost of checking `isParsing` in the callback as well as at the `observe()` call site.
 
@@ -260,12 +259,12 @@ The tables below show what a `MutationObserver` receives in each scenario. `[]` 
 
 #### 1.5.1 Multi-chunk streaming & nested bottom-up ordering
 
-`<s-select>` and `<s-option>` each have their own observer and call `this.#mo.observe(this, { childList: true })` and `this.#mo.waitForParser({ target: this })` in `connectedCallback()`, while `docObserver` observes `document` with `{ childList: true, subtree: true }` and waits for nothing:
+`<s-select>` and `<s-option>` each have their own observer and call `this.#mo.observe(this, { childList: true })` and `this.#mo.alignWithParser(this)` in `connectedCallback()`, while `docObserver` observes `document` with `{ childList: true, subtree: true }` and is not aligned with any target:
 - **Chunk 1:** `<s-select><s-option>A</s-option>`
 - **Chunk 2:** `<s-option>B</s-option></s-select>`
 - **Later task:** `select.append(optC)`
 
-| Checkpoint | `docObserver` (no wait) | `<s-option>A`'s observer (waits for itself) | `<s-select>`'s observer (waits for itself) |
+| Checkpoint | `docObserver` (unaligned) | `<s-option>A`'s observer (aligned with itself) | `<s-select>`'s observer (aligned with itself) |
 |---|---|---|---|
 | **End of Chunk 1** | **Fires:** `addedNodes: [<s-select>]`, `addedNodes: [<s-option>A]`, `addedNodes: ["A"]`. | **Fires:** `[addedNodes: ["A"]]` because `</s-option>` closed in Chunk 1—even though `<s-select>`'s observer was created first. | **Held:** `<s-select>` is still on the stack of open elements (`addedNodes: [<s-option>A]` stays queued). |
 | **End of Chunk 2** | **Fires:** `addedNodes: [<s-option>B]`, `addedNodes: ["B"]`. | *(No changes)* | **Fires once** with all held records from both chunks: `[addedNodes: [<s-option>A], addedNodes: [<s-option>B]]`. |
@@ -273,9 +272,9 @@ The tables below show what a `MutationObserver` receives in each scenario. `[]` 
 
 #### 1.5.2 Empty elements, `createElement`, `innerHTML`, and late custom-element upgrades
 
-When `<s-select>` calls `this.#mo.observe(this, { childList: true })` and `this.#mo.waitForParser({ target: this })` in `connectedCallback()`:
+When `<s-select>` calls `this.#mo.observe(this, { childList: true })` and `this.#mo.alignWithParser(this)` in `connectedCallback()`:
 
-| Scenario | `this.isParsing` when `waitForParser()` runs | Records queued | What `<s-select>`'s observer receives |
+| Scenario | `this.isParsing` when `alignWithParser()` runs | Records queued | What `<s-select>`'s observer receives |
 |---|---|---|---|
 | **Empty across two chunks** (`Chunk 1: <s-select>`, `Chunk 2: </s-select>`) | `true` (on stack of open elements) | None | Held at Chunk 1; **fires at end of Chunk 2** with `[]`. |
 | **Empty in one chunk** (`<s-select></s-select>`) | `true` (on stack when `connectedCallback` runs; popped at `</s-select>` in same chunk) | None | **Fires at end of chunk** with `[]`. |
@@ -286,17 +285,17 @@ When `<s-select>` calls `this.#mo.observe(this, { childList: true })` and `this.
 
 #### 1.5.3 Delegated observation from a parent/document observer
 
-Suppose `docObserver` (`{ childList: true, subtree: true }`, no wait) discovers `<article>` in `addedNodes` at the end of Chunk 1 and, as in [Example 1.2](#example-1-2), creates an observer that calls `observe(article, { childList: true })` and `waitForParser({ target: article })`:
+Suppose `docObserver` (`{ childList: true, subtree: true }`, unaligned) discovers `<article>` in `addedNodes` at the end of Chunk 1 and, as in [Example 1.2](#example-1-2), creates an observer that calls `observe(article, { childList: true })` and `alignWithParser(article)`:
 
 | Chunk 1 & Chunk 2 markup | `article.isParsing` when `docObserver` runs at end of Chunk 1 | What the article's observer receives |
 |---|---|---|
 | **Chunk 1:** `<article><h1>Title</h1>`<br>**Chunk 2:** `<p>Body</p></article>` | **`true`** (`<h1>` was inserted before `observe()` was called, so it is already in `article.children`). | Held until `</article>` in Chunk 2; **fires at end of Chunk 2** with `[addedNodes: [<p>]]`. |
 | **Chunk 1:** `<article><h1>Title</h1>`<br>**Chunk 2:** `</article>` *(no new children in Chunk 2)* | **`true`** | Held until `</article>` in Chunk 2; **fires at end of Chunk 2** with `[]`. |
-| **Chunk 1:** `<article><h1>Title</h1></article>` *(opened and closed in Chunk 1)* | **`false`** (already parsed by the time `docObserver`'s microtask runs). | Nothing is held and nothing is guaranteed, so `docObserver` checks `!article.isParsing` and enhances `article` directly. |
+| **Chunk 1:** `<article><h1>Title</h1></article>` *(opened and closed in Chunk 1)* | **`false`** (already parsed by the time `docObserver`'s microtask runs). | Nothing is held and nothing is scheduled, so `docObserver` checks `!article.isParsing` and enhances `article` directly. |
 
 #### 1.5.4 Inline `<script>` inside an open element (`document.write()`, imperative mutations, `takeRecords()`, aborting)
 
-Suppose `<s-select>`'s observer observes it with `{ childList: true, attributes: true }` and waits for it, and the parser processes:
+Suppose `<s-select>`'s observer observes it with `{ childList: true, attributes: true }` and is aligned with it, and the parser processes:
 ```html
 <s-select>
   <s-option>A</s-option>
@@ -312,11 +311,11 @@ When `</script>` is parsed, the parser executes the script and performs a microt
 | **Imperative mutation** (`select.setAttribute("data-x", "1"); select.append(optX);`) | **Held:** Because `<s-select>` is still parsing, both parser insertions and script mutations stay queued. | **Fires once** with all held `childList` and `attributes` records in order. |
 | **`document.write("<s-option>W</s-option>")`** | **Held:** Tokens written into the active parser while `<s-select>` is on the stack of open elements are held with the rest. | **Fires once** including `addedNodes: [<s-option>W]`. |
 | **`const early = selectObserver.takeRecords()`** | `takeRecords()` synchronously drains and returns `[addedNodes: [<s-option>A], addedNodes: [<script>]]`. `<s-select>` is still parsing, so the observer stays held. | **Still fires at `</s-select>`** with `[addedNodes: [<s-option>B]]` (or `[]` if no further mutations occurred after `takeRecords()`). |
-| **Aborting the wait's `signal`** | **Fires** with `[addedNodes: [<s-option>A], addedNodes: [<script>]]`: the observer no longer waits for anything. | **Fires** with `[addedNodes: [<s-option>B]]`, as an observer without a wait would. |
+| **Aborting the alignment's `signal`** | **Fires** with `[addedNodes: [<s-option>A], addedNodes: [<script>]]`: the observer is no longer aligned with anything. | **Fires** with `[addedNodes: [<s-option>B]]`, as an unaligned observer would. |
 
 #### 1.5.5 Streaming updates after initial parse (`streamHTML*()` and `<template for>`)
 
-Suppose `<section id="feed">` is already parsed, and `feedObserver` called `observe(feed, { childList: true, subtree: true })` and `waitForParser({ target: feed })`. `feed` was not parsing then, so nothing was held or guaranteed, but the wait stands:
+Suppose `<section id="feed">` is already parsed, and `feedObserver` called `observe(feed, { childList: true, subtree: true })` and `alignWithParser(feed)`. `feed` was not parsing then, so nothing was held or scheduled, but the alignment stands:
 
 | Streaming operation | While stream is open across chunks | When stream finishes |
 |---|---|---|
@@ -326,15 +325,15 @@ Suppose `<section id="feed">` is already parsed, and `feedObserver` called `obse
 
 #### 1.5.6 HTML parser edge cases & aborts
 
-Each row is about an observer that waits for the element in question.
+Each row is about an observer aligned with the element in question.
 
-| Edge case | Parser behavior | What the waiting observer receives |
+| Edge case | Parser behavior | What the aligned observer receives |
 |---|---|---|
 | **Implied end tags** (`<ul><li>One<li>Two</ul>`) | Parsing the second `<li>` start tag implicitly pops the first `<li>` from the stack of open elements. | The first `<li>`'s observer fires at that chunk's microtask checkpoint, identically to an explicit `</li>`. |
-| **Adoption agency algorithm** (`<x-b><x-i>Bold </x-b>italic</x-i>`) | At `</x-b>`, the original `<x-i>` and `<x-b>` are popped from the stack of open elements; a *new* `<x-i>` element is created for `italic`. | Observers waiting for the original `<x-i>` and `<x-b>` fire after `</x-b>`. The cloned `<x-i>` is a distinct `Element` instance that remains parsing until `</x-i>`. |
-| **Foster parenting** (`<table><x-div><span>hi</span></x-div><tr><td>cell</td></tr></table>`) | `<x-div>` is inserted as a sibling before `<table>`, but remains on the stack of open elements until `</x-div>`. | `<x-div>`'s observer holds `<span>hi</span>` until `</x-div>`. Because `<x-div>` is inserted into `<table>.parentNode` (not `<table>`), an observer on `<table>` only sees `<tbody>`/`<tr>`, while an observer that observes and waits for `<table>.parentNode` holds both `<x-div>` and `<table>` until `<table>.parentNode` closes. |
-| **Element removed mid-parse** (`Chunk 1: <x-box><p>1</p>` + `<script>box.remove()</script>`, `Chunk 2: <p>2</p></x-box>`) | The parser's stack of open elements holds a reference to `box` and continues appending `<p>2</p>` into the detached `box` until `</x-box>` pops it. | If `disconnectedCallback()` calls `this.#mo.disconnect()`, the queue and the wait are cleared and nothing fires. If the observer does *not* disconnect, `box` stays parsing until `</x-box>` pops it in Chunk 2, and the observer then fires with `[addedNodes: [<p>1], addedNodes: [<p>2]]`. |
-| **Element moved mid-parse** (`newParent.append(box)` while `box` is still on the parser stack, re-running `connectedCallback`) | `box` remains on the stack of open elements until `</x-box>`. | If `disconnectedCallback` did not call `disconnect()`, the repeated `observe()` and `waitForParser()` calls in `connectedCallback` change nothing: the held records are kept, and the observer fires once `</x-box>` is parsed. |
+| **Adoption agency algorithm** (`<x-b><x-i>Bold </x-b>italic</x-i>`) | At `</x-b>`, the original `<x-i>` and `<x-b>` are popped from the stack of open elements; a *new* `<x-i>` element is created for `italic`. | Observers aligned with the original `<x-i>` and `<x-b>` fire after `</x-b>`. The cloned `<x-i>` is a distinct `Element` instance that remains parsing until `</x-i>`. |
+| **Foster parenting** (`<table><x-div><span>hi</span></x-div><tr><td>cell</td></tr></table>`) | `<x-div>` is inserted as a sibling before `<table>`, but remains on the stack of open elements until `</x-div>`. | `<x-div>`'s observer holds `<span>hi</span>` until `</x-div>`. Because `<x-div>` is inserted into `<table>.parentNode` (not `<table>`), an observer on `<table>` only sees `<tbody>`/`<tr>`, while an observer that observes and aligns with `<table>.parentNode` holds both `<x-div>` and `<table>` until `<table>.parentNode` closes. |
+| **Element removed mid-parse** (`Chunk 1: <x-box><p>1</p>` + `<script>box.remove()</script>`, `Chunk 2: <p>2</p></x-box>`) | The parser's stack of open elements holds a reference to `box` and continues appending `<p>2</p>` into the detached `box` until `</x-box>` pops it. | If `disconnectedCallback()` calls `this.#mo.disconnect()`, the queue and the alignment are cleared and nothing fires. If the observer does *not* disconnect, `box` stays parsing until `</x-box>` pops it in Chunk 2, and the observer then fires with `[addedNodes: [<p>1], addedNodes: [<p>2]]`. |
+| **Element moved mid-parse** (`newParent.append(box)` while `box` is still on the parser stack, re-running `connectedCallback`) | `box` remains on the stack of open elements until `</x-box>`. | If `disconnectedCallback` did not call `disconnect()`, the repeated `observe()` and `alignWithParser()` calls in `connectedCallback` change nothing: the held records are kept, and the observer fires once `</x-box>` is parsed. |
 | **Premature EOF / `window.stop()` / aborted stream** (`<x-box><p>Half...` then EOF) | At EOF or abort, the parser pops all remaining elements from the stack of open elements. | `<x-box>` stops parsing and its observer fires with the held records (`[addedNodes: [<p>]]`) at the microtask checkpoint. |
 
 ---
@@ -425,7 +424,7 @@ partial dictionary MutationObserverInit {
 
 When children arrive in the same chunk as the end tag, the `childList` record delivered at parse end is the ordinary non-empty one. Only when no `childList` record for `target` is pending at parse end does Option 2 queue `{ type: "childList", target, addedNodes: [], removedNodes: [], previousSibling: target.lastChild, nextSibling: null }`: a `childList` record that describes no change.
 
-- **It is a fallback wake-up, not a separate event.** Unlike options such as `connectedness: true` (which observe a distinct kind of mutation and emit their own record type), `parseEndChildList: true` ensures `childList` observation covers parse end—using the pending `childList` record when there is one, and queuing an empty one only for an empty element or an end tag arriving in a chunk of its own. Whether the record at parse end is empty therefore depends on where chunk boundaries fall. (Option 1 covers the same empty-chunk cases by invoking the callback with an empty record list.)
+- **It is a fallback wake-up, not a separate event.** Unlike options such as `connectedness: true` (which observe a distinct kind of mutation and emit their own record type), `parseEndChildList: true` ensures `childList` observation covers parse end—using the pending `childList` record when there is one, and queuing an empty one only for an empty element or an end tag arriving in a chunk of its own. Whether the record at parse end is empty therefore depends on where chunk boundaries fall. (Option 1 covers the same empty-chunk cases by invoking the callback with an empty record list when aligned with a parsing target.)
 - **It is a normative DOM change.** [Queue a tree mutation record](https://dom.spec.whatwg.org/#queue-a-tree-mutation-record) asserts that `addedNodes` or `removedNodes` is non-empty; that assertion would be relaxed for records delivered only to observers that opted in. Option 1 does not need this. The `"start"` record in the [template `MutationObserver` explainer](./template-mutation-observer-explainer.md) does, and both should get the same answer.
 - **Callbacks should check `target.isParsing`, not `addedNodes.length === 0`.** Because the `childList` record at parse end is non-empty whenever children arrived in the final chunk, code that needs parse end checks `target.isParsing` (as in the examples above) rather than looking for a record with two empty lists. The usual loops (`for (const r of records) handle(r.addedNodes)`) pass over an empty record naturally. Only observers that passed `parseEndChildList: true` can ever receive an empty `childList` record.
 - **A dedicated record type** (for example `type: "parseEnd"`) is the main alternative; see [Alternatives Considered](#alternatives-considered) #6.
@@ -459,20 +458,20 @@ When children arrive in the same chunk as the end tag, the `childList` record de
 <a id="comparison"></a>
 ## Comparing the options
 
-| | Option 1: `waitForParser()` | Option 2: `parseEndChildList: true` |
+| | Option 1: `alignWithParser()` | Option 2: `parseEndChildList: true` |
 |---|---|---|
-| **Delivery timing** | Changed for an observer that waits: its whole queue is held across intermediate microtask checkpoints while a waited target is parsing. | Unchanged. |
-| **Callbacks during parsing** | None for an observer that waits for the target; the callback never checks `isParsing`. | One per chunk, as today; the callback checks `isParsing`. |
+| **Delivery timing** | Changed for an aligned observer: its whole queue is held across intermediate microtask checkpoints while an aligned target is parsing. | Unchanged. |
+| **Callbacks during parsing** | None for an observer aligned with the target; the callback never checks `isParsing`. | One per chunk, as today; the callback checks `isParsing`. |
 | **Records at parse end** | Everything the observer queued while held, in mutation order, in one batch. | Whatever `childList` record was queued since the last checkpoint, or an empty fallback `childList` record if none was. |
 | **`observe()`** | Unchanged. | One new option; no side effects. |
-| **Already-parsed targets** | No callback is guaranteed; the caller checks `isParsing` after `waitForParser()`. | Caller checks `isParsing` after `observe()`. |
+| **Already-parsed targets** | No callback is scheduled; the caller checks `isParsing` after `alignWithParser()`. | Caller checks `isParsing` after `observe()`. |
 | **`subtree: true`** | Allowed. | `TypeError`. |
-| **Several targets on one observer** | The observer waits for all of its waited targets, so one still-parsing target holds the records for the others. Elements that complete independently need one observer each ([§1.4](#scheduling-and-ordering)). | Multiple targets and mixing `parseEndChildList: true` / `false` (including with a normal `subtree: true` registration) allowed; each record is delivered once at today's timing. |
-| **Empty `childList` record** | Never. After a wait, the callback can be invoked with an empty record list. | Only when no `childList` record for the target is pending at parse end. |
+| **Several targets on one observer** | The observer holds while any aligned target is parsing, so one still-parsing target holds the records for the others. Elements that complete independently need one observer each ([§1.4](#scheduling-and-ordering)). | Multiple targets and mixing `parseEndChildList: true` / `false` (including with a normal `subtree: true` registration) allowed; each record is delivered once at today's timing. |
+| **Empty `childList` record** | Never. When aligned during parsing, the callback can be invoked at parse end with an empty record list. | Only when no `childList` record for the target is pending at parse end. |
 | **Long-lived streams** | Holds the observer's whole queue until the stream ends; aborting `signal`, or `takeRecords()`, is the escape hatch ([§1.3](#13-long-lived-streams--unbounded-buffering)). | Nothing buffered. |
-| **`takeRecords()` / `disconnect()`** | `takeRecords()` drains the held queue as today; `disconnect()` also removes the waits ([§1.2](#guaranteed-callback)). | As today. |
-| **New error conditions** | None. | Two `TypeError`s (`subtree: true`, missing `childList: true`). |
-| **Spec and implementation surface** | A list of waits per observer, one check in the notify step, scheduling at parse end, and invoking the callback with an empty list. | One conditional queuing step at parse end, one validation rule, empty fallback record. |
+| **`takeRecords()` / `disconnect()`** | `takeRecords()` drains the held queue as today; `disconnect()` also removes the alignments ([§1.2](#guaranteed-callback)). | As today. |
+| **New option-combination errors** | None (only Web IDL `Element` / `AbortSignal` type conversion). | Two `TypeError`s (`subtree: true`, missing `childList: true`). |
+| **Spec and implementation surface** | A list of alignments per observer, one check in the notify step, scheduling at parse end, and invoking the callback with an empty list. | One conditional queuing step at parse end, one validation rule, empty fallback record. |
 
 In short: Option 1 keeps half-parsed children out of the callback without touching `observe()`, with no new error conditions and no synthesized record. Its cost is that an observer's records are held across microtask checkpoints (including inline `<script>`s), that each independently completing element needs its own observer, and that already-parsed elements are handled at the call site. Option 2 keeps `MutationObserver`'s delivery timing completely intact, at the cost of an empty `childList` wake-up record, per-chunk callbacks that the author filters with `isParsing`, and the same call-site check.
 
@@ -504,8 +503,8 @@ The central objection in [WICG/webcomponents#809](https://github.com/WICG/webcom
 1. **`Element.isParsing` (or `MutationRecord.closingTagParsed`, [discussed in 2023](https://github.com/WICG/webcomponents/issues/809#issuecomment-1516789211)) alone:** A boolean does not tell an observer when it later becomes `false`. If only `</element>` arrives in a later chunk, no mutation wakes the observer up ([#809 (comment)](https://github.com/WICG/webcomponents/issues/809#issuecomment-1755889378)).
 2. **A `record.parsedElements` list on `MutationRecord`:** Needs an allocation per record, forces observing the parent, and still delivers half-parsed children.
 3. **One `parser: true` option shared with `<template for>` observation:** The [template records](./template-mutation-observer-explainer.md) describe a patch chunk by chunk, while the options here are about the observed target finishing.
-4. **(Option 1) An `observe()` option (`settled: true` or `delivery: "parse-end"`) instead of a method:** Holding then belongs to a registration, which needs `TypeError`s for `subtree: true` and for mixing registrations on one observer ([§1.4](#overlapping-registrations)).
-5. **(Option 1) A one-shot wait, or holding only the waited target's records:** The first misses later streams. The second cannot cover `subtree: true`.
+4. **(Option 1) An `observe()` option (`parserAligned: true` or `delivery: "parse-end"`) instead of a method:** Holding then belongs to a registration, which needs `TypeError`s for `subtree: true` and for mixing registrations on one observer ([§1.4](#overlapping-registrations)).
+5. **(Option 1) A one-shot alignment, or holding only the aligned target's records:** The first misses later streams. The second cannot cover `subtree: true`.
 6. **(Option 2) A dedicated `parseEnd: true` option and `type: "parseEnd"` record:** Avoids a `childList` record that describes no change, at the cost of a new `MutationRecord.type` value.
 7. **An `Element` method (e.g. `element.observeChildren(callback)`):** Loses one observer for many targets, `takeRecords()`, and `disconnect()`.
 8. **DOM events (`parseend`):** Per-element dispatch during parsing repeats the cost of `MutationEvent`, and does not cover later mutations.
@@ -520,15 +519,15 @@ The central objection in [WICG/webcomponents#809](https://github.com/WICG/webcom
 
 <a id="q1"></a>
 ### Q1: Does either option, or `element.isParsing`, add overhead to the HTML parser or delay rendering?
-No. The HTML parser inserts nodes into the live DOM immediately as bytes arrive—layout, rendering, preload scanning, and other observers are never delayed. Option 1 leaves an observer's records in its queue while a target it waits for is parsing; Option 2 queues at most one extra record when a target observed with `parseEndChildList: true` finishes parsing with no pending `childList` record. Both are gated on state the parser already maintains (stack of open elements and active streaming fragment parsers).
+No. The HTML parser inserts nodes into the live DOM immediately as bytes arrive—layout, rendering, preload scanning, and other observers are never delayed. Option 1 leaves an observer's records in its queue while an aligned target is parsing; Option 2 queues at most one extra record when a target observed with `parseEndChildList: true` finishes parsing with no pending `childList` record. Both are gated on state the parser already maintains (stack of open elements and active streaming fragment parsers).
 
 **Off-main-thread / tree-op parsers (e.g., Gecko):** An engine that separates parsing from main-thread DOM construction via queued tree operations does **not** need to emit an "end-parse" operation or flip an `isParsing` bit on every element's opening and closing tags ([w3c/csswg-drafts#12578 (comment)](https://github.com/w3c/csswg-drafts/issues/12578#issuecomment-3209690246)). Any element that opens and closes without an intervening parser batch flush (chunk or timer boundary), `<script>`, or custom element reaction can never be observed by script while open—by the time any `MutationObserver` or script can hold a reference to that element and read `el.isParsing`, it is already parsed (`false`, the default). The same marking tells the main thread which closing elements can have a held batch to flush (Option 1) or a parse-end record to queue (Option 2). The parser only needs to mark the $O(\text{stack depth})$ ancestor elements that are actually on the stack of open elements *at* a batch flush, `<script>`, or custom element reaction (and later emit a close op for those few nodes, which can itself be batched up to the next such boundary).
 
-### Q2 (Option 1): Why can observers fire in a different order when an observer waits for the parser?
-Because the hold is per observer: an observer waiting for `<parent>` delivers nothing while `<parent>` is open, whereas an observer that waits for nothing—or one waiting for `<child>`, whose `</child>` arrived in an earlier chunk—delivers at that earlier chunk's microtask checkpoint. Nested components that each wait for themselves therefore initialize bottom-up (`<s-option>` before `<s-select>`). Within one observer, records are always in mutation order.
+### Q2 (Option 1): Why can observers fire in a different order when an observer is aligned with the parser?
+Because alignment is per observer: an observer aligned with `<parent>` delivers nothing while `<parent>` is open, whereas an unaligned observer—or one aligned with `<child>`, whose `</child>` arrived in an earlier chunk—delivers at that earlier chunk's microtask checkpoint. Nested components that each align with themselves therefore initialize bottom-up (`<s-option>` before `<s-select>`). Within one observer, records are always in mutation order.
 
-### Q3 (Option 1): Why is the callback guaranteed after a wait, but not for an already-parsed target?
-A wait on a parsing target is an explicit request to be told when it completes, so its end is always reported, even when no record was queued (`<my-widget></my-widget>`, or an end tag arriving in a chunk of its own). For a target that is not parsing there is nothing to wait for, and neither `observe()` nor `waitForParser()` schedules a callback by itself; the caller checks `isParsing` once at the call site.
+### Q3 (Option 1): Why is the callback guaranteed when aligned during parsing, but not for an already-parsed target?
+Calling `alignWithParser(target)` while `target` is parsing aligns a flush with the end of that in-progress parse, so parse end is always reported, even when no record was queued (`<my-widget></my-widget>`, or an end tag arriving in a chunk of its own). When `target` is already parsed there is no in-progress parse to flush at the end of, and neither `observe()` nor `alignWithParser()` schedules a callback by itself; the caller checks `isParsing` once at the call site.
 
 </details>
 
@@ -599,7 +598,7 @@ A wait on a parsing target is an explicit request to be told when it completes, 
     If a document is disconnected or its parser aborts while an observed target is still parsing, parsing ends (as at EOF/abort) and standard `MutationObserver` lifecycle rules apply; under Option 1, calling `observer.disconnect()` discards any buffered records.
 
 20. **Does your spec define when and how new kinds of errors should be raised?**
-    Option 1 adds none. Option 2: passing `parseEndChildList: true` without `childList: true` or with `subtree: true` throws a `TypeError`, matching existing `MutationObserver.prototype.observe()` option validation.
+    Option 1 adds none beyond standard Web IDL argument conversion (`Element` and `AbortSignal`). Option 2: passing `parseEndChildList: true` without `childList: true` or with `subtree: true` throws a `TypeError`, matching existing `MutationObserver.prototype.observe()` option validation.
 
 21. **Does your feature allow sites to learn about the user's use of assistive technology?**
     No.
