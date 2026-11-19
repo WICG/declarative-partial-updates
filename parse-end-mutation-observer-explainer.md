@@ -74,28 +74,32 @@ Because element parse completion isn't exposed to `MutationObserver`, server-dri
 
 - **Discouraging dynamic mutation handling:** Observers remain active for ongoing DOM mutations after parse end, and for future streams into the target.
 - **Holding back DOM tree mutations themselves:** Nodes and attribute changes still apply to the DOM immediately so rendering, preload scanning, and other observers are unaffected. Option 1 only aligns `MutationRecord` delivery for an observer that called `alignWithParser()`; Option 2 holds nothing.
-- **Tracking non-element nodes**, or **replacing `PerformanceEntry` for sub-microtask RUM timing**.
+- **Tracking other non-element nodes** (`Document` or plain `DocumentFragment`), or **replacing `PerformanceEntry` for sub-microtask RUM timing**.
 
 ---
 
 <a id="1-definition-of-parsing"></a>
-## `element.isParsing` (both options)
+## `element.isParsing` and `shadowRoot.isParsing` (both options)
 
 ```webidl
 partial interface Element {
   readonly attribute boolean isParsing;
 };
+
+partial interface ShadowRoot {
+  readonly attribute boolean isParsing;
+};
 ```
 
-An `Element` `target` is **parsing** (`target.isParsing === true`; *shared definition with [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) and [Hide While Loading (`hidden="while-loading"`)](./partial-render-blocking-explainer.md#2-when-is-an-element-loading)*) when **either**:
-1. It was pushed onto the HTML parser's stack of open elements and its **end tag has never been seen** yet (void elements and self-closing foreign elements are popped immediately on insertion, so they are already parsed by the time any observer or script sees them), **or**
-2. It is **currently the context element of an active streaming fragment parser**—either an open `streamHTML`, `streamHTMLUnsafe`, or `streamAppendHTML*` parser on `target`, or an active `<template for="...">` / `<template for="..." src="...">` patch currently streaming into a marker whose parent is `target`.
+An `Element` or `ShadowRoot` `target` is **parsing** (`target.isParsing === true`; *shared definition with [whatwg/html#12200](https://github.com/whatwg/html/issues/12200) and [Hide While Loading (`hidden="while-loading"`)](./partial-render-blocking-explainer.md#2-when-is-an-element-loading)*) when **either**:
+1. It (or, for a `ShadowRoot`, its declarative `<template shadowrootmode>` element) was pushed onto the HTML/XML parser's stack of open elements and its **end tag has never been seen** yet (void elements and self-closing foreign elements are popped immediately on insertion, so they are already parsed by the time any observer or script sees them), **or**
+2. It is **currently the target of an active streaming fragment parser or patch**—either an open `streamHTML*`, `streamAppendHTML*`, `streamPrependHTML*`, or adjacent `stream*HTML*` parser targeting `target`, or an active `<template for="...">` patch on the stack of open elements whose marker's parent is `target`.
 
-`target` **finishes parsing** (**parse end**) when `target.isParsing` goes from `true` to `false`: its end tag is popped, an end tag is implied, the parser reaches EOF or aborts, or the active stream/patch closes or aborts. A later `streamHTML*()` call or `<template for>` patch into `target` makes it parsing again, so an element can have more than one parse end.
+`target` **finishes parsing** (**parse end**) when `target.isParsing` goes from `true` to `false`: its end tag (or declarative `</template>`) is popped, an end tag is implied, the parser reaches EOF or aborts, or the active stream/patch closes or aborts. A later `streamHTML*()` call or `<template for>` patch into `target` makes it parsing again, so an `Element` or `ShadowRoot` can have more than one parse end.
 
-`element.isParsing` gives synchronous inspection when script already has a reference to `element` (for example in `connectedCallback()`, an event handler, or a document-level `MutationObserver` checking whether a newly added node already closed in the current chunk). It cannot by itself tell an observer when the value later becomes `false` (see [Alternatives Considered](#alternatives-considered) #1); that is what the two options below add. It does not require per-element parser traffic in off-main-thread parsers (see [Q1](#q1)).
+`isParsing` gives synchronous inspection when script already has a reference to `target` (for example in `connectedCallback()`, an event handler, or a document-level `MutationObserver` checking whether a newly added node already closed in the current chunk). It cannot by itself tell an observer when the value later becomes `false` (see [Alternatives Considered](#alternatives-considered) #1); that is what the two options below add. It does not require per-element parser traffic in off-main-thread parsers (see [Q1](#q1)).
 
-Only `Element` nodes can be parsing (see [Considered Extensions](#considered-extensions-not-currently-proposed) for `ShadowRoot`).
+Only `Element` and `ShadowRoot` nodes can be parsing (for `<template>`, `template.streamHTML*()` targets `template.content`, a plain `DocumentFragment`, so `template.isParsing` is `false`).
 
 ---
 
@@ -175,7 +179,7 @@ docObserver.observe(document, { subtree: true, childList: true });
 
 ```webidl
 partial interface MutationObserver {
-  undefined alignWithParser(Element target, optional MutationObserverAlignOptions options = {});
+  undefined alignWithParser((Element or ShadowRoot) target, optional MutationObserverAlignOptions options = {});
 };
 
 dictionary MutationObserverAlignOptions {
@@ -183,7 +187,7 @@ dictionary MutationObserverAlignOptions {
 };
 ```
 
-Only `Element` nodes can be parsing, so `target` is an `Element`. It does not have to be a node the observer observes.
+Only `Element` and `ShadowRoot` nodes can be parsing, so `target` is an `Element` or `ShadowRoot`. It does not have to be a node the observer observes.
 
 ### 1.1 Holding the whole observer
 
@@ -417,7 +421,7 @@ partial dictionary MutationObserverInit {
 - **Option validation:** `parseEndChildList: true` without `childList: true`, or with `subtree: true`, throws a `TypeError`.
 - **Re-observing:** Calling `observe()` again for an observed target replaces the options as today, and queues nothing.
 - **Disconnection and removal:** After `observer.disconnect()` nothing is queued. An element removed from the document while still on the stack of open elements keeps its registration, so the fallback record is still queued when the parser pops it if none is pending. Elements discarded by the sanitizer never connect and never produce a record.
-- **Non-element targets:** For a `Document`, `DocumentFragment`, or `ShadowRoot` target, `parseEndChildList: true` has no effect.
+- **Other targets:** `Element` and `ShadowRoot` targets are supported; for a `Document` or plain `DocumentFragment` target, `parseEndChildList: true` has no effect.
 
 <a id="parse-end-record"></a>
 ### 2.2 The empty fallback `childList` record
@@ -493,7 +497,6 @@ The central objection in [WICG/webcomponents#809](https://github.com/WICG/webcom
 
 ## Considered Extensions (Not Currently Proposed)
 
-- **`ShadowRoot` targets:** Treating a `ShadowRoot` whose declarative `<template shadowrootmode>` has not yet closed (or that is an active `streamHTML*` target) as parsing, under either option, is a natural extension under consideration, but is not part of the core proposal.
 - **Custom element `parsedCallback()`:** Libraries like [`html-parsed-element`](https://github.com/WebReflection/html-parsed-element) polyfill `parsedCallback()` today using per-element `subtree: true` `MutationObserver`s. While a native `parsedCallback()` could mirror parse-end timing, both options here cover initial readiness and ongoing mutations with the same observer, without introducing a one-shot lifecycle footgun.
 
 ---
